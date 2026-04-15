@@ -6,7 +6,14 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None  # type: ignore[assignment,misc]
+
 _encoder: "SentenceEncoder | None" = None
+
+_DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 class SentenceEncoder:
@@ -15,13 +22,16 @@ class SentenceEncoder:
     All returned arrays are ``np.float32`` and L2-normalised.
     """
 
-    def __init__(self, model_name: str, device: str = "cpu", batch_size: int = 64) -> None:
-        try:
-            from sentence_transformers import SentenceTransformer
-        except ImportError as e:
+    def __init__(
+        self,
+        model_name: str = _DEFAULT_MODEL,
+        device: str = "cpu",
+        batch_size: int = 64,
+    ) -> None:
+        if SentenceTransformer is None:
             raise ImportError(
                 "sentence-transformers is required: pip install sentence-transformers"
-            ) from e
+            )
 
         self._model = SentenceTransformer(model_name, device=device)
         self._batch_size = batch_size
@@ -41,7 +51,7 @@ class SentenceEncoder:
             Shape ``(N, dim)``, dtype ``float32``, L2-normalised.
         """
         if not texts:
-            return np.empty((0, self._dim), dtype=np.float32)
+            raise ValueError("encode() requires at least one text; got an empty list")
 
         vecs = self._model.encode(
             texts,

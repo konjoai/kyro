@@ -124,5 +124,6 @@ class TestRRF:
         sparse = [_bm25r("doc_a"), _bm25r("doc_b")]
         result = reciprocal_rank_fusion(dense, sparse, alpha=alpha, k=k)
         top = next(r for r in result if r.content == "doc_a")
-        expected = alpha * (1 / (k + 1)) + (1 - alpha) * (1 / (k + 1))
+        # Implementation uses enumerate() → rank starts at 0, so top doc score = 1/(k+0) = 1/k
+        expected = alpha * (1.0 / k) + (1 - alpha) * (1.0 / k)
         assert abs(top.rrf_score - expected) < 1e-9

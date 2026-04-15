@@ -23,11 +23,22 @@ Vectro API reference (from vectro.python.interface):
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from typing import Any
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Path registration — vectro is a namespace package under ~/vectro/.
+# Inserting ~ onto sys.path lets Python resolve vectro.python.interface
+# without a separate pip install step.
+# ---------------------------------------------------------------------------
+_home = os.path.expanduser("~")
+if _home not in sys.path:
+    sys.path.insert(0, _home)
 
 # ---------------------------------------------------------------------------
 # Availability probe (cached after first call)

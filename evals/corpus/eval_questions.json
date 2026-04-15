@@ -1,0 +1,202 @@
+[
+  {
+    "id": 1,
+    "question": "What is Reciprocal Rank Fusion and what problem does it solve?",
+    "ground_truth": "Reciprocal Rank Fusion (RRF) is a rank aggregation algorithm that combines result lists from multiple retrieval systems into a single ranked list. It solves the problem of fusing heterogeneous scores from systems like BM25 and dense vector search, which use incompatible scoring scales, without requiring score normalization.",
+    "context_docs": [
+      "Reciprocal Rank Fusion (RRF) is a method for combining ranked lists from multiple retrieval sources. Given a set of retrieval systems, RRF assigns each document a score of the sum of 1/(k + r_i), where r_i is the rank assigned by retrieval system i and k is a smoothing constant (typically 60). Because RRF only uses rank positions rather than raw scores, it sidesteps the challenge of normalizing incompatible relevance scores from different retrieval systems such as BM25 and dense vector search. RRF has been shown to be surprisingly robust across diverse retrieval tasks."
+    ]
+  },
+  {
+    "id": 2,
+    "question": "What is the formula for RRF scoring and what does the constant k represent?",
+    "ground_truth": "The RRF score for a document is the sum of 1/(k + rank_i) across all retrieval systems, where rank_i is the document's rank in system i. The constant k (typically 60) prevents highly-ranked documents from dominating the fusion and provides numerical stability.",
+    "context_docs": [
+      "The RRF scoring formula is: RRF(d) = sum over each retrieval system i of 1/(k + rank_i(d)), where rank_i(d) is the position of document d in the ranked list returned by system i (1-indexed), and k is a smoothing constant. Setting k = 60 is a common default that provides robust performance across many datasets. A small k amplifies the influence of top-ranked documents, while a large k smooths differences between rank positions. Documents appearing in multiple retrieval systems receive a contribution from each system, which is the key mechanism behind RRF's fusion power."
+    ]
+  },
+  {
+    "id": 3,
+    "question": "What is hybrid search in information retrieval and why is it used?",
+    "ground_truth": "Hybrid search combines dense vector retrieval with sparse keyword-based retrieval (such as BM25) to leverage the complementary strengths of both approaches. Dense retrieval captures semantic meaning while sparse retrieval excels at exact keyword matching, making hybrid search more robust across diverse query types.",
+    "context_docs": [
+      "Hybrid search refers to retrieval systems that combine results from both dense (vector-based) and sparse (keyword-based) retrieval methods. Dense retrieval uses neural embedding models to capture semantic similarity, allowing documents to match queries even without exact word overlap. Sparse retrieval methods like BM25 rely on term frequency statistics and perform well on exact-match queries and queries with specialized vocabulary. By fusing both result sets — typically using Reciprocal Rank Fusion — hybrid search captures the complementary strengths of each approach. Empirically, hybrid search outperforms either method alone on heterogeneous query collections."
+    ]
+  },
+  {
+    "id": 4,
+    "question": "What value of alpha is commonly used in hybrid search and what does it control?",
+    "ground_truth": "A common default alpha value in hybrid search is 0.7, meaning 70% weight is given to the dense retrieval score and 30% to the sparse retrieval score. Alpha controls the trade-off between semantic matching (dense) and exact keyword matching (sparse).",
+    "context_docs": [
+      "In a linear combination hybrid search, the final relevance score for a document is computed as: score = alpha * dense_score + (1 - alpha) * sparse_score. The parameter alpha (ranging from 0 to 1) controls the balance between semantic and lexical matching. An alpha of 0.7 assigns 70% of the weight to dense vector similarity and 30% to BM25 or other sparse scores. Query types that rely on precise terminology — such as legal or medical queries — may benefit from lower alpha values, while semantically rich natural language queries benefit from higher alpha values. Tuning alpha on a validation set is recommended for domain-specific deployments."
+    ]
+  },
+  {
+    "id": 5,
+    "question": "What does BM25 stand for and how does it rank documents?",
+    "ground_truth": "BM25 stands for Best Matching 25. It ranks documents by computing a weighted sum of term frequency scores for query terms, applying saturation functions to penalize high term frequencies and normalization factors to penalize long documents.",
+    "context_docs": [
+      "BM25 (Best Matching 25) is a probabilistic retrieval model that ranks documents based on query terms appearing in each document. For each query term, BM25 computes a score using term frequency (TF) with a saturation function that prevents very high TF values from dominating, inverse document frequency (IDF) which gives more weight to rare terms, and a document length normalization factor. The final document score is the sum of per-term contributions. BM25 is the most widely used sparse retrieval baseline and remains competitive with neural models on many benchmarks, particularly for keyword-heavy queries."
+    ]
+  },
+  {
+    "id": 6,
+    "question": "What is inverse document frequency (IDF) and why is it important in text retrieval?",
+    "ground_truth": "Inverse document frequency (IDF) measures the rarity of a term across a corpus, computed as log(N/df_t) where N is the number of documents and df_t is the count of documents containing the term. IDF downweights common stopwords and upweights rare, discriminative terms.",
+    "context_docs": [
+      "Inverse Document Frequency (IDF) is a component of term-weighting schemes like TF-IDF and BM25. It is computed as log(N / df_t), where N is the total number of documents in the corpus and df_t is the number of documents containing term t. The intuition is that a term appearing in almost every document carries little discriminative information, so its weight should be low. Rare terms that appear in only a few documents are more likely to uniquely identify relevant content and receive higher IDF weights. IDF is crucial for preventing common stopwords like 'the', 'is', and 'a' from dominating relevance scores."
+    ]
+  },
+  {
+    "id": 7,
+    "question": "What is a sentence embedding and how is it used in semantic search?",
+    "ground_truth": "A sentence embedding is a dense vector representation that encodes the semantic meaning of a text string. In semantic search, query and document sentences are mapped to embeddings and cosine similarity is used to rank document relevance without requiring exact keyword matching.",
+    "context_docs": [
+      "A sentence embedding is a fixed-dimensional dense vector (e.g., 384 or 768 dimensions) that encodes the semantic meaning of a text passage. Sentence embedding models such as sentence-transformers/all-MiniLM-L6-v2 are trained to map semantically similar sentences to nearby vectors in embedding space. In semantic search, all documents in the corpus are pre-encoded and stored in a vector database. At query time, the query is encoded with the same model and cosine similarity between the query vector and all document vectors is computed to retrieve the most semantically relevant passages. This enables matching based on meaning rather than exact keywords."
+    ]
+  },
+  {
+    "id": 8,
+    "question": "What is cosine similarity and why is it preferred for comparing text embeddings?",
+    "ground_truth": "Cosine similarity measures the cosine of the angle between two vectors, computed as the dot product of normalized vectors. It is preferred for comparing text embeddings because it measures directional similarity independent of vector magnitude, making it robust to differences in text length.",
+    "context_docs": [
+      "Cosine similarity between two vectors u and v is defined as: cos(theta) = (u · v) / (||u|| * ||v||), which equals the dot product of their unit-normalized versions. The result ranges from -1 (opposite directions) to 1 (identical directions). For comparing text embeddings, cosine similarity is preferred over Euclidean distance because embedding magnitudes can vary based on text length and concept density, while the directional component captures semantic content. Normalizing both vectors to unit length before computing their dot product is an efficient implementation strategy used in approximate nearest-neighbor search systems."
+    ]
+  },
+  {
+    "id": 9,
+    "question": "What is the all-MiniLM-L6-v2 model and what are its key characteristics?",
+    "ground_truth": "all-MiniLM-L6-v2 is a compact sentence-transformers model with 6 transformer layers that produces 384-dimensional embeddings. It is a computationally efficient baseline for retrieval and semantic similarity tasks, trained on over 1 billion sentence pairs.",
+    "context_docs": [
+      "all-MiniLM-L6-v2 is a sentence-transformers model derived from Microsoft's MiniLM architecture, compressed to 6 transformer layers. It produces 384-dimensional dense embeddings and is optimized for semantic textual similarity and information retrieval tasks. The model was fine-tuned on over 1 billion training pairs and achieves competitive performance on benchmarks such as MTEB. Its small size (23M parameters) and fast inference make it a popular choice for production retrieval systems where computational cost is a constraint. It runs efficiently on CPU, making it accessible for local RAG deployments without GPU hardware."
+    ]
+  },
+  {
+    "id": 10,
+    "question": "What is a cross-encoder reranker and how does it differ from a bi-encoder?",
+    "ground_truth": "A cross-encoder takes a query-document pair as joint input and outputs a scalar relevance score, enabling fine-grained interaction modeling. Unlike a bi-encoder that encodes query and document independently into single vectors, a cross-encoder cannot pre-compute document representations and is slower but more accurate.",
+    "context_docs": [
+      "A cross-encoder reranker is a transformer model that takes a concatenated query-document pair as input and produces a relevance score. Because query and document are processed jointly, the model captures fine-grained token-level interactions, achieving higher accuracy than bi-encoders. The trade-off is efficiency: cross-encoders cannot pre-compute document representations, so they must score each candidate at query time. This makes cross-encoders too slow for first-stage retrieval over large corpora. In practice, a fast bi-encoder or BM25 retrieves a candidate set of 20-100 documents, and a cross-encoder reranks only those candidates to refine the ordering."
+    ]
+  },
+  {
+    "id": 11,
+    "question": "What is the ms-marco-MiniLM-L-6-v2 model and what is it used for?",
+    "ground_truth": "ms-marco-MiniLM-L-6-v2 is a cross-encoder reranker fine-tuned on the Microsoft MARCO passage ranking dataset. It is used to assign relevance scores to query-document pairs and reorder retrieved candidates in RAG pipelines.",
+    "context_docs": [
+      "ms-marco-MiniLM-L-6-v2 is a cross-encoder trained on the MS MARCO passage ranking dataset, a large-scale information retrieval benchmark derived from Bing search logs. The model takes a query and passage as input, processes them jointly through a 6-layer MiniLM transformer, and outputs a scalar relevance score. It is widely used as a compute-efficient reranker in retrieval-augmented generation pipelines, where it reorders the top-k passages returned by a first-stage retriever. Despite its small size, the model achieves strong performance on the BEIR benchmark evaluation suite."
+    ]
+  },
+  {
+    "id": 12,
+    "question": "What is Retrieval-Augmented Generation (RAG) and what problem does it address?",
+    "ground_truth": "Retrieval-Augmented Generation (RAG) augments large language model generation by first retrieving relevant documents from a knowledge base, then conditioning the LLM's answer on those passages. It addresses LLM hallucination and inability to access private or up-to-date information.",
+    "context_docs": [
+      "Retrieval-Augmented Generation (RAG) is a technique that combines a retrieval system with a large language model to improve generation accuracy. When a user poses a question, a retrieval component first searches a document corpus to find the most relevant passages. These retrieved passages are provided as context to the LLM, which generates an answer conditioned on the retrieved content. RAG addresses two key limitations of standalone LLMs: factual hallucinations caused by knowledge gaps in model weights, and inability to access private, proprietary, or recently published documents not included in pre-training data."
+    ]
+  },
+  {
+    "id": 13,
+    "question": "What are the typical stages of a RAG pipeline?",
+    "ground_truth": "A typical RAG pipeline consists of document ingestion (chunking and embedding), retrieval (fetching relevant passages by vector similarity), optional reranking (reordering by a cross-encoder), and generation (an LLM answers using retrieved passages as context).",
+    "context_docs": [
+      "A standard RAG pipeline involves four stages. First, during ingestion, source documents are split into overlapping text chunks, each chunk is encoded into a dense vector embedding, and chunks are stored in a vector database alongside their text. Second, at query time, the user query is encoded and used to retrieve the top-k most similar chunks, optionally combined with keyword search in a hybrid approach. Third, retrieved results may be reranked by a cross-encoder. Fourth, the top-ranked passages are concatenated and provided as context to a language model, which synthesizes the final answer. Retrieved passages are typically cited as sources in the response."
+    ]
+  },
+  {
+    "id": 14,
+    "question": "What is HyDE and why is it useful for RAG retrieval?",
+    "ground_truth": "HyDE (Hypothetical Document Embeddings) improves retrieval by generating a hypothetical answer document with an LLM, then using that hypothesis's embedding for retrieval instead of the raw query embedding. This closes the semantic embedding gap between short queries and longer document passages.",
+    "context_docs": [
+      "HyDE (Hypothetical Document Embeddings) was introduced by Gao et al. (2022) to address the query-document embedding gap in dense retrieval. Short factoid queries and long informative document passages occupy different regions of embedding space because they differ in length, style, and content density. HyDE bridges this gap by prompting an LLM to generate a plausible (potentially fictional) answer to the query and treating this hypothesis as a surrogate document. The hypothesis is encoded with the same embedding model used for documents, producing a vector that closely resembles actual document embeddings. This typically improves recall for complex or long-form queries."
+    ]
+  },
+  {
+    "id": 15,
+    "question": "What is query intent classification in a RAG system and what routing categories are common?",
+    "ground_truth": "Query intent classification determines the type of query before retrieval occurs and routes it to the appropriate handler. Common categories include RETRIEVAL (factual questions requiring document lookup), CHAT (conversational queries that skip retrieval), and AGGREGATION (multi-faceted queries requiring evidence from multiple sources).",
+    "context_docs": [
+      "Query intent classification is a routing layer that categorizes incoming queries by their information need before any retrieval occurs. Common intent categories include RETRIEVAL (factual questions requiring document lookup), CHAT (conversational messages like greetings that don't need retrieval), and AGGREGATION (complex queries requiring evidence from multiple documents). By identifying chat-type queries early, a RAG system can bypass vector database calls, reducing latency and cost. Intent classification can be implemented efficiently using regular expressions or a lightweight classifier, satisfying a low-latency constraint without invoking a full language model."
+    ]
+  },
+  {
+    "id": 16,
+    "question": "What are the benefits of adding a query router to a RAG pipeline?",
+    "ground_truth": "A query router reduces latency and compute cost by skipping retrieval for queries that don't require it, enables query decomposition for complex aggregation requests, and can route to domain-specific document collections. The classification overhead is typically under 1 ms.",
+    "context_docs": [
+      "Adding a query routing layer to a RAG pipeline provides multiple benefits. For conversational queries — greetings, simple acknowledgments, or small talk — the router returns a direct response without querying the vector database, reducing per-request latency by up to 80% for such requests. For aggregation queries spanning multiple topics, the router can decompose them into sub-queries and merge the retrieved evidence. For multi-domain corpora, the router can direct queries to specialized sub-collections. The overhead of intent classification itself is typically under 1 ms when implemented as a regex or trie-based classifier, making it a net latency improvement even for retrieval-class queries."
+    ]
+  },
+  {
+    "id": 17,
+    "question": "What does the RAGAS faithfulness metric measure?",
+    "ground_truth": "RAGAS faithfulness measures factual consistency of the generated answer with the retrieved context. It computes the fraction of factual claims in the answer that can be verified from the context, with higher scores indicating less hallucination.",
+    "context_docs": [
+      "The RAGAS faithfulness metric evaluates whether the generated answer is grounded in the provided context. It decomposes the answer into individual factual statements, then uses an LLM to determine which statements can be directly inferred from the retrieved context passages. The score is the ratio of grounded statements to total statements, ranging from 0 to 1. A faithfulness score of 1.0 means every claim in the answer is supported by the context; a low score indicates the model is hallucinating or introducing information not present in the retrieved passages. Faithfulness is among the most important RAG quality metrics because hallucinations erode user trust."
+    ]
+  },
+  {
+    "id": 18,
+    "question": "What does RAGAS context precision measure?",
+    "ground_truth": "RAGAS context precision measures the fraction of retrieved context chunks that are actually relevant to answering the question. A low score means the retriever is returning irrelevant passages, diluting the useful signal available to the generator.",
+    "context_docs": [
+      "RAGAS context precision evaluates the signal-to-noise ratio of the retrieved context. For each retrieved passage, an LLM judge determines whether that passage contains information relevant to the query and ground truth answer. Context precision is the proportion of retrieved passages judged relevant. A high context precision (e.g., 0.90) indicates the retriever is precise — most retrieved passages are genuinely useful. A low precision (e.g., 0.40) means the retriever is returning many off-topic passages, wasting context window space and potentially confusing the generator. Context precision is a retrieval quality metric, independent of the answer generated."
+    ]
+  },
+  {
+    "id": 19,
+    "question": "What is RAGAS answer relevancy and how is it computed without a ground truth?",
+    "ground_truth": "RAGAS answer relevancy measures how relevant and complete the generated answer is to the original question. It is computed by generating hypothetical questions from the answer and measuring their mean embedding similarity to the original question — no ground truth answer is required.",
+    "context_docs": [
+      "RAGAS answer relevancy is a metric that measures the appropriateness of the generated answer to the input question. Unlike faithfulness, it does not require a ground truth answer. The metric works by using an LLM to generate multiple hypothetical questions that the given answer could plausibly address, then computing the mean cosine similarity between the embeddings of these hypothetical questions and the original question. A high answer relevancy score indicates that the answer directly addresses the query; a low score suggests the answer is tangential, incomplete, or addresses a different question than what was asked."
+    ]
+  },
+  {
+    "id": 20,
+    "question": "What is recursive character text splitting and why is it commonly used in RAG?",
+    "ground_truth": "Recursive character text splitting divides text by trying a sequence of separators (paragraphs, newlines, sentences, words) in order until chunks meet the target size. It is commonly used because it preserves natural language boundaries rather than cutting text at arbitrary character positions.",
+    "context_docs": [
+      "Recursive character text splitting is a chunking strategy that divides documents by attempting to split on a hierarchy of separator characters: first by double newlines (paragraphs), then single newlines, then sentences, then spaces, and finally individual characters. At each level, if a chunk still exceeds the target size, the next separator is tried. This approach respects natural document structure, keeping paragraphs and sentences intact when possible. Chunk overlap — characters shared between adjacent chunks — is typically added to avoid important context being split across chunk boundaries. Recursive splitting is the default strategy in most RAG frameworks because it balances structural coherence with target size control."
+    ]
+  },
+  {
+    "id": 21,
+    "question": "What is the purpose of chunk overlap in RAG document chunking?",
+    "ground_truth": "Chunk overlap ensures that context spanning the boundary between two adjacent chunks is available in both chunks, preventing relevant information from being split into non-contiguous fragments that neither chunk fully captures.",
+    "context_docs": [
+      "When splitting documents into fixed-size text chunks for retrieval, a portion of each chunk — the overlap — is shared with the adjacent chunk. For example, with chunk_size=512 and chunk_overlap=64, the last 64 characters of chunk N are repeated at the start of chunk N+1. Chunk overlap addresses the boundary problem: if a key fact straddles the boundary between two chunks, without overlap it would be split across two separate retrieval units. With overlap, any single boundary is covered by at least one complete chunk. The optimal overlap balances coverage (higher overlap is better) against storage cost and redundancy (higher overlap creates more chunks with duplicate content)."
+    ]
+  },
+  {
+    "id": 22,
+    "question": "What is late interaction in neural information retrieval?",
+    "ground_truth": "Late interaction is a retrieval architecture where query and document tokens are independently encoded into token-level embeddings, and relevance is scored using a MaxSim operation that matches each query token to its most similar document token. ColBERT is the primary late interaction model.",
+    "context_docs": [
+      "Late interaction, introduced by Khattab and Zaharia (2020) with the ColBERT model, is a neural retrieval approach that balances efficiency and accuracy. Unlike cross-encoders that process query and document jointly (expensive), and bi-encoders that compare single-vector representations (information loss), late interaction encodes both query and document into sets of token-level vectors. Relevance is then scored using MaxSim: for each query token embedding, the maximum cosine similarity with all document token embeddings is computed, and these per-query-token maximums are summed. This allows fine-grained token-level matching while keeping query and document encodings independent, enabling precomputed document indexes."
+    ]
+  },
+  {
+    "id": 23,
+    "question": "What is the MaxSim operation used in ColBERT-style retrieval?",
+    "ground_truth": "MaxSim computes the sum, over each query token, of the maximum cosine similarity between that query token embedding and all document token embeddings. This score captures the best-matching document passage for each query term and aggregates them into a document relevance score.",
+    "context_docs": [
+      "The MaxSim (Maximum Similarity) operation is the scoring function used in ColBERT-style late interaction retrieval. Given a query encoded as Q token vectors and a document encoded as D token vectors, the relevance score is: sum over each query token q of max over each document token d of cosine_similarity(q, d). For each query token, MaxSim finds the document token it matches best and takes that similarity as the token's score contribution. This design ensures that all relevant aspects of a query are matched somewhere in the document. MaxSim scores are computed as a matrix operation of shape (|Q|, |D|), making them amenable to GPU acceleration."
+    ]
+  },
+  {
+    "id": 24,
+    "question": "What is a vector database and what core operations does it support?",
+    "ground_truth": "A vector database is a data store optimized for high-dimensional embedding vectors. Core operations include upserting vectors with metadata, approximate nearest-neighbor search using distance metrics such as cosine similarity, and optional metadata filtering combined with vector search.",
+    "context_docs": [
+      "A vector database is a specialized storage and retrieval system designed for high-dimensional dense vectors produced by embedding models. Unlike traditional relational databases, vector databases support efficient approximate nearest-neighbor (ANN) search: given a query vector, retrieve the k most similar stored vectors by cosine similarity, inner product, or Euclidean distance. Modern vector databases like Qdrant, Pinecone, Milvus, and Weaviate also support metadata filtering (combining vector similarity with structured field constraints), real-time upsert and deletion, and horizontal scaling. They typically use HNSW (Hierarchical Navigable Small World) or IVF algorithms for efficient ANN search over millions of vectors."
+    ]
+  },
+  {
+    "id": 25,
+    "question": "What is Qdrant and what are its key design features for RAG systems?",
+    "ground_truth": "Qdrant is an open-source vector database written in Rust that supports cosine, dot-product, and Euclidean distance metrics. Its key features for RAG include payload filtering that combines structured metadata with vector search, a sparse vector index for hybrid retrieval, and REST and gRPC APIs.",
+    "context_docs": [
+      "Qdrant is an open-source vector database implemented in Rust, designed for high-performance vector storage and retrieval. It supports multiple distance metrics including cosine similarity, dot product, and Euclidean distance. Qdrant's key features include: payload filtering (metadata fields can be combined with vector search using JSON-style conditions), on-disk indexing for datasets that exceed available RAM, a sparse vector index supporting native sparse vectors alongside dense vectors for hybrid retrieval, and REST and gRPC APIs. Qdrant is commonly deployed self-hosted in Docker containers for local RAG development and scales to billion-vector databases in cloud deployments."
+    ]
+  }
+]

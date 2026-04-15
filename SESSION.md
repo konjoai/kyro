@@ -16,6 +16,26 @@
 
 ## Session Log
 
+### Session: RAGAS Eval Sprint — Mock Baseline + Harness Fixes
+
+**Date:** 2026-04-15  
+**Goal:** Run first passing RAGAS mock upper-bound baseline. Gates: faithfulness ≥ 0.80, context_precision ≥ 0.75.  
+**Session type:** Code + debug session.
+
+**What was done:**
+- [x] Built `ragos/eval/ragas_eval.py` — RAGAS harness with throttle (`threading.Lock` + `asyncio.sleep`), RunConfig, `--mock` flag, JSON output, `--run-name` + `--n-samples` CLI args
+- [x] Debugged v1–v11 failures: SSL cert, asyncio semaphore cross-loop, `time.sleep` blocking event loop, `_last_cell=0.0` burst, OpenAI quota, 1B model `LLMDidNotFinishException`
+- [x] Set up Squish local LLM server with `Qwen2.5-7B-Instruct-int3` (3.6 GB INT3, port 3333)
+- [x] v12: upgraded judge to 7B + bumped `max_tokens=4096` → **PASS** (faithfulness=0.9333, context_precision=1.0000, context_recall=1.0000)
+- [x] SESSION.md + CHANGELOG updated; git commit + push
+
+**Sprint todos completed:**
+- [x] Todo 1–5: harness setup, SSL fix, throttle, corpus wiring (prior sessions)
+- [x] Todo 6: RAGAS mock baseline PASS ✅ (faithfulness=0.9333 ≥ 0.80, context_precision=1.0000 ≥ 0.75)
+- [x] Todo 7: SESSION.md + git ✅
+
+---
+
 ### Session: Phase 2a — Instrumentation Blitz
 
 **Date:** 2025-07  
@@ -89,10 +109,41 @@
 
 ## Last Known RAGAS Baseline
 
-**Status:** NOT YET RUN  
-**Target:** Faithfulness ≥ 0.80, Context Precision ≥ 0.75  
-**Command when ready:** `python -m ragos.eval.ragas_eval --run-name baseline_v010 --n-samples 25`  
-**Output location:** `evals/runs/baseline_v010/`
+**Status:** ✅ PASSED — v12 mock upper-bound baseline  
+**Run name:** `mock_upper_bound_v12`  
+**Run saved:** `evals/runs/20260415T054040Z_mock_upper_bound_v12/`  
+**Judge model:** `Qwen2.5-7B-Instruct-int3` via Squish local server (port 3333)  
+**Mode:** `--mock` (ground_truths used as answers — harness upper-bound)  
+**Samples:** 3
+
+| Metric | Score | Gate | Status |
+|---|---|---|---|
+| faithfulness | **0.9333** | ≥ 0.80 | ✅ PASS |
+| context_precision | **1.0000** | ≥ 0.75 | ✅ PASS |
+| context_recall | **1.0000** | — | ✅ bonus |
+
+**Gate result: PASS ✓**
+
+**History (all attempts):**
+- v1–v10: failed (SSL errors → hangs → asyncio bugs → quota exhaustion → 1B `LLMDidNotFinishException`)
+- v11: faithfulness=0.5000 — **FAIL** (1B model too small, `LLMDidNotFinishException` on jobs 0 & 8)
+- v12: faithfulness=0.9333, context_precision=1.0000, context_recall=1.0000 — **PASS ✓**
+
+**Key fixes that enabled v12 PASS:**
+1. Upgraded judge: `Qwen2.5-7B-Instruct-int3` (vs 1B in v11)
+2. `max_tokens: 2048 → 4096` in `ragas_eval.py`
+3. Throttle: `threading.Lock` + `asyncio.sleep` (not `time.sleep`) — correct async
+
+**Command to repro:**
+```bash
+cd /Users/wscholl/RagOS && \
+GENERATOR_BACKEND=squish SQUISH_BASE_URL=http://localhost:3333/v1 \
+SSL_CERT_FILE=/tmp/ragos_certs.pem REQUESTS_CA_BUNDLE=/tmp/ragos_certs.pem \
+python3 -m ragos.eval.ragas_eval \
+  --run-name mock_upper_bound_v12 --mock --n-samples 3 2>&1
+```
+
+**Next eval step:** Run with real RAG pipeline (no `--mock`) targeting same gates.
 
 ---
 

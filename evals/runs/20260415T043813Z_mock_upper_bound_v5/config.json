@@ -1,0 +1,8 @@
+{
+  "run_name": "mock_upper_bound_v5",
+  "n_samples": 3,
+  "corpus": "evals/corpus/eval_questions.json",
+  "mock": true,
+  "generator_backend": "unknown",
+  "timestamp": "20260415T043813Z"
+}

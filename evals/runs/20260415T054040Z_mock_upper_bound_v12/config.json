@@ -1,0 +1,8 @@
+{
+  "run_name": "mock_upper_bound_v12",
+  "n_samples": 3,
+  "corpus": "evals/corpus/eval_questions.json",
+  "mock": true,
+  "generator_backend": "squish",
+  "timestamp": "20260415T054040Z"
+}

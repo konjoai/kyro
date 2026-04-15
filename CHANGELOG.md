@@ -3,6 +3,20 @@
 All notable changes to RagOS are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased] — RAGAS Eval Sprint
+
+### Added
+- `ragos/eval/ragas_eval.py` — RAGAS evaluation harness: `threading.Lock` throttle, `asyncio.sleep` non-blocking gap, `RunConfig(timeout=600)`, `--mock` upper-bound mode, `--run-name`, `--n-samples` CLI; JSON results + gate check output
+- `evals/corpus/eval_questions.json` — 3-question synthetic eval corpus (expandable to 25)
+- Squish local LLM server support as RAGAS judge (`GENERATOR_BACKEND=squish`)
+- **Mock upper-bound baseline PASSED** (v12, 2026-04-15): faithfulness=0.9333 ✅, context_precision=1.0000 ✅, context_recall=1.0000; run saved to `evals/runs/20260415T054040Z_mock_upper_bound_v12/`
+
+### Fixed
+- RAGAS harness: replaced `asyncio.Semaphore` (cross-loop bug) with `threading.Lock` + `asyncio.sleep` throttle
+- RAGAS judge: upgraded from 1B model (LLMDidNotFinishException) to `Qwen2.5-7B-Instruct-int3`
+- `max_tokens` bumped `2048 → 4096` to prevent truncated RAGAS structured-output responses
+- SSL cert: `SSL_CERT_FILE` + `REQUESTS_CA_BUNDLE` → `/tmp/ragos_certs.pem` (certifi bundle)
+
 ## [Unreleased] — Phase 2a
 
 ### Added
