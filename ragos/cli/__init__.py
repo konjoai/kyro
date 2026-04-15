@@ -1,0 +1,1 @@
+"""Click CLI entry point."""

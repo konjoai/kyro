@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ragos"
+version = "0.1.0"
+description = "Production RAG pipeline: hybrid retrieval, reranking, and RAGAS evaluation"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Wesley Scholl"},
+]
+keywords = ["rag", "llm", "retrieval", "embeddings", "fastapi", "qdrant"]
+
+[project.scripts]
+ragos = "ragos.cli.main:cli"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 60
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
