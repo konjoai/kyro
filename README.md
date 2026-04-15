@@ -1,4 +1,4 @@
-# RagOS
+# KonjoOS
 
 Production RAG pipeline with hybrid retrieval, reranking, and RAGAS evaluation.
 No vendor lock-in — plug in OpenAI, Anthropic, or a local [Squish](https://github.com/squishai/squish) server.
