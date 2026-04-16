@@ -35,6 +35,12 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
     settings = get_settings()
     tel = PipelineTelemetry()
 
+    # Lazily import optional retriever / re-scorer based on settings.
+    if settings.use_vectro_retriever:
+        from konjoai.retrieve.vectro_retriever import get_vectro_retriever
+    if settings.use_colbert:
+        from konjoai.retrieve.late_interaction import rerank_with_maxsim
+
     # ── Step 1: Intent routing ────────────────────────────────────────────────
     intent = QueryIntent.RETRIEVAL
     if settings.enable_query_router:
@@ -87,11 +93,26 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
             top_k_dense=settings.top_k_dense,
             top_k_sparse=settings.top_k_sparse,
         ):
-            hybrid_results = hybrid_search(effective_question)
+            if settings.use_vectro_retriever:
+                hybrid_results = get_vectro_retriever().search(
+                    effective_question,
+                    top_k=settings.top_k_dense,
+                )
+            else:
+                hybrid_results = hybrid_search(effective_question)
 
     # ── Step 4: Cross-encoder reranking ──────────────────────────────────────
     with timed(tel, "rerank", top_k=req.top_k):
         reranked = rerank(req.question, hybrid_results, top_k=req.top_k)
+
+    # ── Step 4.5: MaxSim late-interaction re-scoring (ColBERT-style) ─────────
+    if settings.use_colbert:
+        with timed(tel, "colbert_maxsim", top_k=req.top_k):
+            from konjoai.embed.encoder import get_encoder
+            _enc = get_encoder()
+            query_emb = _enc.encode(req.question)
+            reranked = rerank_with_maxsim(query_emb, reranked)
+            reranked = reranked[: req.top_k]
 
     # ── Step 5: Generation ───────────────────────────────────────────────────
     context = "\n\n---\n\n".join(r.content for r in reranked)
@@ -169,8 +190,22 @@ def query_stream(req: QueryRequest) -> StreamingResponse:  # noqa: C901
         effective_question = hypothesis or req.question
 
     # ── Hybrid retrieval + rerank ─────────────────────────────────────────
-    hybrid_results = hybrid_search(effective_question)
+    if settings.use_vectro_retriever:
+        from konjoai.retrieve.vectro_retriever import get_vectro_retriever
+        hybrid_results = get_vectro_retriever().search(
+            effective_question, top_k=settings.top_k_dense
+        )
+    else:
+        hybrid_results = hybrid_search(effective_question)
     reranked = rerank(req.question, hybrid_results, top_k=req.top_k)
+
+    # ── MaxSim late-interaction re-scoring ────────────────────────────────
+    if settings.use_colbert:
+        from konjoai.embed.encoder import get_encoder
+        from konjoai.retrieve.late_interaction import rerank_with_maxsim
+        _query_emb = get_encoder().encode(req.question)
+        reranked = rerank_with_maxsim(_query_emb, reranked)[: req.top_k]
+
     context = "\n\n---\n\n".join(r.content for r in reranked)
 
     sources = [
