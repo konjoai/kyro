@@ -206,7 +206,22 @@ class TestQueryStreamEndpoint:
     """Tests for POST /query/stream SSE endpoint."""
 
     @pytest.fixture
-    def client(self):
+    def client(self, monkeypatch):
+        # httpx picks up ALL proxy env vars (HTTP_PROXY, HTTPS_PROXY, ALL_PROXY,
+        # GRPC_PROXY …) set by the VS Code / CI host environment.  TestClient
+        # uses an in-process ASGI transport and never makes a real network call,
+        # so all proxy vars are irrelevant but cause ProxyError or ImportError
+        # (SOCKS / socksio absent).  monkeypatch.delenv restores originals after
+        # each test — no permanent env mutation.
+        for _var in (
+            "HTTP_PROXY", "http_proxy",
+            "HTTPS_PROXY", "https_proxy",
+            "ALL_PROXY", "all_proxy",
+            "GRPC_PROXY", "grpc_proxy",
+            "FTP_PROXY", "ftp_proxy",
+            "RSYNC_PROXY",
+        ):
+            monkeypatch.delenv(_var, raising=False)
         return TestClient(_make_app(), raise_server_exceptions=True)
 
     def _sse_events(self, body: str) -> list[dict]:
@@ -227,6 +242,8 @@ class TestQueryStreamEndpoint:
         mock_settings.enable_query_router = False
         mock_settings.enable_hyde = False
         mock_settings.enable_telemetry = False
+        mock_settings.use_vectro_retriever = False
+        mock_settings.use_colbert = False
 
         with (
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
@@ -249,6 +266,8 @@ class TestQueryStreamEndpoint:
         mock_settings.enable_query_router = False
         mock_settings.enable_hyde = False
         mock_settings.enable_telemetry = False
+        mock_settings.use_vectro_retriever = False
+        mock_settings.use_colbert = False
 
         with (
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
@@ -273,6 +292,8 @@ class TestQueryStreamEndpoint:
         mock_settings.enable_query_router = False
         mock_settings.enable_hyde = False
         mock_settings.enable_telemetry = False
+        mock_settings.use_vectro_retriever = False
+        mock_settings.use_colbert = False
 
         with (
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
@@ -298,6 +319,10 @@ class TestQueryStreamEndpoint:
         mock_settings.enable_query_router = False
         mock_settings.enable_hyde = False
         mock_settings.enable_telemetry = False
+        mock_settings.use_vectro_retriever = False
+        mock_settings.use_colbert = False
+        mock_settings.use_vectro_retriever = False
+        mock_settings.use_colbert = False
 
         with (
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
@@ -320,8 +345,12 @@ class TestQueryStreamEndpoint:
 
         mock_settings = MagicMock()
         mock_settings.enable_query_router = False
+        mock_settings.use_vectro_retriever = False
+        mock_settings.use_colbert = False
         mock_settings.enable_hyde = False
         mock_settings.enable_telemetry = False
+        mock_settings.use_vectro_retriever = False
+        mock_settings.use_colbert = False
 
         with (
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),

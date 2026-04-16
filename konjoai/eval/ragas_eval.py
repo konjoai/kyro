@@ -163,6 +163,8 @@ if __name__ == "__main__":
                         help="Maximum number of corpus items to evaluate")
     parser.add_argument("--mock", action="store_true",
                         help="Use ground_truth as the answer (upper-bound harness test, no LLM needed)")
+    parser.add_argument("--live-retrieval", action="store_true",
+                        help="Call hybrid_search() per question instead of using pre-baked corpus context_docs")
     args = parser.parse_args()
 
     # --- Load corpus ---
@@ -177,7 +179,17 @@ if __name__ == "__main__":
 
     questions: list[str] = [item["question"] for item in corpus]
     ground_truths: list[str] = [item["ground_truth"] for item in corpus]
-    contexts: list[list[str]] = [item["context_docs"] for item in corpus]  # list[list[str]]
+
+    # --- Contexts: live retrieval or pre-baked corpus ---
+    if args.live_retrieval:
+        from konjoai.retrieve.hybrid import hybrid_search
+        contexts = []
+        for _q in questions:
+            _results = hybrid_search(_q)
+            contexts.append([_r.content for _r in _results])
+        logger.info("Live retrieval: fetched contexts for %d questions", len(questions))
+    else:
+        contexts = [item["context_docs"] for item in corpus]  # list[list[str]]
 
     # --- Resolve judge LLM config (passed as kwargs to evaluate()) ---
     _llm_api_key: str | None = None
@@ -232,6 +244,7 @@ if __name__ == "__main__":
         "n_samples": len(corpus),
         "corpus": str(corpus_path),
         "mock": args.mock,
+        "live_retrieval": args.live_retrieval,
         "generator_backend": os.environ.get("GENERATOR_BACKEND", "unknown"),
         "timestamp": _ts,
     }, indent=2))

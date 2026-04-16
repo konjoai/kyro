@@ -186,3 +186,39 @@ class TestQuantizeForStorage:
         vectors, metrics = result
         assert isinstance(vectors, np.ndarray)
         assert isinstance(metrics, dict)
+
+
+# ---------------------------------------------------------------------------
+# Live benchmark (skipped when Vectro not installed)
+# Gate: compression_ratio >= 4.0, mean_cosine_similarity >= 0.9999
+# Run via: python -m pytest tests/unit/test_vectro_bridge.py -k benchmark
+# ---------------------------------------------------------------------------
+
+
+class TestVectroCompressionBenchmark:
+    """Live INT8 compression gate test.
+
+    Skipped automatically when the Vectro library is not installed.
+    Validates the two hard gates from evals/benchmarks/vectro_compression.json:
+      - compression_ratio >= 4.0
+      - mean_cosine_similarity >= 0.9999
+    """
+
+    def test_benchmark_int8_gates(self) -> None:
+        import konjoai.embed.vectro_bridge as bridge
+
+        _reset_cache()
+        if not bridge._check_vectro():
+            pytest.skip("Vectro not installed — passthrough path only; skip live gate")
+
+        rng = np.random.default_rng(42)
+        emb = rng.standard_normal((10_000, 384)).astype(np.float32)
+
+        _, metrics = bridge.quantize_for_storage(emb)
+
+        assert metrics["compression_ratio"] >= 4.0, (
+            f"compression_ratio {metrics['compression_ratio']:.4f} < 4.0 (gate)"
+        )
+        assert metrics["mean_cosine_similarity"] >= 0.9999, (
+            f"mean_cosine_similarity {metrics['mean_cosine_similarity']:.6f} < 0.9999 (gate)"
+        )

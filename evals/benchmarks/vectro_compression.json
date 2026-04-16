@@ -9,5 +9,5 @@
   "dims": 384,
   "format": "int8",
   "hardware": "M3 16GB",
-  "notes": "Run via: python -m pytest tests/unit/test_vectro_pipeline_service.py -k benchmark. INT8 is the production baseline. NF4 target: mean_cosine_similarity >= 0.98. PQ-96 target: recall@10 >= 0.95."
+  "notes": "Run via: python -m pytest tests/unit/test_vectro_bridge.py -k benchmark. INT8 is the production baseline. NF4 target: mean_cosine_similarity >= 0.98. PQ-96 target: recall@10 >= 0.95."
 }
