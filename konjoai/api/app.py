@@ -40,6 +40,15 @@ app.include_router(eval_route.router)
 app.include_router(vectro_route.router)
 
 
+def create_app() -> FastAPI:
+    """Return the module-level FastAPI application.
+
+    Tests should call ``create_app()`` rather than importing ``app`` directly
+    so this factory can be swapped for a test-only variant if needed.
+    """
+    return app
+
+
 @app.get("/health", response_model=HealthResponse, tags=["health"])
 def health() -> HealthResponse:
     from konjoai.store.qdrant import get_store

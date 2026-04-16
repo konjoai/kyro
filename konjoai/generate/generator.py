@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Protocol, runtime_checkable
+from typing import Iterator, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,18 @@ class OpenAIGenerator:
             },
         )
 
+    def generate_stream(self, question: str, context: str) -> Iterator[str]:
+        """Yield response tokens one at a time from the OpenAI streaming API."""
+        prompt = RAG_PROMPT.format(context=context, question=question)
+        stream = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=self._max_tokens,
+            stream=True,
+        )
+        for chunk in stream:
+            yield chunk.choices[0].delta.content or ""
+
 
 class AnthropicGenerator:
     """Generator backed by the Anthropic Messages API."""
@@ -89,6 +101,17 @@ class AnthropicGenerator:
             model=resp.model,
             usage={"input_tokens": resp.usage.input_tokens, "output_tokens": resp.usage.output_tokens},
         )
+
+    def generate_stream(self, question: str, context: str) -> Iterator[str]:
+        """Yield response tokens one at a time from the Anthropic streaming API."""
+        prompt = RAG_PROMPT.format(context=context, question=question)
+        with self._client.messages.stream(
+            model=self._model,
+            max_tokens=self._max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
 
 
 class SquishGenerator:
@@ -119,6 +142,18 @@ class SquishGenerator:
                 "completion_tokens": resp.usage.completion_tokens if resp.usage else 0,
             },
         )
+
+    def generate_stream(self, question: str, context: str) -> Iterator[str]:
+        """Yield response tokens one at a time from the Squish OpenAI-compatible streaming API."""
+        prompt = RAG_PROMPT.format(context=context, question=question)
+        stream = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=self._max_tokens,
+            stream=True,
+        )
+        for chunk in stream:
+            yield chunk.choices[0].delta.content or ""
 
 
 def get_generator() -> Generator:

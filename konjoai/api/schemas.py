@@ -15,7 +15,25 @@ class IngestRequest(BaseModel):
 class IngestResponse(BaseModel):
     chunks_indexed: int
     sources_processed: int
-    vectro_metrics: dict | None = None  # K6: None when vectro_quantize=False
+    vectro_metrics: dict | None = None     # K6: None when vectro_quantize=False
+    chunks_deduplicated: int = 0           # chunks removed by near-dedup filter; 0 when dedup_threshold=None
+    drift_count: int | None = None         # corpus drift count from auto-verify; None when rag_auto_verify=False
+
+
+class ManifestResponse(BaseModel):
+    available: bool
+    corpus_dir: str
+    file_count: int
+    manifest_hash: str
+    indexed_at: str
+
+
+class VerifyResponse(BaseModel):
+    available: bool
+    ok: bool | None
+    total_files: int
+    drift_count: int
+    drift: list[dict]  # list of {"path": str, "status": str}
 
 
 # ── Vectro pipeline ──────────────────────────────────────────────────────────
@@ -52,6 +70,7 @@ class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(5, ge=1, le=50)
     use_hyde: bool = Field(False, description="Replace the raw query embedding with a Vectro-compatible HyDE hypothesis embedding (Gao et al. 2022).")
+    stream: bool = Field(False, description="Hint only; use POST /query/stream to actually stream tokens.")
 
 
 class SourceDoc(BaseModel):

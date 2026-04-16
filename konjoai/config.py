@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     vectro_retriever_alpha: float = 0.7  # dense weight for VectroRetriever fusion
     bm25_persist_path: str | None = None # if set, BM25 index is saved/loaded at this path
 
+    # ── Corpus Integrity (RagScanner / Squish) ───────────────────────────────
+    rag_corpus_dir: str | None = None    # if set, corpus_dir used by /ingest/manifest and /ingest/verify
+    rag_auto_verify: bool = False        # if True, auto-verify corpus before each ingest (K3: silent when squish absent)
+
+    # ── Ingest Dedup ─────────────────────────────────────────────────────────
+    dedup_threshold: float | None = None # cosine similarity gate for near-duplicate chunk filtering; None = disabled
+
     # ── Generation ────────────────────────────────────────────────────────────
     generator_backend: str = "openai"  # "squish" | "openai" | "anthropic"
     openai_api_key: str | None = None
