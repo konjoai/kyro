@@ -67,7 +67,24 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
             _, hypothesis = hyde_encode(req.question)
         effective_question = hypothesis or req.question
         logger.debug("HyDE hypothesis: %r", effective_question[:120])
-
+    # ── Step 2b: Early embed + cache lookup (RETRIEVAL only) ─────────────────
+    # Embed once here so the same vector is reused by dense_search (K5: no
+    # extra deps; avoids double-encoding on cache miss).
+    q_vec = None
+    if intent != QueryIntent.AGGREGATION:
+        from konjoai.cache import get_semantic_cache
+        _cache_chk = get_semantic_cache()
+        if _cache_chk is not None:
+            from konjoai.embed.encoder import get_encoder
+            with timed(tel, "embed"):
+                q_vec = get_encoder().encode_query(effective_question)
+            _cached = _cache_chk.lookup(effective_question, q_vec)
+            if _cached is not None:
+                logger.debug("semantic cache hit — skipping Qdrant")
+                return _cached.model_copy(update={
+                    "cache_hit": True,
+                    "telemetry": tel.as_dict() if settings.enable_telemetry else None,
+                })
     # ── Step 3: Hybrid retrieval ──────────────────────────────────────────────
     if intent == QueryIntent.AGGREGATION:
         with timed(tel, "decompose"):
@@ -99,7 +116,7 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
                     top_k=settings.top_k_dense,
                 )
             else:
-                hybrid_results = hybrid_search(effective_question)
+                hybrid_results = hybrid_search(effective_question, q_vec=q_vec)
 
     # ── Step 4: Cross-encoder reranking ──────────────────────────────────────
     with timed(tel, "rerank", top_k=req.top_k):
@@ -130,7 +147,7 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
         for r in reranked
     ]
 
-    return QueryResponse(
+    response = QueryResponse(
         answer=result.answer,
         sources=sources,
         model=result.model,
@@ -138,6 +155,13 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
         telemetry=tel.as_dict() if settings.enable_telemetry else None,
         intent=intent.value,
     )
+    # Cache store (after full pipeline; K3: no-op when cache_enabled=False)
+    if q_vec is not None:
+        from konjoai.cache import get_semantic_cache
+        _cache_store = get_semantic_cache()
+        if _cache_store is not None:
+            _cache_store.store(effective_question, q_vec, response)
+    return response
 
 
 @router.post("/stream")

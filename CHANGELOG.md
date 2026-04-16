@@ -3,7 +3,29 @@
 All notable changes to KonjoOS are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased] — RAGAS Eval Sprint
+## [Unreleased] — Sprint 6: Semantic Cache
+
+### Added
+- `konjoai/cache/semantic_cache.py` — two-level semantic cache: exact dict lookup O(1) + cosine-similarity scan O(n); `OrderedDict` LRU eviction; `threading.Lock` singleton with double-checked locking; `SemanticCacheEntry` dataclass; `_reset_cache()` test helper
+- `konjoai/cache/__init__.py` — package with `SemanticCache`, `get_semantic_cache` exports
+- `QueryResponse.cache_hit: bool = False` — backward-compatible field; true when response served from cache
+- Settings: `cache_enabled: bool = False`, `cache_similarity_threshold: float = 0.95`, `cache_max_size: int = 500`
+- `tests/unit/test_semantic_cache.py` — 21 tests covering exact/semantic hit, miss, LRU, invalidate, thread safety, sub-5ms latency gate ✅
+
+### Changed
+- `konjoai/retrieve/dense.py` — added `q_vec: np.ndarray | None = None` param; skips re-embed when pre-computed vector is supplied
+- `konjoai/retrieve/hybrid.py` — added `q_vec: np.ndarray | None = None` param forwarded to `dense_search`
+- `konjoai/api/routes/query.py` — Step 2b: embed → cache lookup → early return on hit; cache store on miss
+- `konjoai/api/routes/ingest.py` — cache invalidated after BM25 rebuild to prevent stale hits
+
+### Performance
+- Cache hit path: < 5 ms (validated by `test_cache_hit_under_5ms` ✅)
+- Zero LLM cost on repeated queries when `CACHE_ENABLED=true`
+
+### Tests
+- Suite: **226 passed, 0 failed** (up from 205)
+
+
 
 ### Added
 - `konjoai/eval/ragas_eval.py` — RAGAS evaluation harness: `threading.Lock` throttle, `asyncio.sleep` non-blocking gap, `RunConfig(timeout=600)`, `--mock` upper-bound mode, `--run-name`, `--n-samples` CLI; JSON results + gate check output

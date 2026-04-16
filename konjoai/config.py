@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     max_tokens: int = 1024
     temperature: float = 0.1
 
+    # ── Semantic Cache ────────────────────────────────────────────────────────
+    cache_enabled: bool = False             # off by default; zero behaviour change when False
+    cache_similarity_threshold: float = 0.95 # cosine similarity gate for cache hit
+    cache_max_size: int = 500               # LRU eviction ceiling
+
     # ── RAGAS Eval ────────────────────────────────────────────────────────────
     ragas_llm: str = "gpt-4o-mini"
 

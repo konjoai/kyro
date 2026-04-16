@@ -86,6 +86,7 @@ class QueryResponse(BaseModel):
     usage: dict
     telemetry: dict | None = None       # per-step latency dict; None if telemetry disabled
     intent: str = "retrieval"           # "retrieval" | "aggregation" | "chat"
+    cache_hit: bool = False             # True when response served from semantic cache
 
 
 # ── Eval ─────────────────────────────────────────────────────────────────────

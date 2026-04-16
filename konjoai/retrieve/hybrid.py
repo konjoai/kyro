@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
+
 from konjoai.store.qdrant import SearchResult
 from konjoai.retrieve.sparse import BM25Result
 
@@ -65,8 +67,13 @@ def hybrid_search(
     top_k_dense: int | None = None,
     top_k_sparse: int | None = None,
     alpha: float | None = None,
+    q_vec: "np.ndarray | None" = None,
 ) -> list[HybridResult]:
     """Run dense + sparse searches then fuse with RRF.
+
+    Args:
+        q_vec:  Pre-computed query embedding.  Forwarded to ``dense_search``
+                to avoid re-embedding when the cache layer already embedded it.
 
     If ``use_vectro_retriever`` is enabled in :class:`konjoai.config.Settings`,
     delegates to :class:`konjoai.retrieve.vectro_retriever.VectroRetrieverAdapter`
@@ -86,7 +93,7 @@ def hybrid_search(
         from konjoai.retrieve.vectro_retriever import get_vectro_retriever
         return get_vectro_retriever().search(query, top_k=max(kd, ks))
 
-    dense_results = dense_search(query, top_k=kd)
+    dense_results = dense_search(query, top_k=kd, q_vec=q_vec)
 
     bm25 = get_sparse_index()
     sparse_results = bm25.search(query, top_k=ks) if bm25.built else []

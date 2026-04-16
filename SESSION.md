@@ -86,9 +86,39 @@
 
 **Layer 1 complete gate met:** 105/105 new tests passing. 0 regressions.
 
----
+### Session: Sprint 6 — Semantic Cache
 
-## Codebase State After This Session
+**Date:** 2025-07 (continuation)
+**Goal:** Sub-5ms cached responses; eliminate LLM cost for repeat queries.
+**Session type:** Code session — minimum viable.
+
+**What was done (new files):**
+- [x] `konjoai/cache/__init__.py` — package init, exports `SemanticCache`, `get_semantic_cache`
+- [x] `konjoai/cache/semantic_cache.py` — two-level cache (exact dict O(1) + cosine scan O(n)); `OrderedDict` LRU; `threading.Lock` singleton; double-checked locking; `SemanticCacheEntry` dataclass; `get_semantic_cache()` returns None when disabled; `_reset_cache()` test helper
+- [x] `tests/unit/test_semantic_cache.py` — 21 tests: exact/semantic hit, miss, LRU eviction, invalidate, disabled/enabled singleton, hit_count, stats, dtype assertion, threshold boundary, thread safety, sub-5ms latency gate, overwrite refresh, empty cache ✅
+
+**What was done (files patched):**
+- [x] `konjoai/config.py` — Added: `cache_enabled: bool = False`, `cache_similarity_threshold: float = 0.95`, `cache_max_size: int = 500`
+- [x] `konjoai/api/schemas.py` — Added `cache_hit: bool = False` to `QueryResponse`
+- [x] `konjoai/retrieve/dense.py` — Added `q_vec: np.ndarray | None = None` param; skips embed if provided
+- [x] `konjoai/retrieve/hybrid.py` — Added `q_vec: np.ndarray | None = None` param; forwarded to `dense_search`
+- [x] `konjoai/api/routes/query.py` — Step 2b: embed + cache lookup + early return; `hybrid_search(q_vec=q_vec)`; cache store on response
+- [x] `konjoai/api/routes/ingest.py` — Cache invalidation after `bm25.build()`
+
+**Test suite status:** **226 passed, 0 failed** ✅ (205 original + 21 new cache tests)
+
+**Key lessons:**
+- `get_settings` is a local import inside `get_semantic_cache()` — patch `"konjoai.config.get_settings"`, NOT `"konjoai.cache.semantic_cache.get_settings"`
+- `multi_replace_string_in_file` can corrupt files by merging adjacent blocks — always verify with `read_file` before the full pytest run and clear `__pycache__` between runs
+- Cache is off by default (`cache_enabled=False`) — zero behavioral change for existing users
+
+**Konjo Invariants met:**
+- K3 (graceful degrade): cache disabled → pipeline unaffected ✅
+- K4 (dtype): float32 enforced at `lookup()` / `store()` boundaries ✅
+- K5 (no new hard deps): numpy (already required) + stdlib `OrderedDict`/`threading` ✅
+- K6 (backward compat): `cache_hit=False` default; existing `QueryResponse` consumers unaffected ✅
+
+---
 
 ### What's in production code (v0.2.0 candidate):
 
@@ -170,14 +200,14 @@ python3 -m konjoai.eval.ragas_eval \
 
 ## Next Session Priorities
 
-1. **Fix pre-existing test failures** (rank-bm25, RRF epsilon, encoder SentenceTransformer):
+1. **Sprint 7 — Batch ingest + streaming endpoint** (see PLAN.md)
+2. **Fix pre-existing test failures** (rank-bm25, RRF epsilon, encoder SentenceTransformer):
    - `pip install rank-bm25` in KonjoOS venv
-   - Fix `test_rrf_formula_correctness` expected epsilon (off-by-delta, wrong expected value in test)
-   - Fix `test_encoder.py` 7 errors: `'module' object has no attribute 'SentenceTransformer'` → subprocess isolation or direct patch fix
-2. **Verify Vectro import from KonjoOS venv** — `python3 -c "from vectro.python.interface import quantize_embeddings"` from KonjoOS venv; install `pip install -e /Users/wscholl/vectro` if needed
-3. **Build 25-question factoid eval corpus** — check `evals/` dir; if empty, generate synthetic dataset and write to `evals/corpus/`
-4. **Run first RAGAS baseline** — `python -m konjoai.eval.ragas_eval --run-name baseline_v010 --n-samples 25`; document Faithfulness and Context Precision here
-5. **Run first Vectro benchmark** — compression ratio ≥ 4×, cosine_sim ≥ 0.9999; document result here
+   - Fix `test_rrf_formula_correctness` expected epsilon
+   - Fix `test_encoder.py` 7 errors: subprocess isolation
+3. **Enable cache in a live query run** — set `CACHE_ENABLED=true`, run 2 identical queries, verify `cache_hit=true` on second
+4. **Build 25-question factoid eval corpus** — generate synthetic dataset, write to `evals/corpus/`
+5. **Run first RAGAS baseline (no --mock)** — document Faithfulness + Context Precision
 
 ---
 

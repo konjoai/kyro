@@ -1,234 +1,90 @@
-# KonjoOS — Master Execution Plan
+# Konjo KORE — Master Plan
 
-> **ቆንጆ** — Beautiful. **根性** — Fighting spirit. **康宙** — Health of the universe.
-> *Make it konjo — build, ship, repeat.*
+> **ቆንጆ** — Beautiful. **根性** — Fighting spirit. **康宙** — Health of the universe. **खोजो** — Search and discover.
+> *Make it konjo — build, ship, rest, repeat.*
 
-**Version:** v0.2.0-planned  
-**Owner:** Wesley Scholl  
-**Last Updated:** 2025-07 (Phase 2a execution)
+**Strategic document:** See [`KORE_PLAN.md`](KORE_PLAN.md) for full market analysis, sprint roadmap, and licensing recommendation.
 
 ---
 
-## Thesis
+## Current State: Sprint 5 Complete (v0.2.5)
 
-KonjoOS is not another RAG tutorial. It is a production-grade, vertically-integrated retrieval system that demonstrates three things simultaneously:
+- **Tests:** 205 passing, 0 failing
+- **Branch:** `main`, HEAD `82f893b`
+- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming
 
-1. **Systems engineering:** A pipeline with telemetry, routing, and graceful degradation — built like production software, not notebooks.
-2. **Research implementation:** HyDE (Gao et al. 2022), Late Interaction (ColBERT), and query routing implemented from algorithm description, not copy-pasted from a library.
-3. **Vertical integration:** Vectro (your own Mojo/Python embedding compression library) is used as a first-class component — not a demo — to quantize stored embeddings and report compression metrics.
+---
 
-The portfolio signal is: *"I built three production systems that work together."*
+## Active Sprint: Sprint 6 — Semantic Cache
+
+**Goal:** Sub-5ms cached responses. Eliminate LLM cost for near-duplicate queries (20–40% of prod traffic).
+
+### Implementation Checklist
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `konjoai/config.py` | Add `cache_enabled`, `cache_similarity_threshold`, `cache_max_size` | 🔄 |
+| 2 | `konjoai/api/schemas.py` | Add `cache_hit: bool = False` to `QueryResponse` | ⬜ |
+| 3 | `konjoai/cache/__init__.py` | New package init | ⬜ |
+| 3 | `konjoai/cache/semantic_cache.py` | `SemanticCacheEntry`, `SemanticCache`, `get_semantic_cache()` | ⬜ |
+| 4 | `konjoai/retrieve/dense.py` | `q_vec: np.ndarray \| None = None` param | ⬜ |
+| 4 | `konjoai/retrieve/hybrid.py` | `q_vec: np.ndarray \| None = None` param, pass-through | ⬜ |
+| 5 | `konjoai/api/routes/query.py` | Embed once → cache lookup → full pipeline → cache store | ⬜ |
+| 6 | `konjoai/api/routes/ingest.py` | `cache.invalidate()` after `bm25.build()` | ⬜ |
+| 7 | `tests/unit/test_semantic_cache.py` | 15+ tests (exact match, semantic match, miss, LRU, invalidate, disabled) | ⬜ |
+| 8 | `pytest tests/ -x -q` | All 205+ must pass, 0 regressions | ⬜ |
+| 9 | `SESSION.md`, `CHANGELOG.md`, git | Document Sprint 6, commit, push | ⬜ |
+
+### Sprint 6 Gates
+
+1. `pytest tests/ --timeout=120` — 0 failures
+2. Cache hit latency < 5 ms (asserted in unit test)
+3. Cache miss returns correct results (existing pipeline unaffected)
+4. Ingest invalidates cache (stale data protected)
+5. `cache_enabled=False` (default) → fully transparent, zero behaviour change
+6. `CHANGELOG.md` entry written
+
+---
+
+## Sprint Roadmap Summary
+
+| Sprint | Version | Focus | Gate |
+|---|---|---|---|
+| 1–5 | v0.2.5 | Foundation: telemetry, routing, HyDE, ColBERT, RAGAS | ✅ 205 tests |
+| **6** | **v0.3.0** | **Semantic cache (lightning-fast repeats)** | **⬛ Active** |
+| 7 | v0.4.0 | Adapter architecture (swap any backend) | ⬜ |
+| 8 | v0.5.0 | Async pipeline + connection pooling (3× throughput) | ⬜ |
+| 9 | v0.6.0 | Multi-tenant namespace isolation | ⬜ |
+| 10 | v0.7.0 | OpenTelemetry + Prometheus + Grafana | ⬜ |
+| 11 | v0.8.0 | Auth + API keys + audit log (enterprise gate) | ⬜ |
+| 12 | v1.0.0 | Python SDK + TypeScript client + Helm chart + PyPI | ⬜ |
 
 ---
 
 ## The Seven Konjo Invariants
 
-These are non-negotiable architectural properties. Any commit that violates one is a hard stop.
-
-| # | Invariant | In Practice |
+| # | Invariant | Contract |
 |---|---|---|
-| K1 | **No silent failures.** | Every component returns a result or raises explicitly. No `except: pass`. |
-| K2 | **Telemetry on every step.** | `timed()` context manager wraps all hot-path calls. Latency reported in every response. |
-| K3 | **Graceful degradation everywhere.** | Vectro unavailable → float32 passthrough. RAGAS not installed → 501. BM25 not built → dense-only. |
-| K4 | **Dtype contracts at boundaries.** | Encoder output: `float32`. Vectro input/output: `float32`. Qdrant vectors: `float32`. Assert, not assume. |
-| K5 | **Zero new hard dependencies for new features.** | Telemetry uses `time.perf_counter()`. Router uses `re`. HyDE reuses the existing generator. |
-| K6 | **Backward-compatible API evolution.** | New response fields are optional with sensible defaults. Existing API consumers don't break. |
-| K7 | **Reproducible evals.** | Every RAGAS run serialized to `evals/runs/<timestamp>_<name>/`. Never overwrite. Seeds logged. |
+| K1 | No silent failures | Every component returns or raises. No `except: pass`. |
+| K2 | Telemetry on every step | `timed()` wraps all hot-path calls. Latency in every response. |
+| K3 | Graceful degradation | Vectro unavailable → float32. RAGAS absent → 501. Cache disabled → transparent fallthrough. |
+| K4 | Dtype contracts | Encoder: `float32`. Vectro: `float32` in/out. Qdrant: `float32`. Assert, never assume. |
+| K5 | Zero new hard deps | Cache uses `collections.OrderedDict` + `numpy` (already required). |
+| K6 | Backward-compatible API | New fields are optional with sensible defaults. |
+| K7 | Reproducible evals | Every run → `evals/runs/<timestamp>_<name>/`. Never overwrite. |
 
 ---
 
-## Current State: v0.1.0 (Baseline Complete)
+## Hard Stops
 
-All 41 scaffold files are implemented and passing. The v0.1.0 pipeline:
-
-```
-User Question
-    │
-    ▼
-hybrid_search(question)       ← Qdrant dense + BM25 sparse, RRF fusion (α=0.7)
-    │
-    ▼
-CrossEncoderReranker.rerank() ← ms-marco-MiniLM-L-6-v2, top-k selection
-    │
-    ▼
-Generator.generate()          ← OpenAI / Anthropic / Squish backend
-    │
-    ▼
-QueryResponse(answer, sources, model, usage)
-```
-
-**What v0.1.0 lacks:**
-- Per-step timing (no telemetry, cannot profile bottlenecks)
-- HyDE (short query → long doc embedding mismatch unaddressed)
-- Query routing (Qdrant called for "hello" greetings — wasteful)
-- Vectro quantization integration (your own library not used)
-- Intent inference in response (downstream consumers can't filter)
+- Tests failing from a previous step.
+- Cache returns stale data after ingest (invalidation must be verified in tests).
+- Dtype assertion fails at any component boundary.
+- NaN/Inf passed to Qdrant.
+- Audit log (Sprint 11) contains raw question text (PII leak, OWASP violation).
+- p95 query latency regression > 5% from current baseline.
 
 ---
 
-## Gap Analysis: v0.1.0 → v0.2.0
-
-| Component | File | Status | Priority |
-|---|---|---|---|
-| Pipeline telemetry | `konjoai/telemetry.py` | ❌ Missing | P0 — enables profiling everything else |
-| Query intent router | `konjoai/retrieve/router.py` | ❌ Missing | P0 — eliminates wasted Qdrant calls |
-| HyDE retrieval mode | `konjoai/retrieve/hyde.py` | ❌ Missing | P1 — closes embedding mismatch gap |
-| Vectro bridge | `konjoai/embed/vectro_bridge.py` | ❌ Missing | P1 — vertical integration demo |
-| Config expansion | `konjoai/config.py` | ❌ 5 keys missing | P0 — gating all above |
-| Schema expansion | `konjoai/api/schemas.py` | ❌ 3 fields missing | P0 — surface telemetry + intent |
-| Query route rewrite | `konjoai/api/routes/query.py` | ❌ Not wired | P0 — wire all components |
-
----
-
-## Architecture: v0.2.0 Target
-
-```
-User Question
-    │
-    ├── [if enable_query_router]
-    │       ▼
-    │   classify_intent()       ← O(1) regex, no model
-    │   ┌── CHAT ──────────────→ Early return (no Qdrant call)
-    │   ├── AGGREGATION ────────→ decompose_query() → multiple sub-queries
-    │   └── RETRIEVAL ──────────→ continue ↓
-    │
-    ├── [if use_hyde or enable_hyde]
-    │       ▼
-    │   generate_hypothesis()   ← generator.generate(hyde_prompt)
-    │   hyde_encode()           ← encode(hypothesis) instead of encode(query)
-    │       ▼
-    │   effective_question = hypothesis_text
-    │
-    ▼
-hybrid_search(effective_question)      ← timed("hybrid_search")
-    │
-    ▼
-CrossEncoderReranker.rerank()          ← timed("rerank")
-    │
-    ▼
-Generator.generate()                    ← timed("generate")
-    │
-    ▼
-QueryResponse(
-    answer, sources, model, usage,
-    telemetry={step: ms, ...},         ← NEW: per-step latency breakdown
-    intent="retrieval"                  ← NEW: classified intent
-)
-```
-
----
-
-## 4-Week Execution Plan
-
-### Week 1 — Instrumentation & Routing (Core Infrastructure)
-
-**Goal:** Every request is timed. Chat queries never touch Qdrant.
-
-| Deliverable | File | Gate |
-|---|---|---|
-| PipelineTelemetry | `konjoai/telemetry.py` | `pytest tests/test_telemetry.py` passes |
-| QueryIntent router | `konjoai/retrieve/router.py` | CHAT → early return verified |
-| Config expansion | `konjoai/config.py` | 5 new settings with defaults |
-| Schema expansion | `konjoai/api/schemas.py` | 3 new fields |
-| Wired query route | `konjoai/api/routes/query.py` | Full 5-step pipeline |
-| Baseline RAGAS run | `evals/runs/baseline_v010/` | Faithfulness measured |
-
-**Verify Gate:** `pytest tests/ --timeout=60 -x -q` — zero failures.
-
----
-
-### Week 2 — Semantic Enhancement (HyDE)
-
-**Goal:** Hypothesis-augmented retrieval measurably improves recall.
-
-| Deliverable | File | Gate |
-|---|---|---|
-| HyDE implementation | `konjoai/retrieve/hyde.py` | `pytest tests/test_hyde.py` passes |
-| `use_hyde` field wired | `konjoai/api/routes/query.py` | `use_hyde=True` returns `telemetry.steps["hyde"]` |
-| HyDE vs baseline eval | `evals/runs/v020_hyde_vs_baseline/` | Δ faithfulness documented |
-
-**Verify Gate:** RAGAS Faithfulness ≥ 0.80 OR a documented analysis of why the dataset limits HyDE gains.
-
----
-
-### Week 3 — Vertical Integration (Vectro)
-
-**Goal:** Your own embedding compression library is a first-class component.
-
-| Deliverable | File | Gate |
-|---|---|---|
-| Vectro bridge | `konjoai/embed/vectro_bridge.py` | INT8 ratio ≥ 4×, cosine_sim ≥ 0.9999 |
-| Float32 passthrough fallback | same | `_check_vectro() = False` → passthrough |
-| Vectro benchmark | `evals/benchmarks/vectro_compression.json` | ratio + sim logged |
-| `vectro_quantize` flag wired | `konjoai/embed/encoder.py` or ingest | Metrics in telemetry |
-
-**Verify Gate:** `pytest tests/test_vectro_bridge.py` passes. Compression ratios logged and archived in `benchmarks/results/`.
-
----
-
-### Week 4 — Late Interaction (ColBERT-style) & Final Portfolio
-
-**Goal:** MaxSim scoring replaces simple cosine as a retrievable extra scoring pass.
-
-| Deliverable | File | Gate |
-|---|---|---|
-| MaxSim implementation | `konjoai/retrieve/late_interaction.py` | Shape contracts: `(Q, D) × (K, S, D) → (K,)` |
-| `use_colbert` flag | `konjoai/config.py`, query route | Optional scoring pass |
-| Full eval suite | `evals/runs/v030_final/` | Context Precision ≥ 0.75 |
-| README final | `README.md` | Architecture diagram, benchmark table, one-command demo |
-| Blog post draft | `docs/blog_post.md` | Wraps the narrative for portfolio |
-
-**Verify Gate:** All v0.3.0 success metrics met.
-
----
-
-## File Manifest (v0.2.0 additions)
-
-```
-KonjoOS/
-├── PLAN.md                          ← this file
-├── SESSION.md                       ← active session state tracker
-├── konjoai/
-│   ├── telemetry.py                 ← NEW: StepTiming, PipelineTelemetry, timed()
-│   ├── embed/
-│   │   └── vectro_bridge.py         ← NEW: Vectro INT8 bridge + fallback
-│   ├── retrieve/
-│   │   ├── hyde.py                  ← NEW: HyDE hypothesis generation + encoding
-│   │   └── router.py                ← NEW: QueryIntent classifier + decomposer
-│   ├── config.py                    ← MODIFIED: +5 settings
-│   └── api/
-│       ├── schemas.py               ← MODIFIED: +3 fields
-│       └── routes/
-│           └── query.py             ← MODIFIED: 5-step wired pipeline
-└── CHANGELOG.md                     ← MODIFIED: [Unreleased] section
-```
-
----
-
-## Success Metrics
-
-| Metric | Target | How Measured |
-|---|---|---|
-| Faithfulness | ≥ 0.80 | RAGAS on 25-question test set |
-| Context Precision | ≥ 0.75 | RAGAS on 25-question test set |
-| Vectro INT8 compression ratio | ≥ 4× | `vectro_bridge.compression_ratio()` |
-| Vectro INT8 cosine similarity | ≥ 0.9999 | `vectro.mean_cosine_similarity()` |
-| CHAT intent early-return latency | < 5 ms | `telemetry.steps["route"].duration_ms` |
-| Full RETRIEVAL pipeline latency | < 1000 ms | `telemetry.total_ms()` |
-| Test suite | 0 failures | `pytest tests/ --timeout=60` |
-| All K1–K7 invariants | Passing | Code review + test assertions |
-
----
-
-## Hard Stops (do not proceed past these)
-
-- Tests failing from a previous step. Fix them first.
-- Dtype boundary assertion fails in Vectro bridge (float32 in, float32 out — assert both).
-- NaN/Inf in Vectro reconstructed embeddings (assert before passing to Qdrant).
-- RAGAS Faithfulness < 0.70 after HyDE (investigate distribution before calling it a regression).
-- Any new module imported at startup that increases import time by > 10%.
-
----
-
-*End of PLAN.md*  
-*Update this file when architectural contracts change. Never let it drift from the actual implementation.*
+*Owner: wesleyscholl / Konjo AI Research*
+*See KORE_PLAN.md for full strategic roadmap, market analysis, and licensing recommendation.*

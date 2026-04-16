@@ -64,6 +64,13 @@ def ingest(req: IngestRequest) -> IngestResponse:
     bm25 = get_sparse_index()
     bm25.build(all_contents, all_sources, all_metadatas)
 
+    # ── Semantic cache invalidation (K3: stale data protection) ──────────────
+    from konjoai.cache import get_semantic_cache
+    _cache = get_semantic_cache()
+    if _cache is not None:
+        _cache.invalidate()
+        logger.info("Semantic cache invalidated after ingest")
+
     # ── Optional: auto-verify corpus after ingest ─────────────────────────
     drift_count: int | None = None
     if settings.rag_auto_verify and settings.rag_corpus_dir:
