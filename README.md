@@ -1,4 +1,4 @@
-# KonjoOS
+# Kyro
 
 Production RAG pipeline with hybrid retrieval, reranking, and RAGAS evaluation.
 No vendor lock-in — plug in OpenAI, Anthropic, or a local [Squish](https://github.com/squishai/squish) server.
@@ -34,8 +34,8 @@ Documents (PDF/MD/HTML/code)
 ## Quickstart
 
 ```bash
-git clone https://github.com/wesleyscholl/KonjoOS.git
-cd KonjoOS
+git clone https://github.com/konjoai/kyro.git
+cd kyro
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
@@ -92,7 +92,7 @@ All settings via `.env` (see `.env.example`):
 
 ## Evaluation
 
-KonjoOS ships RAGAS gates out of the box:
+kyro ships RAGAS gates out of the box:
 
 ```bash
 konjoai serve &
