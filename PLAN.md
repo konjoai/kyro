@@ -7,57 +7,93 @@
 
 ---
 
-## Current State: Sprint 5 Complete (v0.2.5)
+## Current State: Sprint 6 Complete (v0.3.0)
 
-- **Tests:** 205 passing, 0 failing
-- **Branch:** `main`, HEAD `82f893b`
-- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming
+- **Tests:** 226 passing, 0 failing
+- **Branch:** `main`
+- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming + semantic cache
 
 ---
 
-## Active Sprint: Sprint 6 — Semantic Cache
+## Completed Sprints
+
+| Sprint | Version | Focus | Status |
+|---|---|---|---|
+| 1–5 | v0.2.5 | Foundation: telemetry, routing, HyDE, ColBERT, RAGAS | ✅ |
+| 6 | v0.3.0 | Semantic cache: sub-5ms cached responses | ✅ 226 tests |
+
+---
+
+## Active Sprint: Sprint 7 — Adapter Architecture
 
 **Goal:** Sub-5ms cached responses. Eliminate LLM cost for near-duplicate queries (20–40% of prod traffic).
 
-### Implementation Checklist
+### Implementation Checklist — Sprint 7
 
 | # | File | Change | Status |
 |---|---|---|---|
-| 1 | `konjoai/config.py` | Add `cache_enabled`, `cache_similarity_threshold`, `cache_max_size` | 🔄 |
-| 2 | `konjoai/api/schemas.py` | Add `cache_hit: bool = False` to `QueryResponse` | ⬜ |
-| 3 | `konjoai/cache/__init__.py` | New package init | ⬜ |
-| 3 | `konjoai/cache/semantic_cache.py` | `SemanticCacheEntry`, `SemanticCache`, `get_semantic_cache()` | ⬜ |
-| 4 | `konjoai/retrieve/dense.py` | `q_vec: np.ndarray \| None = None` param | ⬜ |
-| 4 | `konjoai/retrieve/hybrid.py` | `q_vec: np.ndarray \| None = None` param, pass-through | ⬜ |
-| 5 | `konjoai/api/routes/query.py` | Embed once → cache lookup → full pipeline → cache store | ⬜ |
-| 6 | `konjoai/api/routes/ingest.py` | `cache.invalidate()` after `bm25.build()` | ⬜ |
-| 7 | `tests/unit/test_semantic_cache.py` | 15+ tests (exact match, semantic match, miss, LRU, invalidate, disabled) | ⬜ |
-| 8 | `pytest tests/ -x -q` | All 205+ must pass, 0 regressions | ⬜ |
-| 9 | `SESSION.md`, `CHANGELOG.md`, git | Document Sprint 6, commit, push | ⬜ |
+| 1 | `konjoai/adapters/__init__.py` | Package init exporting protocols | ✅ |
+| 2 | `konjoai/adapters/base.py` | `VectorStoreAdapter`, `EmbedderAdapter`, `GeneratorAdapter`, `RetrieverAdapter` protocols | ✅ |
+| 3 | `tests/unit/test_adapters.py` | Protocol conformance + duck-typing tests | ✅ |
 
-### Sprint 6 Gates
+### Sprint 7 Gates
 
-1. `pytest tests/ --timeout=120` — 0 failures
-2. Cache hit latency < 5 ms (asserted in unit test)
-3. Cache miss returns correct results (existing pipeline unaffected)
-4. Ingest invalidates cache (stale data protected)
-5. `cache_enabled=False` (default) → fully transparent, zero behaviour change
-6. `CHANGELOG.md` entry written
+1. All existing 226 tests still pass.
+2. `VectorStoreAdapter`, `EmbedderAdapter`, `GeneratorAdapter`, `RetrieverAdapter` protocols defined.
+3. Existing `get_store()`, `get_encoder()`, `get_generator()` singletons satisfy the protocols (checked via `isinstance` + `runtime_checkable`).
 
 ---
 
-## Sprint Roadmap Summary
+## Phase 1 → Phase 2 Transition: Active Sprint 10 — Adaptive Chunking
 
-| Sprint | Version | Focus | Gate |
+### Implementation Checklist — Sprint 10
+
+| # | File | Change | Status |
 |---|---|---|---|
-| 1–5 | v0.2.5 | Foundation: telemetry, routing, HyDE, ColBERT, RAGAS | ✅ 205 tests |
-| **6** | **v0.3.0** | **Semantic cache (lightning-fast repeats)** | **⬛ Active** |
-| 7 | v0.4.0 | Adapter architecture (swap any backend) | ⬜ |
-| 8 | v0.5.0 | Async pipeline + connection pooling (3× throughput) | ⬜ |
-| 9 | v0.6.0 | Multi-tenant namespace isolation | ⬜ |
-| 10 | v0.7.0 | OpenTelemetry + Prometheus + Grafana | ⬜ |
-| 11 | v0.8.0 | Auth + API keys + audit log (enterprise gate) | ⬜ |
-| 12 | v1.0.0 | Python SDK + TypeScript client + Helm chart + PyPI | ⬜ |
+| 1 | `konjoai/ingest/adaptive_chunker.py` | `QueryComplexityScorer`, `MultiGranularityChunker`, `AdaptiveRetriever` | ✅ |
+| 2 | `konjoai/config.py` | `adaptive_chunking_enabled`, `chunk_sizes_hierarchy` | ✅ |
+| 3 | `tests/unit/test_adaptive_chunker.py` | Complexity scoring, multi-granularity, retrieval dispatch | ✅ |
+
+### Implementation Checklist — Sprint 11: CRAG
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `konjoai/retrieve/crag.py` | `RelevanceGrade`, `grade_documents()`, `CRAGPipeline` | ✅ |
+| 2 | `konjoai/config.py` | `enable_crag`, `crag_relevance_threshold` | ✅ |
+| 3 | `konjoai/api/routes/query.py` | Wire CRAG step between hybrid_search and rerank | ✅ |
+| 4 | `tests/unit/test_crag.py` | Grade relevant/irrelevant/ambiguous, fallback, threshold | ✅ |
+
+### Implementation Checklist — Sprint 12: Self-RAG
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `konjoai/retrieve/self_rag.py` | `SelfRAGTokens`, `SelfRAGCritic`, `SelfRAGPipeline` | ✅ |
+| 2 | `konjoai/config.py` | `enable_self_rag`, `self_rag_max_iterations` | ✅ |
+| 3 | `konjoai/api/routes/query.py` | Wire Self-RAG as optional post-generate critique | ✅ |
+| 4 | `tests/unit/test_self_rag.py` | Retrieve/no-retrieve decision, critique tokens, iteration loop | ✅ |
+
+---
+
+## Sprint Roadmap Summary (Production Release Plan)
+
+| Sprint | Version | Phase | Focus | Gate |
+|---|---|---|---|---|
+| 1–5 | v0.2.5 | — | Foundation: telemetry, routing, HyDE, ColBERT, RAGAS | ✅ 205 tests |
+| 6 | v0.3.0 | — | Semantic cache (sub-5ms cached responses) | ✅ 226 tests |
+| **7** | **v0.3.5** | **P1** | **Adapter architecture (swap any backend)** | **✅ Active** |
+| 8 | v0.4.0 | P1 | Async pipeline + connection pooling (3× throughput) | ⬜ |
+| 9 | v0.5.0 | P1 | Streaming SSE (already exists; harden + OTel hooks) | ⬜ |
+| 10 | v0.5.5 | P2 | Adaptive chunking (query-aware granularity) | ✅ |
+| 11 | v0.6.0 | P2 | CRAG — retrieval critique + corrective fallback | ✅ |
+| 12 | v0.7.0 | P2 | Self-RAG — reflection tokens + critique loop | ✅ |
+| 13 | v0.7.5 | P3 | Query decomposition (multi-hop fan-out) | ⬜ |
+| 14 | v0.8.0 | P3 | Agentic RAG — ReAct loop | ⬜ |
+| 15 | v0.8.5 | P3 | Lightweight GraphRAG (NetworkX + Louvain) | ⬜ |
+| 16 | v0.8.7 | P4 | OTel + Prometheus + Grafana | ⬜ |
+| 17 | v0.9.0 | P4 | Multi-tenancy + JWT | ⬜ |
+| 18 | v0.9.5 | P4 | Auth + rate limiting | ⬜ |
+| 19 | v0.9.8 | P5 | Python SDK + MCP server | ⬜ |
+| 20 | v1.0.0 | P5 | Helm chart + PyPI + Docs site | ⬜ |
 
 ---
 

@@ -76,6 +76,22 @@ class Settings(BaseSettings):
     # ── RAGAS Eval ────────────────────────────────────────────────────────────
     ragas_llm: str = "gpt-4o-mini"
 
+    # ── Adaptive Chunking (Sprint 10) ─────────────────────────────────────────
+    adaptive_chunking_enabled: bool = False          # off by default; transparent fallthrough
+    chunk_sizes_hierarchy: list[int] = Field(
+        default_factory=lambda: [1024, 512, 128],
+        description="Parent → base → child chunk sizes used by MultiGranularityChunker.",
+    )
+
+    # ── CRAG — Corrective RAG (Sprint 11) ────────────────────────────────────
+    enable_crag: bool = False                        # off by default; K3 graceful degradation
+    crag_relevance_threshold: float = 0.0            # cross-encoder logit threshold; >0 = RELEVANT
+    crag_min_relevant_docs: int = 1                  # fallback triggered below this count
+
+    # ── Self-RAG — Reflective Generation (Sprint 12) ─────────────────────────
+    enable_self_rag: bool = False                    # off by default
+    self_rag_max_iterations: int = 2                 # max generate → critique cycles
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

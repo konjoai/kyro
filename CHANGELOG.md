@@ -27,6 +27,62 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
 
+## [Unreleased] — Sprint 12: Self-RAG
+
+### Added
+- `konjoai/retrieve/self_rag.py` — Self-RAG pipeline (Asai et al. 2023): `RetrieveDecision`, `RelevanceToken`, `SupportToken`, `UsefulnessToken` (IntEnum), `DocumentCritique`, `SupportScorer`, `SelfRAGPipeline`
+- `tests/unit/test_self_rag.py` — 27 tests ✅
+
+### Fixed
+- `UsefulnessToken` changed from `str, Enum` to `IntEnum` to fix comparison operators
+- Module-level import of `QueryIntent`, `classify_intent` from `konjoai.retrieve.router` (was local-only, caused `NameError` at runtime)
+- `@patch("sentence_transformers.CrossEncoder")` in test fixtures to prevent SSL certificate errors during `SupportScorer` initialisation in sandboxed CI
+
+### Tests
+- Suite: **329 passed, 0 failed** (up from 302)
+
+---
+
+## [Unreleased] — Sprint 11: CRAG (Corrective RAG)
+
+### Added
+- `konjoai/retrieve/crag.py` — Corrective Retrieval-Augmented Generation pipeline: relevance grading, web fallback, knowledge refinement
+- `tests/unit/test_crag.py` — tests ✅
+
+### Tests
+- Suite: **302 passed, 0 failed** (up from 280)
+
+---
+
+## [Unreleased] — Sprint 10: Adaptive Chunking
+
+### Added
+- `konjoai/chunk/adaptive.py` — adaptive chunk sizing based on document structure and content density
+- `tests/unit/test_adaptive_chunking.py` — tests ✅
+
+### Tests
+- Suite: **280 passed, 0 failed** (up from 255)
+
+---
+
+## [Unreleased] — Sprint 7: Adapter Architecture
+
+### Added
+- `konjoai/adapters/base.py` — `BaseAdapter` abstract interface for retrieval backends
+- `konjoai/adapters/registry.py` — `AdapterRegistry`: runtime registration and resolution of named adapters
+- `konjoai/adapters/__init__.py`
+- `tests/unit/test_adapters.py` — tests ✅
+
+### Changed
+- Retrieval backends refactored to implement `BaseAdapter` interface; backwards-compatible
+
+### Tests
+- Suite: **255 passed, 0 failed** (up from 226)
+
+---
+
+## [Unreleased] — RAGAS Eval Sprint
+
 ### Added
 - `konjoai/eval/ragas_eval.py` — RAGAS evaluation harness: `threading.Lock` throttle, `asyncio.sleep` non-blocking gap, `RunConfig(timeout=600)`, `--mock` upper-bound mode, `--run-name`, `--n-samples` CLI; JSON results + gate check output
 - `evals/corpus/eval_questions.json` — 3-question synthetic eval corpus (expandable to 25)

@@ -17,14 +17,18 @@ router = APIRouter(prefix="/query", tags=["query"])
 
 @router.post("", response_model=QueryResponse)
 def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
-    """Run the full RAG pipeline: route → (HyDE) → hybrid_search → rerank → generate.
+    """Run the full RAG pipeline: route → (HyDE) → hybrid_search → (CRAG) → rerank → generate → (Self-RAG).
 
     Pipeline steps (each wrapped in timed() when telemetry is enabled):
-        1. route       — classify intent; CHAT short-circuits immediately.
-        2. hyde        — (optional) replace query embedding with hypothesis embedding.
+        1. route         — classify intent; CHAT short-circuits immediately.
+        2. hyde          — (optional) replace query embedding with hypothesis embedding.
+        2b. embed+cache  — embed once; check semantic cache before hitting Qdrant.
         3. hybrid_search — dense + BM25 retrieval with RRF fusion.
-        4. rerank      — cross-encoder reranking.
-        5. generate    — LLM answer synthesis.
+        3b. crag         — (optional) relevance grading + corrective filter.
+        4. rerank        — cross-encoder reranking.
+        4.5 colbert      — (optional) MaxSim late-interaction re-scoring.
+        5. generate      — LLM answer synthesis.
+        5b. self_rag     — (optional) reflection critique; retries if unsupported.
     """
     from konjoai.generate.generator import get_generator
     from konjoai.retrieve.hybrid import HybridResult, hybrid_search
@@ -35,11 +39,17 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
     settings = get_settings()
     tel = PipelineTelemetry()
 
-    # Lazily import optional retriever / re-scorer based on settings.
+    # Optional pipeline component flags
     if settings.use_vectro_retriever:
         from konjoai.retrieve.vectro_retriever import get_vectro_retriever
     if settings.use_colbert:
         from konjoai.retrieve.late_interaction import rerank_with_maxsim
+
+    # CRAG + Self-RAG metadata (populated only when those features are enabled)
+    crag_confidence: float | None = None
+    crag_fallback: bool | None = None
+    self_rag_support: float | None = None
+    self_rag_iterations: int | None = None
 
     # ── Step 1: Intent routing ────────────────────────────────────────────────
     intent = QueryIntent.RETRIEVAL
@@ -68,8 +78,6 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
         effective_question = hypothesis or req.question
         logger.debug("HyDE hypothesis: %r", effective_question[:120])
     # ── Step 2b: Early embed + cache lookup (RETRIEVAL only) ─────────────────
-    # Embed once here so the same vector is reused by dense_search (K5: no
-    # extra deps; avoids double-encoding on cache miss).
     q_vec = None
     if intent != QueryIntent.AGGREGATION:
         from konjoai.cache import get_semantic_cache
@@ -118,6 +126,24 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
             else:
                 hybrid_results = hybrid_search(effective_question, q_vec=q_vec)
 
+    # ── Step 3b: CRAG — Corrective RAG relevance grading ─────────────────────
+    if settings.enable_crag and hybrid_results:
+        from konjoai.retrieve.crag import get_crag_pipeline
+        with timed(tel, "crag", n_docs=len(hybrid_results)):
+            crag_result = get_crag_pipeline().run(req.question, hybrid_results)
+        crag_confidence = crag_result.overall_confidence
+        crag_fallback = crag_result.needs_fallback
+        # Use the CRAG-filtered document list for downstream steps
+        if crag_result.documents:
+            hybrid_results = crag_result.documents  # type: ignore[assignment]
+        logger.debug(
+            "CRAG: kept=%d discarded=%d confidence=%.3f fallback=%s",
+            len(crag_result.documents),
+            crag_result.discarded_count,
+            crag_result.overall_confidence,
+            crag_result.needs_fallback,
+        )
+
     # ── Step 4: Cross-encoder reranking ──────────────────────────────────────
     with timed(tel, "rerank", top_k=req.top_k):
         reranked = rerank(req.question, hybrid_results, top_k=req.top_k)
@@ -138,6 +164,29 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
     with timed(tel, "generate", model=settings.openai_model):
         result = generator.generate(question=req.question, context=context)
 
+    answer = result.answer
+
+    # ── Step 5b: Self-RAG reflection critique ────────────────────────────────
+    if settings.enable_self_rag and reranked:
+        from konjoai.retrieve.self_rag import get_self_rag_pipeline
+        with timed(tel, "self_rag"):
+            def _gen() -> str:
+                return generator.generate(question=req.question, context=context).answer
+            sr = get_self_rag_pipeline().run(
+                question=req.question,
+                documents=reranked,
+                generate_fn=_gen,
+            )
+        answer = sr.answer
+        self_rag_support = sr.support_score
+        self_rag_iterations = sr.iterations
+        logger.debug(
+            "Self-RAG: support=%.3f usefulness=%s iterations=%d",
+            sr.support_score,
+            sr.usefulness.name,
+            sr.iterations,
+        )
+
     sources = [
         SourceDoc(
             source=r.source,
@@ -148,12 +197,16 @@ def query(req: QueryRequest) -> QueryResponse:  # noqa: C901
     ]
 
     response = QueryResponse(
-        answer=result.answer,
+        answer=answer,
         sources=sources,
         model=result.model,
         usage=result.usage,
         telemetry=tel.as_dict() if settings.enable_telemetry else None,
         intent=intent.value,
+        crag_confidence=crag_confidence,
+        crag_fallback=crag_fallback,
+        self_rag_support=self_rag_support,
+        self_rag_iterations=self_rag_iterations,
     )
     # Cache store (after full pipeline; K3: no-op when cache_enabled=False)
     if q_vec is not None:

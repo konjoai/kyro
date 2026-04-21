@@ -87,6 +87,11 @@ class QueryResponse(BaseModel):
     telemetry: dict | None = None       # per-step latency dict; None if telemetry disabled
     intent: str = "retrieval"           # "retrieval" | "aggregation" | "chat"
     cache_hit: bool = False             # True when response served from semantic cache
+    # ── Self-correcting retrieval metadata (Sprints 11–12) ───────────────────
+    crag_confidence: float | None = None    # mean relevance score from CRAG; None when disabled
+    crag_fallback: bool | None = None       # True if CRAG triggered corrective fallback
+    self_rag_support: float | None = None   # mean support score from Self-RAG; None when disabled
+    self_rag_iterations: int | None = None  # number of Self-RAG generate→critique cycles
 
 
 # ── Eval ─────────────────────────────────────────────────────────────────────

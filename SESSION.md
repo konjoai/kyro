@@ -16,6 +16,34 @@
 
 ## Session Log
 
+### Session: Sprints 7 / 10–12 — Adapter Architecture · Adaptive Chunking · CRAG · Self-RAG
+
+**Date:** 2026 (current session)
+**Goal:** Implement Sprints 7, 10, 11, 12; fix all test failures; achieve fully green suite.
+**Session type:** Code + debug session.
+
+**What was done:**
+- [x] Sprint 7: `konjoai/adapters/base.py` (`BaseAdapter`), `konjoai/adapters/registry.py` (`AdapterRegistry`) — pluggable retrieval backends
+- [x] Sprint 10: `konjoai/chunk/adaptive.py` — adaptive chunk sizing based on content signals
+- [x] Sprint 11: `konjoai/retrieve/crag.py` — Corrective RAG pipeline with web fallback
+- [x] Sprint 12: `konjoai/retrieve/self_rag.py` — Self-RAG: `UsefulnessToken(IntEnum)`, `SupportScorer`, `DocumentCritique`, `RelevanceToken`, `SupportToken`, `RetrieveDecision`, `SelfRAGPipeline`
+- [x] Fix 1: `UsefulnessToken(str, Enum)` → `UsefulnessToken(IntEnum)` — fixed comparison semantics (12→5 failures)
+- [x] Fix 2: module-level `QueryIntent`/`classify_intent` import in `self_rag.py` (5→2 failures)
+- [x] Fix 3: `@patch("sentence_transformers.CrossEncoder")` in `test_self_rag.py` — prevents SSL errors on CI (2→0 failures)
+- [x] **329 passed, 0 failed** ✅ (up from 226 at Sprint 6 baseline)
+- [x] CHANGELOG.md updated with Sprint 7/10/11/12 entries
+- [x] SESSION.md updated; git commit
+
+**Sprint todos completed:**
+- [x] Sprint 7: Adapter architecture — `BaseAdapter`, `AdapterRegistry` ✅
+- [x] Sprint 10: Adaptive chunking — `AdaptiveChunker` ✅
+- [x] Sprint 11: CRAG — `CRAGPipeline` ✅
+- [x] Sprint 12: Self-RAG — `SelfRAGPipeline` + all token enums + `SupportScorer` ✅
+- [x] Full test suite green (329 passed) ✅
+- [x] Docs + git ✅
+
+---
+
 ### Session: RAGAS Eval Sprint — Mock Baseline + Harness Fixes
 
 **Date:** 2026-04-15  
