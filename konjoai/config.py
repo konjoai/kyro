@@ -78,6 +78,9 @@ class Settings(BaseSettings):
 
     # ── Adaptive Chunking (Sprint 10) ─────────────────────────────────────────
     adaptive_chunking_enabled: bool = False          # off by default; transparent fallthrough
+
+    # ── Streaming (Sprint 9) ──────────────────────────────────────────────────
+    streaming_enabled: bool = Field(True, description="Enable token streaming via SSE")
     chunk_sizes_hierarchy: list[int] = Field(
         default_factory=lambda: [1024, 512, 128],
         description="Parent → base → child chunk sizes used by MultiGranularityChunker.",

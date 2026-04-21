@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Iterator, Protocol, runtime_checkable
+from typing import AsyncIterator, Iterator, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,20 @@ class OpenAIGenerator:
         for chunk in stream:
             yield chunk.choices[0].delta.content or ""
 
+    async def stream(self, question: str, context: str) -> AsyncIterator[str]:
+        """Async token-streaming interface; bridges generate_stream() via asyncio.to_thread."""
+        sentinel = object()
+        sync_gen = self.generate_stream(question=question, context=context)
+
+        def _next() -> object:
+            return next(sync_gen, sentinel)
+
+        while True:
+            token = await asyncio.to_thread(_next)
+            if token is sentinel:
+                break
+            yield token
+
 
 class AnthropicGenerator:
     """Generator backed by the Anthropic Messages API."""
@@ -112,6 +127,20 @@ class AnthropicGenerator:
         ) as stream:
             for text in stream.text_stream:
                 yield text
+
+    async def stream(self, question: str, context: str) -> AsyncIterator[str]:
+        """Async token-streaming interface; bridges generate_stream() via asyncio.to_thread."""
+        sentinel = object()
+        sync_gen = self.generate_stream(question=question, context=context)
+
+        def _next() -> object:
+            return next(sync_gen, sentinel)
+
+        while True:
+            token = await asyncio.to_thread(_next)
+            if token is sentinel:
+                break
+            yield token
 
 
 class SquishGenerator:
@@ -154,6 +183,20 @@ class SquishGenerator:
         )
         for chunk in stream:
             yield chunk.choices[0].delta.content or ""
+
+    async def stream(self, question: str, context: str) -> AsyncIterator[str]:
+        """Async token-streaming interface; bridges generate_stream() via asyncio.to_thread."""
+        sentinel = object()
+        sync_gen = self.generate_stream(question=question, context=context)
+
+        def _next() -> object:
+            return next(sync_gen, sentinel)
+
+        while True:
+            token = await asyncio.to_thread(_next)
+            if token is sentinel:
+                break
+            yield token
 
 
 def get_generator() -> Generator:

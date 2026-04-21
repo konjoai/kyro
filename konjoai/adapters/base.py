@@ -14,7 +14,7 @@ Design principles
 """
 from __future__ import annotations
 
-from typing import Iterator, Protocol, runtime_checkable
+from typing import AsyncIterator, Iterator, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -114,6 +114,14 @@ class GeneratorAdapter(Protocol):
 
         K1: Raise on the first API error rather than silently stopping
         iteration.
+        """
+        ...
+
+    async def stream(self, question: str, context: str) -> AsyncIterator[str]:
+        """Async token-streaming interface for use in async contexts.
+
+        Bridges the sync ``generate_stream`` iterator via
+        ``asyncio.to_thread`` so callers never block the event loop.
         """
         ...
 

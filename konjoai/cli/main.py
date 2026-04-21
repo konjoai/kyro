@@ -100,8 +100,9 @@ def ingest(ctx: click.Context, path: str, strategy: str, chunk_size: int, overla
 @click.argument("question")
 @click.option("--top-k", default=5, show_default=True, help="Number of final passages to include in context.")
 @click.option("--quiet", "-q", is_flag=True, default=False, help="Print only the answer.")
+@click.option("--stream", "-s", is_flag=True, default=False, help="Stream tokens to stdout as they are generated.")
 @click.pass_context
-def query(ctx: click.Context, question: str, top_k: int, quiet: bool) -> None:
+def query(ctx: click.Context, question: str, top_k: int, quiet: bool, stream: bool) -> None:
     """Query the RAG pipeline with QUESTION.
 
     \b
@@ -122,9 +123,13 @@ def query(ctx: click.Context, question: str, top_k: int, quiet: bool) -> None:
 
     context = "\n\n---\n\n".join(r.content for r in reranked)
     generator = get_generator()
-    result = generator.generate(question=question, context=context)
-
-    click.echo(result.answer)
+    if stream:
+        for token in generator.generate_stream(question=question, context=context):
+            click.echo(token, nl=False)
+        click.echo()
+    else:
+        result = generator.generate(question=question, context=context)
+        click.echo(result.answer)
 
     if not quiet:
         click.echo("\nSources:", err=True)

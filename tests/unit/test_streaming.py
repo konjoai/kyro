@@ -6,6 +6,8 @@ Covers:
 """
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 from unittest.mock import MagicMock, patch
 
@@ -361,3 +363,225 @@ class TestQueryStreamEndpoint:
             resp = client.post("/query/stream", json={"question": "q?", "stream": True})
 
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Sprint 9: async stream() sentinel + streaming_enabled config + CLI --stream
+# ---------------------------------------------------------------------------
+
+
+class TestAsyncGeneratorStream:
+    """Verify async stream() wraps generate_stream() correctly for all backends."""
+
+    def test_openai_stream_is_async_generator(self):
+        from konjoai.generate.generator import OpenAIGenerator
+        gen = OpenAIGenerator.__new__(OpenAIGenerator)
+        gen._model = "gpt-4o-mini"
+        gen._max_tokens = 1024
+        with patch.object(gen, "generate_stream", return_value=iter(["tok"])):
+            agen = gen.stream(question="q", context="c")
+        assert inspect.isasyncgen(agen)
+
+    def test_openai_stream_yields_all_tokens(self):
+        from konjoai.generate.generator import OpenAIGenerator
+        gen = OpenAIGenerator.__new__(OpenAIGenerator)
+        gen._model = "gpt-4o-mini"
+        gen._max_tokens = 1024
+        tokens = ["Hello", " ", "world"]
+        with patch.object(gen, "generate_stream", return_value=iter(tokens)):
+            collected: list[str] = []
+
+            async def _run() -> None:
+                async for tok in gen.stream(question="q", context="c"):
+                    collected.append(tok)
+
+            asyncio.run(_run())
+        assert collected == tokens
+
+    def test_openai_stream_empty_yields_nothing(self):
+        from konjoai.generate.generator import OpenAIGenerator
+        gen = OpenAIGenerator.__new__(OpenAIGenerator)
+        gen._model = "gpt-4o-mini"
+        gen._max_tokens = 1024
+        with patch.object(gen, "generate_stream", return_value=iter([])):
+            collected: list[str] = []
+
+            async def _run() -> None:
+                async for tok in gen.stream(question="q", context="c"):
+                    collected.append(tok)
+
+            asyncio.run(_run())
+        assert collected == []
+
+    def test_anthropic_stream_is_async_generator(self):
+        from konjoai.generate.generator import AnthropicGenerator
+        gen = AnthropicGenerator.__new__(AnthropicGenerator)
+        gen._model = "claude-3-haiku-20240307"
+        gen._max_tokens = 1024
+        with patch.object(gen, "generate_stream", return_value=iter(["x"])):
+            agen = gen.stream(question="q", context="c")
+        assert inspect.isasyncgen(agen)
+
+    def test_anthropic_stream_yields_all_tokens(self):
+        from konjoai.generate.generator import AnthropicGenerator
+        gen = AnthropicGenerator.__new__(AnthropicGenerator)
+        gen._model = "claude-3-haiku-20240307"
+        gen._max_tokens = 1024
+        tokens = ["Alpha", "Beta"]
+        with patch.object(gen, "generate_stream", return_value=iter(tokens)):
+            collected: list[str] = []
+
+            async def _run() -> None:
+                async for tok in gen.stream(question="q", context="c"):
+                    collected.append(tok)
+
+            asyncio.run(_run())
+        assert collected == tokens
+
+    def test_squish_stream_is_async_generator(self):
+        from konjoai.generate.generator import SquishGenerator
+        gen = SquishGenerator.__new__(SquishGenerator)
+        gen._model = "qwen3:8b"
+        gen._max_tokens = 1024
+        with patch.object(gen, "generate_stream", return_value=iter(["y"])):
+            agen = gen.stream(question="q", context="c")
+        assert inspect.isasyncgen(agen)
+
+    def test_squish_stream_yields_all_tokens(self):
+        from konjoai.generate.generator import SquishGenerator
+        gen = SquishGenerator.__new__(SquishGenerator)
+        gen._model = "qwen3:8b"
+        gen._max_tokens = 1024
+        tokens = ["Gamma", "Delta"]
+        with patch.object(gen, "generate_stream", return_value=iter(tokens)):
+            collected: list[str] = []
+
+            async def _run() -> None:
+                async for tok in gen.stream(question="q", context="c"):
+                    collected.append(tok)
+
+            asyncio.run(_run())
+        assert collected == tokens
+
+    def test_squish_stream_empty_yields_nothing(self):
+        from konjoai.generate.generator import SquishGenerator
+        gen = SquishGenerator.__new__(SquishGenerator)
+        gen._model = "qwen3:8b"
+        gen._max_tokens = 1024
+        with patch.object(gen, "generate_stream", return_value=iter([])):
+            collected: list[str] = []
+
+            async def _run() -> None:
+                async for tok in gen.stream(question="q", context="c"):
+                    collected.append(tok)
+
+            asyncio.run(_run())
+        assert collected == []
+
+
+class TestStreamingEnabledConfig:
+    """Verify streaming_enabled config field defaults and override."""
+
+    def test_streaming_enabled_default_is_true(self):
+        from konjoai.config import Settings
+        s = Settings()
+        assert s.streaming_enabled is True
+
+    def test_streaming_enabled_can_be_disabled(self):
+        from konjoai.config import Settings
+        s = Settings(streaming_enabled=False)
+        assert s.streaming_enabled is False
+
+
+class TestCLIStreamFlag:
+    """Verify --stream / -s flag on the query command."""
+
+    def test_stream_flag_calls_generate_stream(self):
+        from click.testing import CliRunner
+        from konjoai.cli.main import cli
+
+        mock_gen = MagicMock()
+        mock_gen.generate_stream.return_value = iter(["Hello", " world"])
+
+        with (
+            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.retrieve.reranker.rerank", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["query", "--stream", "What is RAG?"])
+
+        mock_gen.generate_stream.assert_called_once()
+        mock_gen.generate.assert_not_called()
+        assert result.exit_code == 0
+
+    def test_stream_short_form_flag(self):
+        from click.testing import CliRunner
+        from konjoai.cli.main import cli
+
+        mock_gen = MagicMock()
+        mock_gen.generate_stream.return_value = iter(["tok"])
+
+        with (
+            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.retrieve.reranker.rerank", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["query", "-s", "What is RAG?"])
+
+        assert result.exit_code == 0
+        mock_gen.generate_stream.assert_called_once()
+
+    def test_no_stream_flag_calls_generate(self):
+        from click.testing import CliRunner
+        from konjoai.cli.main import cli
+
+        mock_gen = MagicMock()
+        mock_gen.generate.return_value = MagicMock(answer="The answer.", model="gpt-4o-mini")
+
+        with (
+            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.retrieve.reranker.rerank", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["query", "What is RAG?"])
+
+        mock_gen.generate.assert_called_once()
+        mock_gen.generate_stream.assert_not_called()
+        assert result.exit_code == 0
+
+    def test_stream_flag_outputs_tokens(self):
+        from click.testing import CliRunner
+        from konjoai.cli.main import cli
+
+        mock_gen = MagicMock()
+        mock_gen.generate_stream.return_value = iter(["Hello", " world"])
+
+        with (
+            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.retrieve.reranker.rerank", return_value=[
+                MagicMock(content="ctx", score=0.9, source="src.md")
+            ]),
+            patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(cli, ["query", "--stream", "What is RAG?"])
+
+        assert "Hello world" in result.output
+        assert result.exit_code == 0

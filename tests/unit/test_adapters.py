@@ -58,6 +58,9 @@ class _StubGenerator:
     def generate_stream(self, question, context):
         yield "stub"
 
+    async def stream(self, question, context):
+        yield "stub"
+
 
 class _StubRetriever:
     def search(self, query, top_k=10, q_vec=None):
@@ -173,6 +176,49 @@ def test_generator_stream_yields_str():
     gen = _StubGenerator()
     tokens = list(gen.generate_stream("q", "ctx"))
     assert all(isinstance(t, str) for t in tokens)
+
+
+def test_generator_stub_stream_is_async_generator():
+    import inspect
+    gen = _StubGenerator()
+    assert inspect.isasyncgenfunction(gen.stream)
+
+
+def test_generator_stub_stream_yields_token():
+    import asyncio
+    gen = _StubGenerator()
+
+    async def _collect():
+        return [tok async for tok in gen.stream("q", "ctx")]
+
+    assert asyncio.run(_collect()) == ["stub"]
+
+
+def test_stream_flag_passed_correctly_to_generate_stream():
+    """async stream() must pass question and context through to generate_stream()."""
+    import asyncio
+    from unittest.mock import patch
+    from konjoai.generate.generator import OpenAIGenerator
+
+    gen = OpenAIGenerator.__new__(OpenAIGenerator)
+    gen._model = "gpt-4o-mini"
+    gen._max_tokens = 1024
+    with patch.object(gen, "generate_stream", return_value=iter(["x"])) as mock_gs:
+        async def _run() -> None:
+            async for _ in gen.stream(question="my q", context="my ctx"):
+                pass
+        asyncio.run(_run())
+    mock_gs.assert_called_once_with(question="my q", context="my ctx")
+
+
+def test_cli_stream_flag_appears_in_help():
+    from click.testing import CliRunner
+    from konjoai.cli.main import cli
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["query", "--help"])
+    assert "--stream" in result.output
+    assert "-s" in result.output
 
 
 # ── RetrieverAdapter ─────────────────────────────────────────────────────────
