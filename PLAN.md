@@ -9,11 +9,40 @@
 
 ---
 
-## Current State: Sprint 21 Complete — v1.1.0 SHIPPED
+## Current State: Sprint 22 Complete — v1.2.0 SHIPPED
 
-- **Tests:** 769 passing (+ 15 skipped), 5 pre-existing Python 3.9 compat failures
+- **Tests:** 798 passing (+ 15 skipped), 5 pre-existing Python 3.9 compat failures
 - **Branch:** `main`
-- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming + semantic cache + adaptive chunking + CRAG + Self-RAG + Query Decomposition + Agentic RAG + **Streaming Agent (Sprint 21 — v1.1.0)** + GraphRAG + OTel + Prometheus + Multi-tenancy + JWT + Auth hardening + Rate limiting + Python SDK + MCP server + Helm chart + PyPI + Docs site
+- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming + **distributed semantic cache (Sprint 22 — v1.2.0, Redis-backed, tenant-namespaced)** + adaptive chunking + CRAG + Self-RAG + Query Decomposition + Agentic RAG + Streaming Agent (Sprint 21 — v1.1.0) + GraphRAG + OTel + Prometheus + Multi-tenancy + JWT + Auth hardening + Rate limiting + Python SDK + MCP server + Helm chart + PyPI + Docs site
+
+---
+
+## Completed Sprint: Sprint 22 — Distributed Semantic Cache (Redis backend) (v1.2.0)
+
+**Goal:** Make the Sprint-6 semantic cache survive pod restarts and shard across the Helm HPA topology (2–10 replicas), without breaking the in-memory contract or adding a hard dependency on Redis.
+
+### Implementation Checklist — Sprint 22
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `konjoai/cache/redis_cache.py` | New `RedisSemanticCache` — tenant-namespaced HASH + LRU ZSET, `_safely()` wrapper, optional TTL, pickled entries with l2-normalised float32 bytes | ✅ |
+| 2 | `konjoai/cache/redis_cache.py::build_redis_cache(...)` | Lazy `import redis`; PING-and-fallback factory returning `None` on missing package or connection error | ✅ |
+| 3 | `konjoai/cache/__init__.py` | Re-export `RedisSemanticCache` and `build_redis_cache` | ✅ |
+| 4 | `konjoai/cache/semantic_cache.py::get_semantic_cache()` | Backend dispatch: `memory` | `redis` (with K3 fallback to memory) | ✅ |
+| 5 | `konjoai/config.py` | `cache_backend`, `cache_redis_url`, `cache_redis_namespace`, `cache_redis_ttl_seconds` | ✅ |
+| 6 | `tests/unit/test_redis_cache.py` | 29 tests across construction, roundtrip, LRU, tenant isolation, invalidate, stats, TTL, graceful degradation, factory dispatch, backend parity | ✅ |
+| 7 | `pyproject.toml` + `konjoai/__init__.py` + `helm/kyro/Chart.yaml` + `docs/index.md` + `tests/unit/test_packaging.py` | Version bump 1.1.0 → 1.2.0 | ✅ |
+| 8 | `README.md` + `CHANGELOG.md` + `docs/configuration.md` | Document new backend selection + Redis settings | ✅ |
+
+### Sprint 22 Gate Results
+
+1. **K1**: Redis transport errors are logged and surfaced as cache misses; no swallowed business-logic exceptions. ✅
+2. **K3**: `cache_backend="redis"` with `redis` not installed or `PING` failing → in-memory fallback, request paths stay green. ✅
+3. **K4**: `q_vec` float32 assertion enforced at the `store()` boundary on both backends. ✅
+4. **K5**: `redis` is **optional** — full suite runs without it. ✅
+5. **K6**: Default `cache_backend="memory"` preserves v1.1.0 behaviour byte-for-byte; new keys are additive. ✅
+6. **K7**: Tenant prefix in every Redis key — cross-tenant lookups cannot leak. ✅
+7. **Tests**: 798 passing (was 769 — +29 new). 15 skipped, 5 pre-existing Py3.9 compat failures unchanged. ✅
 
 ---
 

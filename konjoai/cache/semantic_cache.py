@@ -174,14 +174,18 @@ class SemanticCache:
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 
-_cache: SemanticCache | None = None
+_cache: object | None = None
 _cache_lock = threading.Lock()
 
 
-def get_semantic_cache() -> SemanticCache | None:
-    """Return the module-level SemanticCache, or None if cache_enabled=False.
+def get_semantic_cache() -> object | None:
+    """Return the active semantic cache, or ``None`` when caching is disabled.
 
-    Lazily initialises the cache on first call (K3: transparent when disabled).
+    Sprint 22 — backend selection:
+        ``cache_backend == "memory"`` → in-process LRU :class:`SemanticCache`.
+        ``cache_backend == "redis"``  → cross-pod :class:`RedisSemanticCache`,
+        with **K3 graceful fallback** to the in-memory backend if the
+        ``redis`` package is missing or the initial ``PING`` fails.
     """
     global _cache  # noqa: PLW0603
     from konjoai.config import get_settings  # local import avoids circular dep
@@ -190,19 +194,46 @@ def get_semantic_cache() -> SemanticCache | None:
     if not settings.cache_enabled:
         return None
 
-    if _cache is None:
-        with _cache_lock:
-            if _cache is None:
-                _cache = SemanticCache(
-                    max_size=settings.cache_max_size,
-                    threshold=settings.cache_similarity_threshold,
-                )
+    if _cache is not None:
+        return _cache
+
+    with _cache_lock:
+        if _cache is not None:
+            return _cache
+
+        backend = (getattr(settings, "cache_backend", "memory") or "memory").lower()
+        if backend == "redis":
+            from konjoai.cache.redis_cache import build_redis_cache
+
+            redis_cache = build_redis_cache(
+                url=settings.cache_redis_url,
+                namespace=settings.cache_redis_namespace,
+                max_size=settings.cache_max_size,
+                threshold=settings.cache_similarity_threshold,
+                ttl_seconds=settings.cache_redis_ttl_seconds,
+            )
+            if redis_cache is not None:
+                _cache = redis_cache
                 logger.info(
-                    "semantic cache initialised — max_size=%d threshold=%.2f",
+                    "redis semantic cache initialised — namespace=%s max_size=%d threshold=%.2f ttl=%d",
+                    settings.cache_redis_namespace,
                     settings.cache_max_size,
                     settings.cache_similarity_threshold,
+                    settings.cache_redis_ttl_seconds,
                 )
-    return _cache
+                return _cache
+            logger.warning("redis backend unavailable — falling back to in-memory semantic cache")
+
+        _cache = SemanticCache(
+            max_size=settings.cache_max_size,
+            threshold=settings.cache_similarity_threshold,
+        )
+        logger.info(
+            "in-memory semantic cache initialised — max_size=%d threshold=%.2f",
+            settings.cache_max_size,
+            settings.cache_similarity_threshold,
+        )
+        return _cache
 
 
 def _reset_cache() -> None:

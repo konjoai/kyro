@@ -76,6 +76,13 @@ class Settings(BaseSettings):
     cache_enabled: bool = False             # off by default; zero behaviour change when False
     cache_similarity_threshold: float = 0.95 # cosine similarity gate for cache hit
     cache_max_size: int = 500               # LRU eviction ceiling
+    # Sprint 22 — distributed cache backend selection.
+    # "memory"  → in-process LRU (default; single-pod or single-tenant only)
+    # "redis"   → Redis-backed cache shared across pods, tenant-namespaced.
+    cache_backend: str = "memory"
+    cache_redis_url: str = "redis://localhost:6379/0"
+    cache_redis_namespace: str = "kyro:cache"
+    cache_redis_ttl_seconds: int = 0         # 0 disables TTL; >0 sets per-entry expiry
 
     # ── RAGAS Eval ────────────────────────────────────────────────────────────
     ragas_llm: str = "gpt-4o-mini"

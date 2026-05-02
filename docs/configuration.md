@@ -53,6 +53,10 @@ All settings are read from environment variables or a `.env` file in the project
 | `USE_COLBERT` | `false` | ColBERT MaxSim late-interaction re-scoring |
 | `VECTRO_QUANTIZE` | `false` | INT8 quantize via Vectro before upsert |
 | `CACHE_ENABLED` | `false` | Semantic response cache |
+| `CACHE_BACKEND` | `memory` | `memory` (in-process LRU) or `redis` (cross-pod, tenant-namespaced) — Sprint 22 |
+| `CACHE_REDIS_URL` | `redis://localhost:6379/0` | Redis URL for the `redis` backend |
+| `CACHE_REDIS_NAMESPACE` | `kyro:cache` | Top-level key prefix in Redis |
+| `CACHE_REDIS_TTL_SECONDS` | `0` | Per-entry TTL in seconds; `0` disables expiry |
 
 ## Multi-tenancy + Auth (Sprint 17–18)
 

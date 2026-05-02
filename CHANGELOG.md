@@ -3,6 +3,49 @@
 All notable changes to KonjoOS are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v1.2.0] — Sprint 22: Distributed Semantic Cache (Redis backend)
+
+### Added
+- `konjoai/cache/redis_cache.py`: `RedisSemanticCache` — cross-pod-shared, tenant-namespaced semantic cache backed by Redis. Storage layout per tenant is `<namespace>:<tenant>:entries` (HASH, field=normalised question, value=pickled blob containing question, l2-normalised float32 vector bytes, response, timestamp) and `<namespace>:<tenant>:lru` (ZSET ordered by `time.monotonic()` for eviction). All Redis calls go through a `_safely(op, fn)` wrapper that logs and returns `None` on transport errors so a Redis outage degrades to a cache miss instead of a 500. Tenant prefix is read from the Sprint-17 `_current_tenant_id` ContextVar; the anonymous bucket falls back to `__anonymous__`. Optional per-entry TTL (`cache_redis_ttl_seconds`).
+- `konjoai/cache/redis_cache.py::build_redis_cache(...)`: lazy-imports the `redis` package, runs an initial `PING`, and returns the cache or `None` (K3 graceful fallback) when the package is missing or the connection fails. Callers that get `None` fall back to the in-memory backend.
+- `konjoai/cache/__init__.py`: re-exports `RedisSemanticCache` and `build_redis_cache` alongside the existing `SemanticCache` / `get_semantic_cache` symbols.
+- `konjoai/cache/semantic_cache.py::get_semantic_cache()`: backend selection — when `cache_backend == "redis"` the factory tries `build_redis_cache(...)` first; on `None` it logs a warning and constructs the in-memory `SemanticCache`. The factory still returns `None` when `cache_enabled=False` (zero-overhead off path).
+- `konjoai/config.py`: four new settings:
+  - `cache_backend: str = "memory"` — `"memory"` or `"redis"`
+  - `cache_redis_url: str = "redis://localhost:6379/0"`
+  - `cache_redis_namespace: str = "kyro:cache"`
+  - `cache_redis_ttl_seconds: int = 0` — `0` disables TTL
+- `tests/unit/test_redis_cache.py` — 29 new tests:
+  - Construction guardrails (threshold, max_size, ttl_seconds)
+  - Exact + cosine roundtrip; below-threshold misses; question normalisation; float32 enforcement
+  - LRU eviction order and refresh-on-lookup behaviour
+  - Tenant scoping isolation across `acme`/`globex`/anonymous
+  - `invalidate()` only drops the active tenant
+  - Stats: hit/miss counters and hit_rate
+  - TTL: `0` skips `EXPIRE`; `>0` sets it on both hash + zset
+  - Graceful degradation: `lookup` returns `None` and `store` does not raise when every Redis op throws
+  - `build_redis_cache` returns `None` on missing `redis` package and on `PING` failure
+  - Factory dispatch: returns memory backend by default, returns the Redis backend when configured, falls back to memory when `build_redis_cache` returns `None`, and falls back to memory for unknown backends
+  - Backend-protocol parity: both backends expose `lookup`/`store`/`invalidate`/`stats` with identical roundtrip semantics
+
+### Changed
+- `pyproject.toml`, `konjoai/__init__.py`, `helm/kyro/Chart.yaml`, `docs/index.md`, `tests/unit/test_packaging.py`: version bumped `1.1.0 → 1.2.0`.
+
+### Konjo Invariants
+- **K1**: Redis transport errors are logged via `logger.warning` and surfaced as cache misses (no silent failures, no swallowed exceptions in business logic). Pickle-decode errors degrade to a miss with a warning rather than crashing the request.
+- **K2**: Hit/miss counters per backend; debug-level breadcrumbs include the active tenant and similarity score.
+- **K3**: When the `redis` package is missing, when `PING` fails, when an unknown backend is configured, or when individual Redis ops error, the caller still gets a working cache (in-memory) or a clean miss.
+- **K4**: `RedisSemanticCache.store()` asserts `q_vec.dtype == np.float32` at the boundary, identical to the in-memory contract. Vectors are L2-normalised before pickling.
+- **K5**: `redis` is **optional** (lazy import). Tests use a 100-line in-process fake; the suite stays runnable without `pip install redis`.
+- **K6**: New endpoint surface and config keys are additive; default `cache_backend="memory"` preserves the v1.1.0 behaviour byte-for-byte.
+- **K7**: Multi-tenant isolation is enforced via the keyspace, so a Redis instance shared across tenants cannot leak responses between them.
+
+### Tests
+- Focused: `python3 -m pytest tests/unit/test_redis_cache.py -q` → **29 passed in ~1s**
+- Full regression: `python3 -m pytest tests/unit/ -q` → **798 passed, 15 skipped** (was 769 — +29 tests; 5 pre-existing Python 3.9 compat failures unchanged)
+
+---
+
 ## [v1.1.0] — Sprint 21: Streaming Agent (`POST /agent/query/stream`)
 
 ### Added

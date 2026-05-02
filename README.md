@@ -79,6 +79,8 @@ konjoai status            Show collection stats
 | POST   | /query       | RAG query with optional decomposition + CRAG + Self-RAG reflective critique |
 | POST   | /agent/query | Bounded ReAct-style agent query with step trace (`steps[]`) |
 | POST   | /agent/query/stream | SSE stream of ReAct steps + final result + telemetry frame (Sprint 21) |
+
+> **Sprint 22 — distributed cache:** set `CACHE_BACKEND=redis` and `CACHE_REDIS_URL` to share the semantic cache across HPA replicas. Tenant-namespaced; falls back to the in-memory LRU when the `redis` package is missing or the initial `PING` fails.
 | POST   | /eval        | RAGAS evaluation over QA samples   |
 | GET    | /health      | Collection health + document count |
 | GET    | /metrics     | Prometheus exposition (requires `otel_enabled=true` + `pip install prometheus-client`) |
