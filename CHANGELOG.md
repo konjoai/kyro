@@ -3,6 +3,34 @@
 All notable changes to KonjoOS are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v1.1.0] — Sprint 21: Streaming Agent (`POST /agent/query/stream`)
+
+### Added
+- `konjoai/agent/react.py`: `RAGAgent.run_stream()` — synchronous generator that drives the bounded ReAct loop and yields one event dict per step plus a final `result` event. `RAGAgent.run()` is now a thin consumer of `run_stream()`, preserving its existing `AgentResult` contract.
+- `konjoai/api/routes/agent.py`: `POST /agent/query/stream` — Server-Sent Events endpoint that emits one `data:` frame per ReAct step, then a `result` frame (answer + serialized sources/steps), then a `telemetry` frame (populated when `enable_telemetry=True`), then a terminal `[DONE]` sentinel. Bridges the synchronous agent loop to the async stream via `asyncio.Queue` + `asyncio.to_thread`. `request_timeout_seconds` is enforced via `asyncio.wait_for`; breaches return a deterministic 504 with K2 telemetry (`logger.warning`).
+- `konjoai/sdk/models.py`: `SDKAgentStreamEvent` — typed frozen dataclass with `type` discriminator and decoded `data` payload.
+- `konjoai/sdk/client.py`: `KonjoClient.agent_query_stream()` — iterator over `SDKAgentStreamEvent`. Skips malformed JSON frames and frames missing a `type`, and stops cleanly at `[DONE]`. Wraps `httpx.TimeoutException` as `KyroTimeoutError`.
+- `tests/unit/test_agentic.py` (+4 tests): `run_stream` step-then-result sequencing, parser fallback path, empty-question rejection, and a regression that proves `run()` still returns an identical `AgentResult` after the refactor.
+- `tests/unit/test_agent_route.py` (+4 tests): SSE frame contract (`step`/`result`/`telemetry`/`[DONE]`), telemetry omission when disabled, 504 on `asyncio.wait_for` timeout, 422 on empty question.
+- `tests/unit/test_sdk.py` (+4 tests): typed event yielding, `[DONE]` sentinel termination, malformed/typeless frame skipping, `KyroTimeoutError` mapping.
+
+### Changed
+- `pyproject.toml`, `konjoai/__init__.py`, `helm/kyro/Chart.yaml`, `docs/index.md`: version bumped `1.0.0 → 1.1.0`.
+- `tests/unit/test_packaging.py`: pinned-version assertion updated to `1.1.0`.
+
+### Konjo Invariants
+- **K1** (no silent failures): producer-side exceptions in `run_stream()` are propagated through the SSE bridge; the route surfaces them rather than swallowing them.
+- **K2** (telemetry): `agent_stream` step is wrapped in `timed()`; timeout path emits `logger.warning`.
+- **K3** (graceful degradation): SDK iterator silently skips malformed/typeless frames so a partial deploy cannot crash a pinned client.
+- **K5** (no new hard deps): pure stdlib `asyncio.Queue` + `asyncio.to_thread`; SDK reuses the existing `httpx.Client.stream` codepath.
+- **K6** (backward compatible): `RAGAgent.run()`, `POST /agent/query`, and all existing SDK methods are unchanged. New endpoint and new SDK method are purely additive.
+
+### Tests
+- Focused: `python3 -m pytest tests/unit/test_agent_route.py tests/unit/test_agentic.py tests/unit/test_sdk.py -q` → **64 passed in 3.25s**
+- Full regression: `python3 -m pytest tests/unit/ -q` → **769 passed, 15 skipped** (up from 757 — +12 tests; 5 pre-existing Python 3.9 compat failures unchanged)
+
+---
+
 ## [v1.0.0] — Sprint 20: Helm chart + PyPI packaging + Docs site
 
 ### Added

@@ -21,6 +21,7 @@ from konjoai.sdk.exceptions import (
 from konjoai.sdk.models import (
     SDKAgentQueryResponse,
     SDKAgentStep,
+    SDKAgentStreamEvent,
     SDKHealthResponse,
     SDKIngestResponse,
     SDKQueryResponse,
@@ -40,6 +41,7 @@ __all__ = [
     "SDKHealthResponse",
     "SDKAgentQueryResponse",
     "SDKAgentStep",
+    "SDKAgentStreamEvent",
     "SDKSourceDoc",
     "SDKStreamChunk",
 ]

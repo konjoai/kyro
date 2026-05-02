@@ -37,9 +37,9 @@ def _pyproject() -> str:
 
 
 class TestPackageVersion:
-    def test_version_is_1_0_0(self) -> None:
+    def test_version_is_1_1_0(self) -> None:
         import konjoai
-        assert konjoai.__version__ == "1.0.0"
+        assert konjoai.__version__ == "1.1.0"
 
     def test_version_matches_pyproject(self) -> None:
         import konjoai
@@ -205,7 +205,7 @@ class TestDocsPages:
             assert (ROOT / "docs" / page).exists(), f"Missing docs/{page}"
 
     def test_index_mentions_version(self) -> None:
-        assert "1.0.0" in _read("docs/index.md")
+        assert "1.1.0" in _read("docs/index.md")
 
     def test_sdk_doc_has_error_handling_section(self) -> None:
         assert "KyroError" in _read("docs/sdk.md")

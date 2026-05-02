@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Iterator
 
 from konjoai.generate.generator import GenerationResult, Generator, get_generator
 from konjoai.retrieve.hybrid import HybridResult, hybrid_search
@@ -75,6 +75,35 @@ class RAGAgent:
         self.top_k = top_k
 
     def run(self, question: str, *, generator: Generator | None = None) -> AgentResult:
+        """Drive the agent loop and return the final assembled result."""
+        result: AgentResult | None = None
+        for event in self.run_stream(question, generator=generator):
+            if event.get("type") == "result":
+                result = AgentResult(
+                    answer=event["answer"],
+                    model=event["model"],
+                    usage=event["usage"],
+                    steps=event["steps"],
+                    sources=event["sources"],
+                )
+        if result is None:  # pragma: no cover — run_stream always yields a result
+            raise RuntimeError("agent stream terminated without a result event")
+        return result
+
+    def run_stream(
+        self,
+        question: str,
+        *,
+        generator: Generator | None = None,
+    ) -> Iterator[dict]:
+        """Drive the ReAct loop, yielding one event dict per step plus a final result.
+
+        Event shapes:
+          {"type": "step", "index": int, "thought": str, "action": str,
+           "action_input": str, "observation": str}
+          {"type": "result", "answer": str, "model": str, "usage": dict,
+           "steps": list[AgentStep], "sources": list[RerankResult]}
+        """
         if not question.strip():
             raise ValueError("question must be non-empty")
 
@@ -84,6 +113,17 @@ class RAGAgent:
         working_docs: list[RerankResult] = []
         last_generation: GenerationResult | None = None
 
+        def _emit_step(step: AgentStep) -> dict:
+            steps.append(step)
+            return {
+                "type": "step",
+                "index": len(steps),
+                "thought": step.thought,
+                "action": step.action,
+                "action_input": step.action_input,
+                "observation": step.observation,
+            }
+
         for _ in range(self.max_steps):
             prompt = self._build_prompt(question, steps, registry.actions())
             context = self._format_context(working_docs)
@@ -92,7 +132,7 @@ class RAGAgent:
 
             payload = _parse_action_payload(generation.answer)
             if payload is None:
-                steps.append(
+                yield _emit_step(
                     AgentStep(
                         thought="parser_fallback",
                         action="finish",
@@ -100,18 +140,20 @@ class RAGAgent:
                         observation="model output was not valid JSON; returning raw answer",
                     )
                 )
-                return AgentResult(
-                    answer=generation.answer.strip(),
-                    model=generation.model,
-                    usage=generation.usage,
-                    steps=steps,
-                    sources=working_docs,
-                )
+                yield {
+                    "type": "result",
+                    "answer": generation.answer.strip(),
+                    "model": generation.model,
+                    "usage": generation.usage,
+                    "steps": steps,
+                    "sources": working_docs,
+                }
+                return
 
             action = _normalize_action(payload.action)
             if action == "finish":
                 answer = payload.final_answer.strip() if payload.final_answer.strip() else generation.answer.strip()
-                steps.append(
+                yield _emit_step(
                     AgentStep(
                         thought=payload.thought,
                         action="finish",
@@ -119,16 +161,18 @@ class RAGAgent:
                         observation="completed",
                     )
                 )
-                return AgentResult(
-                    answer=answer,
-                    model=generation.model,
-                    usage=generation.usage,
-                    steps=steps,
-                    sources=working_docs,
-                )
+                yield {
+                    "type": "result",
+                    "answer": answer,
+                    "model": generation.model,
+                    "usage": generation.usage,
+                    "steps": steps,
+                    "sources": working_docs,
+                }
+                return
 
             if action not in registry.actions():
-                steps.append(
+                yield _emit_step(
                     AgentStep(
                         thought=payload.thought,
                         action=action,
@@ -144,7 +188,7 @@ class RAGAgent:
             if docs:
                 working_docs = docs
 
-            steps.append(
+            yield _emit_step(
                 AgentStep(
                     thought=payload.thought,
                     action=action,
@@ -159,7 +203,7 @@ class RAGAgent:
 
         fallback_context = self._format_context(working_docs)
         fallback = llm.generate(question=question, context=fallback_context)
-        steps.append(
+        yield _emit_step(
             AgentStep(
                 thought="max_steps_guard",
                 action="finish",
@@ -167,13 +211,15 @@ class RAGAgent:
                 observation="max step limit reached; returned direct generation",
             )
         )
-        return AgentResult(
-            answer=fallback.answer.strip(),
-            model=fallback.model,
-            usage=fallback.usage,
-            steps=steps,
-            sources=working_docs,
-        )
+        yield {
+            "type": "result",
+            "answer": fallback.answer.strip(),
+            "model": fallback.model,
+            "usage": fallback.usage,
+            "steps": steps,
+            "sources": working_docs,
+        }
+        _ = last_generation  # retained for parity with prior closure
 
     def _build_registry(self, question: str) -> ToolRegistry:
         registry = ToolRegistry()

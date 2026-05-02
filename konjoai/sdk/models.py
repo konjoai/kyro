@@ -57,3 +57,16 @@ class SDKAgentQueryResponse:
     usage: dict
     steps: list
     telemetry: object = None
+
+
+@dataclass(frozen=True)
+class SDKAgentStreamEvent:
+    """A single Server-Sent Event from ``KonjoClient.agent_query_stream``.
+
+    ``type`` is one of ``"step"``, ``"result"``, or ``"telemetry"``. The
+    ``data`` payload mirrors the JSON frame emitted by the server, decoded
+    into a plain dict so callers can branch on ``type`` without depending on
+    a specific schema version.
+    """
+    type: str
+    data: dict = field(default_factory=dict)

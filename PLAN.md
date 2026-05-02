@@ -9,11 +9,41 @@
 
 ---
 
-## Current State: Sprint 20 Complete — v1.0.0 SHIPPED
+## Current State: Sprint 21 Complete — v1.1.0 SHIPPED
 
-- **Tests:** 764 passing (+ 15 skipped), 5 pre-existing Python 3.9 compat failures
+- **Tests:** 769 passing (+ 15 skipped), 5 pre-existing Python 3.9 compat failures
 - **Branch:** `main`
-- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming + semantic cache + adaptive chunking + CRAG + Self-RAG + Query Decomposition + Agentic RAG + GraphRAG + OTel + Prometheus + Multi-tenancy + JWT + Auth hardening + Rate limiting + Python SDK + MCP server + **Helm chart + PyPI + Docs site (Sprint 20 — v1.0.0)**
+- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming + semantic cache + adaptive chunking + CRAG + Self-RAG + Query Decomposition + Agentic RAG + **Streaming Agent (Sprint 21 — v1.1.0)** + GraphRAG + OTel + Prometheus + Multi-tenancy + JWT + Auth hardening + Rate limiting + Python SDK + MCP server + Helm chart + PyPI + Docs site
+
+---
+
+## Completed Sprint: Sprint 21 — Streaming Agent (`POST /agent/query/stream`) (v1.1.0)
+
+**Goal:** Bridge the bounded ReAct loop to a Server-Sent Events stream so callers see each Thought/Action/Observation in real time instead of waiting for the full multi-step run to complete.
+
+### Implementation Checklist — Sprint 21
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `konjoai/agent/react.py` | `RAGAgent.run_stream()` — sync generator yielding `step` events + final `result` event; `run()` refactored to consume it | ✅ |
+| 2 | `konjoai/api/routes/agent.py` | `POST /agent/query/stream` — SSE endpoint, `asyncio.Queue` bridge from `to_thread`, timeout-bounded, telemetry frame, `[DONE]` sentinel | ✅ |
+| 3 | `konjoai/sdk/models.py` | `SDKAgentStreamEvent` typed event | ✅ |
+| 4 | `konjoai/sdk/client.py` | `KonjoClient.agent_query_stream()` iterator | ✅ |
+| 5 | `konjoai/sdk/__init__.py` | Export `SDKAgentStreamEvent` | ✅ |
+| 6 | `tests/unit/test_agentic.py` | +4 tests: stream sequencing, parser fallback, empty-question reject, `run()` parity | ✅ |
+| 7 | `tests/unit/test_agent_route.py` | +4 tests: SSE frame contract, telemetry-off, 504 timeout, 422 empty-question | ✅ |
+| 8 | `tests/unit/test_sdk.py` | +4 tests: typed events, `[DONE]` stop, malformed/typeless skip, timeout mapping | ✅ |
+| 9 | `pyproject.toml` + `konjoai/__init__.py` + `helm/kyro/Chart.yaml` + `docs/index.md` + `tests/unit/test_packaging.py` | Version bump 1.0.0 → 1.1.0 | ✅ |
+| 10 | `README.md` + `CHANGELOG.md` | Document new endpoint and bumped version | ✅ |
+
+### Sprint 21 Gate Results
+
+1. K1: producer-side exceptions in `run_stream()` propagate through the SSE bridge and surface to the route layer. ✅
+2. K2: `agent_stream` step wrapped in `timed()`; timeout path emits `logger.warning`. ✅
+3. K3: SDK iterator silently drops malformed/typeless frames; new endpoint is purely additive. ✅
+4. K5: pure stdlib bridge (`asyncio.Queue` + `asyncio.to_thread`). Zero new hard deps. ✅
+5. K6: `RAGAgent.run()`, `POST /agent/query`, and all existing SDK methods unchanged. ✅
+6. **Tests:** 769 passing (was 757 — +12 new). 15 skipped, 5 pre-existing Py3.9 compat failures unchanged. ✅
 
 ---
 

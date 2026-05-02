@@ -15,6 +15,7 @@ from konjoai.sdk.exceptions import (
 from konjoai.sdk.models import (
     SDKAgentQueryResponse,
     SDKAgentStep,
+    SDKAgentStreamEvent,
     SDKHealthResponse,
     SDKIngestResponse,
     SDKQueryResponse,
@@ -254,6 +255,46 @@ class KonjoClient:
             ],
             telemetry=data.get("telemetry"),
         )
+
+    def agent_query_stream(
+        self,
+        question: str,
+        *,
+        top_k: int = 5,
+        max_steps: int = 5,
+    ) -> Iterator[SDKAgentStreamEvent]:
+        """Stream the bounded ReAct agent loop as Server-Sent Events.
+
+        Each yielded :class:`SDKAgentStreamEvent` carries a ``type`` discriminator
+        (``"step"``, ``"result"``, or ``"telemetry"``) and the decoded JSON ``data``
+        payload. The terminal ``[DONE]`` sentinel is consumed silently and ends
+        iteration.
+        """
+        try:
+            with self._client.stream(
+                "POST",
+                "/agent/query/stream",
+                json={"question": question, "top_k": top_k, "max_steps": max_steps},
+            ) as resp:
+                self._raise_for_status(resp)
+                for line in resp.iter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    payload = line[6:]
+                    if payload.strip() == "[DONE]":
+                        break
+                    try:
+                        frame = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(frame, dict):
+                        continue
+                    event_type = str(frame.get("type", ""))
+                    if not event_type:
+                        continue
+                    yield SDKAgentStreamEvent(type=event_type, data=frame)
+        except httpx.TimeoutException as exc:
+            raise KyroTimeoutError(f"agent stream timed out: {exc}") from exc
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 

@@ -461,3 +461,69 @@ class TestKonjoClientLifecycle:
             client = KonjoClient("http://localhost:8000")
         client.close()
         client._client.close.assert_called_once()
+
+
+# ── agent_query_stream() ─────────────────────────────────────────────────────
+
+
+class TestKonjoClientAgentQueryStream:
+    def _client(self) -> KonjoClient:
+        with patch("konjoai.sdk.client.httpx.Client"):
+            c = KonjoClient("http://localhost:8000")
+        return c
+
+    def _mock_stream_ctx(self, lines: list[str], status_code: int = 200) -> MagicMock:
+        resp = MagicMock()
+        resp.status_code = status_code
+        resp.text = ""
+        resp.headers = {}
+        resp.iter_lines.return_value = iter(lines)
+        ctx = MagicMock()
+        ctx.__enter__ = MagicMock(return_value=resp)
+        ctx.__exit__ = MagicMock(return_value=False)
+        return ctx
+
+    def test_agent_stream_yields_typed_events(self) -> None:
+        client = self._client()
+        client._client.stream.return_value = self._mock_stream_ctx([
+            'data: {"type":"step","index":1,"action":"retrieve","thought":"t","action_input":"x","observation":"[]"}',
+            'data: {"type":"step","index":2,"action":"finish","thought":"t","action_input":"","observation":"completed"}',
+            'data: {"type":"result","answer":"A","model":"m","usage":{},"steps":[],"sources":[]}',
+            'data: {"type":"telemetry","telemetry":null}',
+            "data: [DONE]",
+        ])
+        events = list(client.agent_query_stream("q", top_k=3, max_steps=4))
+        assert [e.type for e in events] == ["step", "step", "result", "telemetry"]
+        assert events[0].data["action"] == "retrieve"
+        assert events[2].data["answer"] == "A"
+
+    def test_agent_stream_stops_at_done_sentinel(self) -> None:
+        client = self._client()
+        client._client.stream.return_value = self._mock_stream_ctx([
+            'data: {"type":"step","action":"retrieve"}',
+            "data: [DONE]",
+            'data: {"type":"step","action":"never"}',
+        ])
+        events = list(client.agent_query_stream("q"))
+        assert len(events) == 1
+
+    def test_agent_stream_skips_malformed_and_typeless_frames(self) -> None:
+        client = self._client()
+        client._client.stream.return_value = self._mock_stream_ctx([
+            "event: message",
+            "data: not json",
+            'data: {"no_type":"x"}',
+            'data: ["a","b"]',
+            'data: {"type":"step","action":"retrieve"}',
+            "data: [DONE]",
+        ])
+        events = list(client.agent_query_stream("q"))
+        assert len(events) == 1
+        assert events[0].type == "step"
+
+    def test_agent_stream_raises_timeout(self) -> None:
+        import httpx
+        client = self._client()
+        client._client.stream.side_effect = httpx.TimeoutException("timeout")
+        with pytest.raises(KyroTimeoutError):
+            list(client.agent_query_stream("q"))
