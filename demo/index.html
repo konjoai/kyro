@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kyro — Production RAG agent with semantic caching and streaming</title>
+<meta name="description" content="Kyro: production RAG agent — bounded ReAct loop, SSE streaming, distributed semantic cache (Redis), multi-tenant, MIT-licensed." />
+<style>
+  :root {
+    --bg-0: #07080c;
+    --bg-1: #0c0f17;
+    --bg-2: #131826;
+    --bg-3: #1a2236;
+    --line: #232b40;
+    --ink:  #e6ecff;
+    --dim:  #8893b1;
+    --acc:  #6affd5;     /* mint */
+    --acc-2:#7aa7ff;     /* azure */
+    --acc-3:#ff8fb1;     /* coral */
+    --acc-4:#f6d35b;     /* amber */
+    --good: #2ecc71;
+    --bad:  #ff6464;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg-0); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 80% -200px, rgba(106, 255, 213, 0.08), transparent 60%),
+      radial-gradient(900px 600px at -10% 30%, rgba(122, 167, 255, 0.07), transparent 60%),
+      var(--bg-0);
+    line-height: 1.55;
+  }
+
+  a { color: var(--acc-2); text-decoration: none; }
+  a:hover { color: var(--acc); }
+
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(10px);
+    background: rgba(7, 8, 12, 0.7);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.5px; }
+  .brand-mark {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--acc), var(--acc-2));
+    display: grid; place-items: center; color: #06121a; font-weight: 800;
+  }
+  .nav-links { display: flex; gap: 22px; font-size: 14px; color: var(--dim); }
+  .nav-links a { color: var(--dim); }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .nav-cta:hover { border-color: var(--acc); }
+
+  .container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 90px 16px 72px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero h1 {
+    font-size: clamp(40px, 6vw, 76px);
+    line-height: 1.05;
+    margin: 0 0 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #b9c5e2 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 .accent {
+    background: linear-gradient(90deg, var(--acc) 0%, var(--acc-2) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p {
+    color: var(--dim);
+    font-size: 18px;
+    max-width: 720px;
+    margin: 0 auto 32px;
+  }
+  .badges { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
+  .badge {
+    border: 1px solid var(--line);
+    background: rgba(19, 24, 38, 0.7);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--dim);
+    font-family: var(--mono);
+  }
+  .badge .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--acc); margin-right: 6px; box-shadow: 0 0 8px var(--acc); }
+
+  .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    border-radius: 10px; padding: 11px 18px;
+    font-weight: 600; font-size: 14px;
+    border: 1px solid transparent; cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.2s ease;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--acc) 0%, var(--acc-2) 100%);
+    color: #06121a;
+  }
+  .btn-primary:hover { transform: translateY(-1px); }
+  .btn-ghost {
+    background: transparent; color: var(--ink);
+    border-color: var(--line);
+  }
+  .btn-ghost:hover { border-color: var(--acc); color: var(--acc); }
+
+  /* Section scaffolding */
+  section { padding: 72px 0; }
+  .eyebrow { display: inline-block; font-family: var(--mono); font-size: 12px; color: var(--acc); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 10px; }
+  h2 { font-size: 36px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  h2 small { display: block; font-size: 16px; color: var(--dim); font-weight: 400; margin-top: 6px; letter-spacing: 0; }
+
+  /* What-is */
+  .what {
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(19, 24, 38, 0.7), rgba(12, 15, 23, 0.5));
+    border-radius: 18px;
+    padding: 32px;
+    color: var(--dim);
+    font-size: 16px;
+  }
+  .what strong { color: var(--ink); }
+
+  /* Feature grid */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .feature {
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    background: linear-gradient(180deg, rgba(19, 24, 38, 0.7), rgba(12, 15, 23, 0.4));
+    transition: transform 0.2s ease, border-color 0.2s ease;
+    position: relative; overflow: hidden;
+  }
+  .feature::before {
+    content: ""; position: absolute; inset: 0; border-radius: 16px;
+    pointer-events: none; opacity: 0.6;
+    background: radial-gradient(400px 200px at 0% 0%, rgba(106, 255, 213, 0.06), transparent 60%);
+  }
+  .feature:hover { transform: translateY(-3px); border-color: var(--acc); }
+  .feature .ico {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: rgba(106, 255, 213, 0.1);
+    border: 1px solid rgba(106, 255, 213, 0.4);
+    display: grid; place-items: center; color: var(--acc);
+    margin-bottom: 14px;
+  }
+  .feature h3 { margin: 0 0 6px; font-size: 18px; }
+  .feature p { margin: 0; color: var(--dim); font-size: 14px; }
+
+  /* SSE visualizer */
+  .demo {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(19, 24, 38, 0.6), rgba(12, 15, 23, 0.5));
+    padding: 24px;
+  }
+  .demo-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
+  }
+  .demo-head h3 { margin: 0; font-size: 18px; }
+  .demo-controls { display: flex; gap: 8px; }
+  .term {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: #04060a;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+    min-height: 230px;
+    color: var(--ink);
+    overflow: hidden;
+  }
+  .term .req { color: var(--acc-2); }
+  .term .step-row { opacity: 0; transform: translateY(6px); animation: rise 0.35s forwards; }
+  .term .ok { color: var(--good); }
+  .term .key { color: var(--acc-4); }
+  .term .dim { color: var(--dim); }
+  .term .err { color: var(--bad); }
+  .term .arrow { color: var(--acc); }
+  @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+
+  /* Cache visualizer */
+  .cache-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 760px) {
+    .cache-grid { grid-template-columns: 1fr; }
+  }
+  .cache-input {
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .cache-input label { color: var(--dim); font-size: 13px; }
+  .cache-input input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #04060a;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 14px;
+    outline: none;
+  }
+  .cache-input input:focus { border-color: var(--acc); }
+  .preset-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .preset-chips button {
+    background: rgba(122, 167, 255, 0.08);
+    color: var(--acc-2);
+    border: 1px solid var(--line);
+    padding: 6px 10px; border-radius: 999px;
+    font-family: var(--mono); font-size: 12px;
+    cursor: pointer;
+  }
+  .preset-chips button:hover { border-color: var(--acc-2); }
+  .cache-meter {
+    background: #04060a;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    min-height: 230px;
+    font-family: var(--mono); font-size: 13px;
+  }
+  .cache-line { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.04); }
+  .cache-line:last-child { border-bottom: 0; }
+  .similarity-bar {
+    margin-top: 12px;
+    height: 8px; border-radius: 999px; background: rgba(255,255,255,0.06);
+    overflow: hidden; position: relative;
+  }
+  .similarity-bar > span {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--bad) 0%, var(--acc-4) 50%, var(--good) 100%);
+    width: 0%;
+    transition: width 0.45s ease;
+  }
+  .verdict {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    font-weight: 600;
+    text-align: center;
+  }
+  .verdict.miss { color: var(--bad); border-color: rgba(255, 100, 100, 0.4); background: rgba(255,100,100,0.06); }
+  .verdict.hit  { color: var(--good); border-color: rgba(46, 204, 113, 0.4); background: rgba(46,204,113,0.06); }
+
+  /* Architecture SVG */
+  .arch {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 24px;
+    background: linear-gradient(180deg, rgba(19, 24, 38, 0.6), rgba(12, 15, 23, 0.5));
+  }
+  .arch svg { width: 100%; height: auto; display: block; }
+
+  /* Code blocks */
+  .codeblock {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #04060a;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .codeblock-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+    color: var(--dim); font-family: var(--mono); font-size: 12px;
+  }
+  .copy-btn {
+    background: transparent; color: var(--dim); border: 1px solid var(--line);
+    padding: 4px 8px; border-radius: 6px; cursor: pointer; font-family: var(--mono); font-size: 11px;
+  }
+  .copy-btn:hover { color: var(--acc); border-color: var(--acc); }
+  pre { margin: 0; padding: 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: #cdd6f4; }
+  .tok-kw { color: #ff8fb1; }
+  .tok-str { color: #a6e3a1; }
+  .tok-fn { color: #89b4fa; }
+  .tok-num { color: #f6d35b; }
+  .tok-cmt { color: #6c7891; font-style: italic; }
+  .tok-builtin { color: #6affd5; }
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 28px 0 36px;
+    color: var(--dim);
+    font-size: 13px;
+    text-align: center;
+  }
+  footer .scripts { font-family: var(--mono); margin-top: 8px; opacity: 0.7; letter-spacing: 0.05em; }
+</style>
+</head>
+<body>
+
+<!-- ── Nav ─────────────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="brand">
+    <span class="brand-mark">K</span>
+    <span>kyro</span>
+    <span style="color: var(--dim); font-family: var(--mono); font-size: 12px; margin-left: 6px;">v1.2.0</span>
+  </div>
+  <div class="nav-links">
+    <a href="#what">What</a>
+    <a href="#features">Features</a>
+    <a href="#streaming">Streaming</a>
+    <a href="#cache">Cache</a>
+    <a href="#arch">Architecture</a>
+    <a href="#sdk">SDK</a>
+  </div>
+  <a class="nav-cta" href="https://github.com/konjoai/kyro" target="_blank" rel="noopener">GitHub →</a>
+</nav>
+
+<!-- ── Hero ────────────────────────────────────────────────────────────── -->
+<header class="hero">
+  <div class="badges">
+    <span class="badge"><span class="dot"></span>v1.2.0  ·  Sprint 22 shipped</span>
+    <span class="badge">798 tests passing</span>
+    <span class="badge">MIT</span>
+    <span class="badge">Python 3.11+</span>
+  </div>
+  <h1>Production RAG agent with<br/><span class="accent">semantic caching and streaming</span></h1>
+  <p>
+    A bounded ReAct loop, server-sent step events, and a tenant-namespaced
+    semantic cache that survives pod restarts. Drop in, scale out, ship today.
+  </p>
+  <div class="cta-row">
+    <button class="btn btn-primary" onclick="document.getElementById('streaming').scrollIntoView({behavior:'smooth'})">See it stream →</button>
+    <a class="btn btn-ghost" href="#sdk">View SDK</a>
+  </div>
+</header>
+
+<!-- ── What is kyro ────────────────────────────────────────────────────── -->
+<section id="what" class="container">
+  <div class="eyebrow">What is kyro?</div>
+  <h2>Post-naive RAG, in one library.<small>HyDE · ColBERT · CRAG · Self-RAG · GraphRAG · ReAct · semantic cache · SSE streaming · multi-tenancy.</small></h2>
+  <div class="what">
+    Kyro is a <strong>production-grade Retrieval-Augmented Generation pipeline</strong> with the post-naive primitives the literature actually demands —
+    corrective and self-reflective retrieval, multi-step decomposition, agentic ReAct, and lightweight GraphRAG —
+    fronted by an <strong>SSE-streaming agent endpoint</strong> and a <strong>distributed semantic cache</strong>
+    that collapses 20–40% of production query traffic onto Redis. Multi-tenant by design,
+    observable via OpenTelemetry, deployable via Helm. Built so the next engineer
+    inherits a vessel — not a graveyard.
+  </div>
+</section>
+
+<!-- ── Features ────────────────────────────────────────────────────────── -->
+<section id="features" class="container">
+  <div class="eyebrow">Capability matrix</div>
+  <h2>Five primitives, one runtime.</h2>
+  <div class="features">
+    <div class="feature">
+      <div class="ico">⚡</div>
+      <h3>RAG Agent</h3>
+      <p>Bounded ReAct loop: thought → action → observation. Tool-traced. Timeout-enforced. Returns 504 deterministically on overrun.</p>
+    </div>
+    <div class="feature">
+      <div class="ico">🧠</div>
+      <h3>Semantic Cache</h3>
+      <p>Cosine-gated lookup with LRU eviction. ~3 ms p50 cache hit vs 800 ms LLM cold path. Threshold tuned per workload.</p>
+    </div>
+    <div class="feature">
+      <div class="ico">🔀</div>
+      <h3>Redis Backend</h3>
+      <p>Tenant-namespaced HASH + LRU ZSET. Survives pod restarts. Optional TTL. K3 graceful fallback to in-memory.</p>
+    </div>
+    <div class="feature">
+      <div class="ico">📡</div>
+      <h3>SSE Streaming</h3>
+      <p><code>/agent/query/stream</code>: one frame per ReAct step, then a result frame, then a telemetry frame, then [DONE].</p>
+    </div>
+    <div class="feature">
+      <div class="ico">🐍</div>
+      <h3>Typed SDK</h3>
+      <p>Frozen-dataclass response models, structured exception hierarchy, context-managed lifecycle. Pure httpx — no rag-framework lock-in.</p>
+    </div>
+    <div class="feature">
+      <div class="ico">🔐</div>
+      <h3>Multi-tenant + Auth</h3>
+      <p>JWT-derived tenant_id auto-scopes Qdrant filters and cache keys. API-key or Bearer. Sliding-window rate limit. All optional.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── SSE Streaming Visualizer ─────────────────────────────────────────── -->
+<section id="streaming" class="container">
+  <div class="eyebrow">live SSE event flow</div>
+  <h2>The agent streams its work.<small>Each ReAct step is one Server-Sent Event. Watch the loop unfold.</small></h2>
+  <div class="demo">
+    <div class="demo-head">
+      <h3><span style="color:var(--acc)">▸</span> POST /agent/query/stream</h3>
+      <div class="demo-controls">
+        <button class="btn btn-ghost" id="streamBtn" onclick="runStream()">Replay ↻</button>
+      </div>
+    </div>
+    <div class="term" id="streamTerm" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ── Cache Visualizer ────────────────────────────────────────────────── -->
+<section id="cache" class="container">
+  <div class="eyebrow">semantic cache</div>
+  <h2>Type a query. Watch it miss, then hit.<small>Cosine similarity is computed live against the cached vector — paraphrases collapse to the same answer.</small></h2>
+  <div class="cache-grid">
+    <div class="cache-input">
+      <label for="q">Query</label>
+      <input id="q" type="text" placeholder='Try: "What is the refund policy?"' onkeydown="if(event.key==='Enter')runCache()" />
+      <div class="preset-chips">
+        <button onclick="setPreset('What is the refund policy?')">What is the refund policy?</button>
+        <button onclick="setPreset('How do refunds work?')">How do refunds work?</button>
+        <button onclick="setPreset('Tell me about returns.')">Tell me about returns.</button>
+        <button onclick="setPreset('What is your shipping rate?')">What is your shipping rate?</button>
+      </div>
+      <div class="cta-row" style="justify-content:flex-start; gap: 8px; margin-top: 6px;">
+        <button class="btn btn-primary" onclick="runCache()">Lookup →</button>
+        <button class="btn btn-ghost" onclick="resetCache()">Reset cache</button>
+      </div>
+    </div>
+    <div class="cache-meter" id="cacheMeter">
+      <div class="cache-line"><span>cache.size</span><span id="m-size">0 / 100</span></div>
+      <div class="cache-line"><span>threshold</span><span style="color:var(--acc)">0.95</span></div>
+      <div class="cache-line"><span>last query</span><span id="m-last">—</span></div>
+      <div class="cache-line"><span>best similarity</span><span id="m-sim">—</span></div>
+      <div class="cache-line"><span>total hits / misses</span><span id="m-hm">0 / 0</span></div>
+      <div class="cache-line"><span>hit rate</span><span id="m-rate">0.0</span></div>
+      <div class="similarity-bar"><span id="m-bar"></span></div>
+      <div class="verdict" id="m-verdict">Awaiting query…</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Architecture diagram ─────────────────────────────────────────────── -->
+<section id="arch" class="container">
+  <div class="eyebrow">architecture</div>
+  <h2>Client → SDK → FastAPI → Agent → Cache.<small>Everything between the user and the LLM is yours to control. No magic.</small></h2>
+  <div class="arch">
+    <svg viewBox="0 0 1100 380" xmlns="http://www.w3.org/2000/svg" aria-label="kyro architecture diagram">
+      <defs>
+        <linearGradient id="grad-mint" x1="0" x2="1">
+          <stop offset="0" stop-color="#6affd5"/>
+          <stop offset="1" stop-color="#7aa7ff"/>
+        </linearGradient>
+        <linearGradient id="grad-card" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="#1a2236"/>
+          <stop offset="1" stop-color="#0c0f17"/>
+        </linearGradient>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#6affd5"/>
+        </marker>
+      </defs>
+
+      <!-- Client -->
+      <g>
+        <rect x="20" y="140" width="150" height="100" rx="14" fill="url(#grad-card)" stroke="#232b40"/>
+        <text x="95" y="180" text-anchor="middle" fill="#e6ecff" font-family="ui-monospace" font-size="14" font-weight="700">Client</text>
+        <text x="95" y="200" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">user · CLI · MCP</text>
+      </g>
+
+      <!-- SDK -->
+      <g>
+        <rect x="220" y="140" width="170" height="100" rx="14" fill="url(#grad-card)" stroke="#6affd5"/>
+        <text x="305" y="175" text-anchor="middle" fill="#6affd5" font-family="ui-monospace" font-size="14" font-weight="700">KonjoClient</text>
+        <text x="305" y="195" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">httpx · SSE · typed</text>
+        <text x="305" y="212" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">JWT · API key</text>
+      </g>
+
+      <!-- FastAPI -->
+      <g>
+        <rect x="440" y="80" width="180" height="220" rx="14" fill="url(#grad-card)" stroke="#7aa7ff"/>
+        <text x="530" y="115" text-anchor="middle" fill="#7aa7ff" font-family="ui-monospace" font-size="14" font-weight="700">FastAPI</text>
+        <text x="530" y="142" text-anchor="middle" fill="#e6ecff" font-family="ui-monospace" font-size="11">/query  /query/stream</text>
+        <text x="530" y="160" text-anchor="middle" fill="#e6ecff" font-family="ui-monospace" font-size="11">/agent/query</text>
+        <text x="530" y="178" text-anchor="middle" fill="#e6ecff" font-family="ui-monospace" font-size="11">/agent/query/stream</text>
+        <text x="530" y="196" text-anchor="middle" fill="#e6ecff" font-family="ui-monospace" font-size="11">/ingest  /eval  /health</text>
+        <text x="530" y="222" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">tenant_id from JWT</text>
+        <text x="530" y="240" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">request_timeout_seconds</text>
+        <text x="530" y="258" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">rate-limit · OTel</text>
+      </g>
+
+      <!-- Agent + Retrieve -->
+      <g>
+        <rect x="670" y="60" width="190" height="110" rx="14" fill="url(#grad-card)" stroke="#ff8fb1"/>
+        <text x="765" y="95" text-anchor="middle" fill="#ff8fb1" font-family="ui-monospace" font-size="14" font-weight="700">RAGAgent</text>
+        <text x="765" y="115" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">ReAct loop · max_steps</text>
+        <text x="765" y="133" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">Self-RAG · CRAG</text>
+        <text x="765" y="151" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">decomposition · GraphRAG</text>
+      </g>
+      <g>
+        <rect x="670" y="200" width="190" height="80" rx="14" fill="url(#grad-card)" stroke="#f6d35b"/>
+        <text x="765" y="232" text-anchor="middle" fill="#f6d35b" font-family="ui-monospace" font-size="14" font-weight="700">Hybrid Retrieval</text>
+        <text x="765" y="252" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">BM25 + Dense · RRF</text>
+        <text x="765" y="270" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">ColBERT MaxSim rerank</text>
+      </g>
+
+      <!-- Cache -->
+      <g>
+        <rect x="910" y="60" width="170" height="110" rx="14" fill="url(#grad-card)" stroke="#6affd5"/>
+        <text x="995" y="95" text-anchor="middle" fill="#6affd5" font-family="ui-monospace" font-size="14" font-weight="700">SemanticCache</text>
+        <text x="995" y="115" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">cosine ≥ 0.95 · LRU</text>
+        <text x="995" y="133" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">memory · redis</text>
+        <text x="995" y="151" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">tenant-scoped</text>
+      </g>
+      <!-- Storage -->
+      <g>
+        <rect x="910" y="200" width="170" height="80" rx="14" fill="url(#grad-card)" stroke="#7aa7ff"/>
+        <text x="995" y="232" text-anchor="middle" fill="#7aa7ff" font-family="ui-monospace" font-size="14" font-weight="700">Qdrant</text>
+        <text x="995" y="252" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">float32 · tenant_id filter</text>
+        <text x="995" y="270" text-anchor="middle" fill="#8893b1" font-family="ui-monospace" font-size="11">async pool</text>
+      </g>
+
+      <!-- arrows -->
+      <line x1="170" y1="190" x2="220" y2="190" stroke="url(#grad-mint)" stroke-width="2" marker-end="url(#arrow)"/>
+      <line x1="390" y1="190" x2="440" y2="190" stroke="url(#grad-mint)" stroke-width="2" marker-end="url(#arrow)"/>
+      <line x1="620" y1="140" x2="670" y2="115" stroke="url(#grad-mint)" stroke-width="2" marker-end="url(#arrow)"/>
+      <line x1="620" y1="240" x2="670" y2="240" stroke="url(#grad-mint)" stroke-width="2" marker-end="url(#arrow)"/>
+      <line x1="860" y1="115" x2="910" y2="115" stroke="url(#grad-mint)" stroke-width="2" marker-end="url(#arrow)"/>
+      <line x1="860" y1="240" x2="910" y2="240" stroke="url(#grad-mint)" stroke-width="2" marker-end="url(#arrow)"/>
+
+      <!-- Cache fast path -->
+      <path d="M530,80 Q530,30 995,30 L995,60" fill="none" stroke="#6affd5" stroke-dasharray="6 4" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.7"/>
+      <text x="760" y="20" fill="#6affd5" font-family="ui-monospace" font-size="11" text-anchor="middle">cache fast-path · ~3 ms p50</text>
+
+      <!-- footnote -->
+      <text x="20" y="370" fill="#8893b1" font-family="ui-monospace" font-size="11">SSE: server emits step → step → result → telemetry → [DONE]      ·       Cache miss falls through to Agent → Hybrid → Qdrant → LLM.</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ── SDK code ─────────────────────────────────────────────────────────── -->
+<section id="sdk" class="container">
+  <div class="eyebrow">python sdk</div>
+  <h2>Five lines to a streaming agent.<small><code>pip install konjoai</code> — frozen-dataclass models, exception hierarchy, context-managed lifecycle.</small></h2>
+
+  <div class="codeblock">
+    <div class="codeblock-head">
+      <span>installation</span>
+      <button class="copy-btn" onclick="copyCode(this)">copy</button>
+    </div>
+<pre><span class="tok-cmt"># Pure SDK — no FastAPI, no transformers required client-side.</span>
+<span class="tok-builtin">pip</span> install konjoai
+</pre>
+  </div>
+
+  <div class="codeblock">
+    <div class="codeblock-head">
+      <span>blocking agent_query</span>
+      <button class="copy-btn" onclick="copyCode(this)">copy</button>
+    </div>
+<pre><span class="tok-kw">from</span> konjoai.sdk <span class="tok-kw">import</span> KonjoClient
+
+<span class="tok-kw">with</span> <span class="tok-fn">KonjoClient</span>(<span class="tok-str">"https://kyro.acme.io"</span>, api_key=<span class="tok-str">"sk-..."</span>) <span class="tok-kw">as</span> client:
+    response = client.<span class="tok-fn">agent_query</span>(<span class="tok-str">"What is the refund policy?"</span>, top_k=<span class="tok-num">3</span>)
+    <span class="tok-fn">print</span>(response.answer)
+    <span class="tok-fn">print</span>([s.action <span class="tok-kw">for</span> s <span class="tok-kw">in</span> response.steps])
+</pre>
+  </div>
+
+  <div class="codeblock">
+    <div class="codeblock-head">
+      <span>streaming agent — print steps as they arrive</span>
+      <button class="copy-btn" onclick="copyCode(this)">copy</button>
+    </div>
+<pre><span class="tok-kw">for</span> ev <span class="tok-kw">in</span> client.<span class="tok-fn">agent_query_stream</span>(<span class="tok-str">"How do refunds work?"</span>):
+    <span class="tok-kw">if</span> ev.type == <span class="tok-str">"step"</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">f"  → "</span> + ev.data[<span class="tok-str">"action"</span>] + <span class="tok-str">"  "</span> + ev.data[<span class="tok-str">"observation"</span>][:<span class="tok-num">80</span>])
+    <span class="tok-kw">elif</span> ev.type == <span class="tok-str">"result"</span>:
+        <span class="tok-fn">print</span>(<span class="tok-str">"\n"</span> + ev.data[<span class="tok-str">"answer"</span>])
+</pre>
+  </div>
+
+  <div class="codeblock">
+    <div class="codeblock-head">
+      <span>distributed semantic cache (Sprint 22)</span>
+      <button class="copy-btn" onclick="copyCode(this)">copy</button>
+    </div>
+<pre><span class="tok-cmt"># Set once via env — falls back to in-memory if Redis is unavailable.</span>
+<span class="tok-kw">export</span> CACHE_ENABLED=<span class="tok-str">true</span>
+<span class="tok-kw">export</span> CACHE_BACKEND=<span class="tok-str">redis</span>
+<span class="tok-kw">export</span> CACHE_REDIS_URL=<span class="tok-str">redis://kyro-cache.svc.cluster.local:6379/0</span>
+<span class="tok-kw">export</span> CACHE_REDIS_TTL_SECONDS=<span class="tok-num">3600</span>
+</pre>
+  </div>
+
+  <div class="codeblock">
+    <div class="codeblock-head">
+      <span>SSE — wire format</span>
+      <button class="copy-btn" onclick="copyCode(this)">copy</button>
+    </div>
+<pre><span class="tok-cmt"># Each frame is one Server-Sent Event:</span>
+data: {<span class="tok-str">"type"</span>:<span class="tok-str">"step"</span>,<span class="tok-str">"index"</span>:<span class="tok-num">1</span>,<span class="tok-str">"action"</span>:<span class="tok-str">"retrieve"</span>,<span class="tok-str">"observation"</span>:<span class="tok-str">"[1 doc]"</span>}
+data: {<span class="tok-str">"type"</span>:<span class="tok-str">"step"</span>,<span class="tok-str">"index"</span>:<span class="tok-num">2</span>,<span class="tok-str">"action"</span>:<span class="tok-str">"finish"</span>,<span class="tok-str">"observation"</span>:<span class="tok-str">"completed"</span>}
+data: {<span class="tok-str">"type"</span>:<span class="tok-str">"result"</span>,<span class="tok-str">"answer"</span>:<span class="tok-str">"30 days, with receipt."</span>,<span class="tok-str">"sources"</span>:[…]}
+data: {<span class="tok-str">"type"</span>:<span class="tok-str">"telemetry"</span>,<span class="tok-str">"telemetry"</span>:{…}}
+data: [DONE]
+</pre>
+  </div>
+</section>
+
+<footer>
+  <div>kyro · MIT · ቆንጆ — Beautiful  ·  根性 — Fighting Spirit  ·  康宙 — Health of the Universe</div>
+  <div class="scripts">ቆንጆ · 根性 · 康宙 · कोहजो · ᨀᨚᨐᨚ · конйо · 건조 · কুঞ্জ</div>
+  <div style="margin-top:10px;">github.com/konjoai/kyro</div>
+</footer>
+
+<script>
+  // ── SSE replay animation ───────────────────────────────────────────────
+  const STREAM = [
+    { kind: "req",  text: 'POST /agent/query/stream  {"question": "What is the refund policy?", "top_k": 3, "max_steps": 4}' },
+    { kind: "wait" },
+    { kind: "step", n: 1, action: "retrieve", thought: "Need refund policy", obs: "[1 doc, score=0.95]" },
+    { kind: "step", n: 2, action: "finish",   thought: "Have enough evidence", obs: "completed" },
+    { kind: "result", answer: "Refunds are accepted within 30 days with a receipt." },
+    { kind: "telemetry" },
+    { kind: "done" },
+  ];
+
+  const term = document.getElementById('streamTerm');
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function ts() {
+    const d = new Date();
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+  }
+
+  async function runStream() {
+    term.innerHTML = '';
+    document.getElementById('streamBtn').disabled = true;
+    for (const ev of STREAM) {
+      const row = document.createElement('div');
+      row.className = 'step-row';
+      if (ev.kind === 'req') {
+        row.innerHTML = `<span class="dim">${ts()}</span>  <span class="req">▸</span> <span class="key">${ev.text}</span>`;
+      } else if (ev.kind === 'wait') {
+        row.innerHTML = `<span class="dim">${ts()}</span>  <span class="dim">⋯ opening SSE stream…</span>`;
+      } else if (ev.kind === 'step') {
+        const tag = ev.action === 'finish' ? 'ok' : 'arrow';
+        row.innerHTML =
+          `<span class="dim">${ts()}</span>  <span class="${tag}">step #${ev.n}</span>  ` +
+          `<span class="key">action=</span><span class="ok">${ev.action}</span>  ` +
+          `<span class="key">thought=</span><span class="dim">${ev.thought}</span>  ` +
+          `<span class="key">obs=</span><span>${ev.obs}</span>`;
+      } else if (ev.kind === 'result') {
+        row.innerHTML = `<span class="dim">${ts()}</span>  <span class="ok">▣ result</span>  <span>${ev.answer}</span>`;
+      } else if (ev.kind === 'telemetry') {
+        row.innerHTML = `<span class="dim">${ts()}</span>  <span class="dim">▢ telemetry { agent_stream: { latency_ms: 248 } }</span>`;
+      } else if (ev.kind === 'done') {
+        row.innerHTML = `<span class="dim">${ts()}</span>  <span class="ok">[DONE]</span>`;
+      }
+      term.appendChild(row);
+      term.scrollTop = term.scrollHeight;
+      await new Promise(r => setTimeout(r, ev.kind === 'wait' ? 400 : ev.kind === 'done' ? 350 : 700));
+    }
+    document.getElementById('streamBtn').disabled = false;
+  }
+  // Auto-run once on load.
+  window.addEventListener('load', () => setTimeout(runStream, 350));
+
+  // ── Cache visualizer ──────────────────────────────────────────────────
+  // A toy semantic embedder: bag-of-stems → unit vector. Same word stems on
+  // paraphrases give >0.95 cosine.
+  const STEMS = {
+    refund: ['refund','refunds','return','returns','money','back','policy'],
+    shipping: ['ship','shipping','shipped','delivery','deliver','rate','rates','cost','costs'],
+    sla:    ['sla','uptime','availability','reliability','guarantee'],
+  };
+
+  function vectorize(text) {
+    const dim = 32;
+    const v = new Array(dim).fill(0);
+    const tokens = text.toLowerCase().match(/[a-z]+/g) || [];
+    for (const tok of tokens) {
+      // Match against topic stem buckets to cluster paraphrases.
+      let matched = false;
+      for (const [topic, stems] of Object.entries(STEMS)) {
+        if (stems.includes(tok)) {
+          // Anchor topic bucket gets a hot vector; same anchor for all paraphrases.
+          const hash = (topic.charCodeAt(0) + topic.charCodeAt(topic.length-1)) * 7;
+          for (let i = 0; i < dim; i++) {
+            v[i] += Math.sin((hash + i) * 1.7) * 1.2;
+          }
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) {
+        // Unknown token contributes a small noise term unique to that token.
+        const h = [...tok].reduce((a,c)=>a + c.charCodeAt(0), 0);
+        v[h % dim] += 0.18;
+      }
+    }
+    let n = Math.sqrt(v.reduce((a,x)=>a+x*x, 0)) || 1;
+    return v.map(x => x / n);
+  }
+
+  function cosine(a,b){
+    let s = 0;
+    for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+    return s;
+  }
+
+  const cache = []; // [{question, vec, answer}]
+  let hits = 0, misses = 0;
+  const THRESH = 0.95;
+
+  const ANSWERS = {
+    refund: "Refunds are accepted within 30 days with a receipt.",
+    shipping: "Shipping is free for orders over $50; flat $5 otherwise.",
+    sla: "Our SLA is 99.95% uptime measured per quarter.",
+    default: "(synthesised answer for this query)",
+  };
+
+  function answerFor(q) {
+    const tokens = q.toLowerCase();
+    if (STEMS.refund.some(s => tokens.includes(s))) return ANSWERS.refund;
+    if (STEMS.shipping.some(s => tokens.includes(s))) return ANSWERS.shipping;
+    if (STEMS.sla.some(s => tokens.includes(s))) return ANSWERS.sla;
+    return ANSWERS.default;
+  }
+
+  function setPreset(s) {
+    document.getElementById('q').value = s;
+    runCache();
+  }
+
+  function resetCache() {
+    cache.length = 0;
+    hits = 0; misses = 0;
+    document.getElementById('q').value = '';
+    document.getElementById('m-size').textContent = '0 / 100';
+    document.getElementById('m-last').textContent = '—';
+    document.getElementById('m-sim').textContent  = '—';
+    document.getElementById('m-hm').textContent   = '0 / 0';
+    document.getElementById('m-rate').textContent = '0.0';
+    document.getElementById('m-bar').style.width  = '0%';
+    const v = document.getElementById('m-verdict');
+    v.textContent = 'Awaiting query…';
+    v.className = 'verdict';
+  }
+
+  function runCache() {
+    const q = document.getElementById('q').value.trim();
+    if (!q) return;
+    const v = vectorize(q);
+    let bestSim = -1, bestIdx = -1;
+    cache.forEach((e, i) => {
+      const s = cosine(v, e.vec);
+      if (s > bestSim) { bestSim = s; bestIdx = i; }
+    });
+
+    const verdictEl = document.getElementById('m-verdict');
+    const simStr = cache.length ? bestSim.toFixed(3) : '—';
+    document.getElementById('m-last').textContent = q;
+    document.getElementById('m-sim').textContent  = simStr;
+
+    let answer;
+    if (bestIdx >= 0 && bestSim >= THRESH) {
+      hits++;
+      answer = cache[bestIdx].answer;
+      verdictEl.textContent = `HIT  ·  cosine ${simStr}  →  ${answer}`;
+      verdictEl.className = 'verdict hit';
+    } else {
+      misses++;
+      answer = answerFor(q);
+      cache.push({ question: q, vec: v, answer });
+      verdictEl.textContent = `MISS  ·  best cosine ${simStr}  →  stored "${answer}"`;
+      verdictEl.className = 'verdict miss';
+    }
+
+    document.getElementById('m-size').textContent = `${cache.length} / 100`;
+    document.getElementById('m-hm').textContent   = `${hits} / ${misses}`;
+    const total = hits + misses;
+    const rate  = total ? (hits / total).toFixed(3) : '0.0';
+    document.getElementById('m-rate').textContent = rate;
+
+    // Animate similarity bar from 0 → bestSim (clamped 0..1).
+    const pct = cache.length ? Math.max(0, Math.min(1, bestSim)) * 100 : 0;
+    requestAnimationFrame(() => {
+      document.getElementById('m-bar').style.width = pct.toFixed(1) + '%';
+    });
+  }
+
+  // ── copy button ───────────────────────────────────────────────────────
+  function copyCode(btn) {
+    const pre = btn.closest('.codeblock').querySelector('pre');
+    const txt = pre.innerText;
+    navigator.clipboard.writeText(txt).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'copied ✓';
+      setTimeout(() => btn.textContent = old, 1200);
+    });
+  }
+</script>
+</body>
+</html>
