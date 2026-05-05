@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from fastapi import Depends
 
 from konjoai.api.schemas import IngestRequest, IngestResponse, ManifestResponse, VerifyResponse
+from konjoai.audit.models import INGEST, AuditEvent, hash_text
 from konjoai.auth.deps import get_tenant_id
 from konjoai.config import get_settings
 
@@ -88,13 +89,31 @@ def ingest(
                 logger.warning("Corpus drift detected: %d changed files in %s", drift_count, settings.rag_corpus_dir)
 
     logger.info("Ingested %d chunks from %d sources", len(all_contents), len(sources_seen))
-    return IngestResponse(
+
+    response = IngestResponse(
         chunks_indexed=len(all_contents),
         sources_processed=len(sources_seen),
         vectro_metrics=vectro_metrics,
         chunks_deduplicated=n_deduped,
         drift_count=drift_count,
     )
+
+    # ── Audit log (Sprint 24; K3: no-op when audit_enabled=False) ────────────
+    if settings.audit_enabled:
+        from datetime import datetime, timezone
+        from konjoai.audit import get_audit_logger
+        get_audit_logger().log(AuditEvent(
+            event_type=INGEST,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            endpoint="/ingest",
+            status_code=200,
+            latency_ms=0.0,
+            path_hash=hash_text(req.path),
+            chunks_indexed=len(all_contents),
+            chunks_deduplicated=n_deduped,
+        ))
+
+    return response
 
 
 class ManifestBody(BaseModel):

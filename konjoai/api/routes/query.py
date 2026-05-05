@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from konjoai.api.schemas import QueryRequest, QueryResponse, SourceDoc
+from konjoai.audit.models import QUERY, AuditEvent, hash_text
 from konjoai.auth.deps import get_tenant_id
 from konjoai.config import get_settings
 from konjoai.telemetry import PipelineTelemetry, record_pipeline_metrics, timed
@@ -417,6 +418,28 @@ async def query(  # noqa: C901
                 await asyncio.to_thread(
                     _cache_store.store, effective_question, q_vec, response
                 )
+
+        # ── Audit log (Sprint 24; K3: no-op when audit_enabled=False) ────────
+        if settings.audit_enabled:
+            from datetime import datetime, timezone
+            from konjoai.audit import get_audit_logger
+            _latency = sum(
+                t.elapsed_ms for t in tel.steps
+            ) if tel.steps else 0.0
+            get_audit_logger().log(AuditEvent(
+                event_type=QUERY,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                endpoint="/query",
+                status_code=200,
+                latency_ms=_latency,
+                tenant_id=getattr(request.state, "tenant_id", None),
+                client_ip=request.client.host if request.client else None,
+                question_hash=hash_text(req.question),
+                intent=intent.value,
+                cache_hit=bool(response.cache_hit),
+                result_count=len(sources),
+            ))
+
         return response
 
     try:

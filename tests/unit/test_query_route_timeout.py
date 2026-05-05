@@ -39,6 +39,7 @@ class _SettingsNormal:
     graph_rag_max_communities: int = 5
     graph_rag_similarity_threshold: float = 0.3
     otel_enabled: bool = False
+    audit_enabled: bool = False
 
 
 @dataclass
@@ -62,6 +63,7 @@ class _SettingsTimeout:
     graph_rag_max_communities: int = 5
     graph_rag_similarity_threshold: float = 0.3
     otel_enabled: bool = False
+    audit_enabled: bool = False
 
 
 def _make_app() -> FastAPI:

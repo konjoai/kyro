@@ -33,6 +33,7 @@ class _SettingsStub:
     graph_rag_max_communities: int = 5
     graph_rag_similarity_threshold: float = 0.3
     otel_enabled: bool = False
+    audit_enabled: bool = False
 
 
 class _GeneratorStub:

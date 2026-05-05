@@ -148,6 +148,15 @@ class Settings(BaseSettings):
     request_timeout_seconds: float = 30.0   # asyncio.timeout ceiling per request
     qdrant_max_connections: int = 10         # httpx connection pool limit for AsyncQdrantClient
 
+    # ── Audit Logging (Sprint 24) ─────────────────────────────────────────────
+    # K3: off by default — zero cost when disabled.
+    # K1: write errors are logged as warnings, never crash the request path.
+    # OWASP: raw question text is NEVER stored — only SHA-256([:16]) hashes.
+    audit_enabled: bool = False             # master switch; off → every log() is a no-op
+    audit_backend: str = "memory"           # "memory" | "jsonl"
+    audit_log_path: str = "logs/audit.jsonl"  # only used when audit_backend="jsonl"
+    audit_max_memory_events: int = 1000     # ring-buffer capacity for the in-memory backend
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

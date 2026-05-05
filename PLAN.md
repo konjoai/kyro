@@ -9,11 +9,41 @@
 
 ---
 
-## Current State: Sprint 23 Complete — v1.3.0 SHIPPED
+## Current State: Sprint 24 Complete — v1.4.0 SHIPPED
 
-- **Tests:** 810 passing (+ 15 skipped), 5 pre-existing Python 3.9 compat failures
+- **Tests:** 853 passing (+ 15 skipped), 5 pre-existing Python 3.9 compat failures
 - **Branch:** `main`
-- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming + distributed semantic cache (Sprint 22 — Redis-backed, tenant-namespaced) + **async cache + singleflight stampede protection (Sprint 23 — v1.3.0)** + adaptive chunking + CRAG + Self-RAG + Query Decomposition + Agentic RAG + Streaming Agent + GraphRAG + OTel + Prometheus + Multi-tenancy + JWT + Auth hardening + Rate limiting + Python SDK + MCP server + Helm chart + PyPI + Docs site
+- **Stack:** FastAPI + HyDE + ColBERT + hybrid search + RAGAS + Vectro bridge + streaming + distributed semantic cache (Sprint 22 — Redis-backed, tenant-namespaced) + async cache + singleflight stampede protection (Sprint 23 — v1.3.0) + **audit logging (Sprint 24 — v1.4.0)** + adaptive chunking + CRAG + Self-RAG + Query Decomposition + Agentic RAG + Streaming Agent + GraphRAG + OTel + Prometheus + Multi-tenancy + JWT + Auth hardening + Rate limiting + Python SDK + MCP server + Helm chart + PyPI + Docs site
+
+---
+
+## Completed Sprint: Sprint 24 — Audit Logging (v1.4.0)
+
+**Goal:** Wire the pre-scaffolded `konjoai/audit/` package into the full API surface — query, ingest, and agent routes — expose a read-only query API (`GET /audit/events`, `GET /audit/stats`), and add four config fields (all off by default, K3). Zero new hard dependencies (stdlib only, K5). OWASP-compliant: raw question text and document paths are NEVER stored — only SHA-256 hashes.
+
+### Implementation Checklist — Sprint 24
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `konjoai/api/routes/audit.py` | New `GET /audit/events` + `GET /audit/stats` endpoints; 404 when disabled (K3) | ✅ |
+| 2 | `konjoai/api/app.py` | Register `audit_route.router` | ✅ |
+| 3 | `konjoai/config.py` | `audit_enabled`, `audit_backend`, `audit_log_path`, `audit_max_memory_events` | ✅ |
+| 4 | `konjoai/api/routes/query.py` | Emit `QUERY` `AuditEvent` after pipeline (K3 gated) | ✅ |
+| 5 | `konjoai/api/routes/ingest.py` | Emit `INGEST` `AuditEvent` after ingest (K3 gated) | ✅ |
+| 6 | `konjoai/api/routes/agent.py` | Emit `AGENT_QUERY` `AuditEvent` after agent run (K3 gated) | ✅ |
+| 7 | `tests/unit/test_audit.py` | 36 tests: hash, model, backends, logger, singleton, API, OWASP contract, config | ✅ |
+| 8 | `tests/unit/test_agent_route.py` + 5 other route test files | `audit_enabled: bool = False` added to all `_Settings*` stubs (K6) | ✅ |
+| 9 | `pyproject.toml` + `konjoai/__init__.py` + `helm/kyro/Chart.yaml` + `docs/index.md` + `tests/unit/test_packaging.py` | Version bump 1.3.0 → 1.4.0 | ✅ |
+
+### Sprint 24 Gate Results
+
+1. **K1**: backend write errors are caught and emitted as `logger.warning()`; never propagate to the request path. ✅
+2. **K3**: `audit_enabled=False` (default) → every `log()` is a pure no-op (early return); both API endpoints return 404. ✅
+3. **K5**: stdlib only — `hashlib`, `json`, `threading`, `collections.deque`, `pathlib`. Zero new hard deps. ✅
+4. **K6**: all four new config keys have sensible defaults; six existing route test stubs extended with `audit_enabled=False`. ✅
+5. **K7**: `AuditEvent.tenant_id` populated from request state; `GET /audit/events?tenant_id=<id>` filters by tenant. ✅
+6. **OWASP**: raw question text and file paths appear only as 16-hex-char SHA-256 hashes in every serialized event. ✅
+7. **Tests**: 853 passing (was 810 — +43 new). 15 skipped, 5 pre-existing Py3.9 compat failures unchanged. ✅
 
 ---
 
@@ -415,6 +445,10 @@
 | 18 | v0.9.5 | P4 | Auth + rate limiting | ✅ 607 tests |
 | 19 | v0.9.8 | P5 | Python SDK + MCP server | ✅ 687 tests |
 | 20 | v1.0.0 | P5 | Helm chart + PyPI + Docs site | ✅ 764 tests |
+| 21 | v1.1.0 | P5 | Streaming Agent (`POST /agent/query/stream`) | ✅ 769 tests |
+| 22 | v1.2.0 | P5 | Distributed Semantic Cache (Redis backend) | ✅ 798 tests |
+| 23 | v1.3.0 | P5 | Async Cache + Singleflight stampede protection | ✅ 810 tests |
+| 24 | v1.4.0 | P6 | Audit logging (OWASP PII-safe event trail) | ✅ 853 tests |
 
 ---
 
