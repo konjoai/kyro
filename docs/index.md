@@ -22,10 +22,11 @@ No vendor lock-in — plug in OpenAI, Anthropic, or a local [Squish](https://git
 | Feedback collection | `POST /feedback` thumbs-up/down + relevance score per query; `GET /feedback/summary` aggregates |
 | Python SDK | Typed `KonjoClient` for programmatic access |
 | MCP server | Expose Kyro tools to any MCP-compatible AI agent |
+| AutoRouter | Sprint 25 CRAG-classification → retrieval strategy mapping |
 
 ## Version
 
-Current version: **1.5.0** — 876 tests passing.
+Current version: **1.5.0** — 878 tests passing.
 
 ## License
 

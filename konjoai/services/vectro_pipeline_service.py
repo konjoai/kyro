@@ -46,7 +46,6 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -210,7 +209,7 @@ def quantize(
 
 def embeddings_to_jsonl(
     embeddings: np.ndarray,
-    ids: Optional[list[str]] = None,
+    ids: list[str] | None = None,
 ) -> str:
     """Serialise a numpy embedding matrix to a temporary JSONL file.
 
@@ -257,7 +256,7 @@ def run_pipeline(
     m: int = 16,
     ef_construction: int = 200,
     ef_search: int = 50,
-    query_file: Optional[str] = None,
+    query_file: str | None = None,
     top_k: int = 10,
     quiet: bool = False,
     archive: bool = False,
@@ -409,7 +408,7 @@ def run_pipeline(
 def run_pipeline_from_embeddings(
     embeddings: np.ndarray,
     out_dir: str,
-    ids: Optional[list[str]] = None,
+    ids: list[str] | None = None,
     format: str = "nf4",
     m: int = 16,
     ef_construction: int = 200,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
-# ── Ingest ──────────────────────────────────────────────────────────────────
+# ── Ingest ───────────────────────────────────────────────────────────────────────────────────────
 
 class IngestRequest(BaseModel):
     path: str = Field(..., description="File or directory path to ingest.")
@@ -36,7 +36,7 @@ class VerifyResponse(BaseModel):
     drift: list[dict]  # list of {"path": str, "status": str}
 
 
-# ── Vectro pipeline ──────────────────────────────────────────────────────────
+# ── Vectro pipeline ─────────────────────────────────────────────────────────────────────────────────────────
 
 class VectroPipelineRequest(BaseModel):
     """Request body for POST /vectro/pipeline."""
@@ -64,7 +64,7 @@ class VectroPipelineResponse(BaseModel):
     binary_path: str = ""
 
 
-# ── Query ────────────────────────────────────────────────────────────────────
+# ── Query ─────────────────────────────────────────────────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
@@ -75,6 +75,7 @@ class QueryRequest(BaseModel):
     use_decomposition: bool = Field(False, description="Enable Sprint 13 query decomposition for this request only.")
     use_graph_rag: bool = Field(False, description="Enable Sprint 15 GraphRAG community-based retrieval for this request only.")
     stream: bool = Field(False, description="Hint only; use POST /query/stream to actually stream tokens.")
+    auto_route: bool = Field(False, description="Enable Sprint 25 AutoRouter to map CRAG classification to retrieval strategy for this request only.")
 
 
 class SourceDoc(BaseModel):
@@ -91,7 +92,7 @@ class QueryResponse(BaseModel):
     telemetry: dict | None = None       # per-step latency dict; None if telemetry disabled
     intent: str = "retrieval"           # "retrieval" | "aggregation" | "chat"
     cache_hit: bool = False             # True when response served from semantic cache
-    # ── Self-correcting retrieval metadata (Sprints 11–12) ───────────────────
+    # ── Self-correcting retrieval metadata (Sprints 11–12) ──────────────────────────────────────────────
     crag_confidence: float | None = None    # mean relevance score from CRAG; None when disabled
     crag_fallback: bool | None = None       # True if CRAG triggered corrective fallback
     crag_scores: list[float] | None = None  # per-chunk normalized CRAG scores [0, 1]
@@ -104,11 +105,14 @@ class QueryResponse(BaseModel):
     decomposition_used: bool | None = None  # True when Sprint 13 decomposition was executed
     decomposition_sub_queries: list[str] | None = None  # generated sub-query list
     decomposition_synthesis_hint: str | None = None  # synthesis hint emitted by QueryDecomposer
-    # ── GraphRAG community metadata (Sprint 15) ───────────────────────────────
+    # ── GraphRAG community metadata (Sprint 15) ───────────────────────────────────────────────────────────────────────────
     graph_rag_communities: list[str] | None = None  # community label list; None when GraphRAG disabled
+    # ── AutoRouter metadata (Sprint 25) ─────────────────────────────────────────────────────────────────────────────────────
+    auto_route_strategy: str | None = None       # RouteStrategy value; None when AutoRouter disabled
+    auto_route_rationale: str | None = None      # human-readable rationale from AutoRouter
 
 
-# ── Eval ─────────────────────────────────────────────────────────────────────
+# ── Eval ─────────────────────────────────────────────────────────────────────────────────────────
 
 class EvalRequest(BaseModel):
     questions: list[str]
@@ -121,7 +125,7 @@ class EvalResponse(BaseModel):
     scores: dict[str, float]
 
 
-# ── Health ───────────────────────────────────────────────────────────────────
+# ── Health ───────────────────────────────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):
     status: str

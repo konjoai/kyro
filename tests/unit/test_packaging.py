@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).parent.parent.parent  # /Users/wesleyscholl/kyro
 
@@ -33,7 +33,7 @@ def _pyproject() -> str:
     return _read("pyproject.toml")
 
 
-# ── konjoai.__version__ ───────────────────────────────────────────────────────
+# ── konjoai.__version__ ───────────────────────────────────────────────────
 
 
 class TestPackageVersion:
@@ -53,7 +53,7 @@ class TestPackageVersion:
         assert re.match(r"^\d+\.\d+\.\d+$", konjoai.__version__)
 
 
-# ── pyproject.toml metadata ───────────────────────────────────────────────────
+# ── pyproject.toml metadata ───────────────────────────────────────────────
 
 
 class TestPyprojectMetadata:
@@ -80,7 +80,7 @@ class TestPyprojectMetadata:
         assert '"llm"' in text
 
 
-# ── Classifiers ───────────────────────────────────────────────────────────────
+# ── Classifiers ───────────────────────────────────────────────────────────
 
 
 class TestPyprojectClassifiers:
@@ -103,7 +103,7 @@ class TestPyprojectClassifiers:
         assert "Typing :: Typed" in _pyproject()
 
 
-# ── Optional extras ───────────────────────────────────────────────────────────
+# ── Optional extras ───────────────────────────────────────────────────────
 
 
 class TestPyprojectExtras:
@@ -126,7 +126,7 @@ class TestPyprojectExtras:
         assert "all" in _pyproject()
 
 
-# ── Project URLs ──────────────────────────────────────────────────────────────
+# ── Project URLs ──────────────────────────────────────────────────────────
 
 
 class TestPyprojectURLs:
@@ -143,7 +143,7 @@ class TestPyprojectURLs:
         assert "Changelog" in _pyproject()
 
 
-# ── Entry point ───────────────────────────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────────────────
 
 
 class TestPyprojectEntryPoints:
@@ -153,7 +153,7 @@ class TestPyprojectEntryPoints:
         assert "konjoai.cli.main:cli" in text
 
 
-# ── Sub-package smoke imports ─────────────────────────────────────────────────
+# ── Sub-package smoke imports ─────────────────────────────────────────────
 
 
 class TestSubPackageImports:
@@ -180,7 +180,7 @@ class TestSubPackageImports:
         assert THUMBS_DOWN == "thumbs_down"
 
 
-# ── mkdocs.yml ────────────────────────────────────────────────────────────────
+# ── mkdocs.yml ────────────────────────────────────────────────────────────
 
 
 class TestMkdocsConfig:
@@ -200,7 +200,7 @@ class TestMkdocsConfig:
         assert "deployment.md" in _read("mkdocs.yml")
 
 
-# ── docs/ pages ───────────────────────────────────────────────────────────────
+# ── docs/ pages ───────────────────────────────────────────────────────────
 
 
 class TestDocsPages:
