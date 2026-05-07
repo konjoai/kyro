@@ -2,8 +2,8 @@ apiVersion: v2
 name: kyro
 description: Production RAG pipeline with hybrid retrieval, reranking, multi-tenancy, and agentic capabilities.
 type: application
-version: 1.4.0
-appVersion: "1.4.0"
+version: 1.5.0
+appVersion: "1.5.0"
 home: https://github.com/konjoai/kyro
 sources:
   - https://github.com/konjoai/kyro

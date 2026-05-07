@@ -19,12 +19,13 @@ No vendor lock-in — plug in OpenAI, Anthropic, or a local [Squish](https://git
 | Auth hardening | API key auth, sliding-window rate limiting, brute-force protection |
 | Observability | OTel traces + Prometheus metrics, all K3-gated |
 | Audit logging | Immutable event trail with OWASP-compliant hashing, in-memory and JSONL backends |
+| Feedback collection | `POST /feedback` thumbs-up/down + relevance score per query; `GET /feedback/summary` aggregates |
 | Python SDK | Typed `KonjoClient` for programmatic access |
 | MCP server | Expose Kyro tools to any MCP-compatible AI agent |
 
 ## Version
 
-Current version: **1.4.0** — 853 tests passing.
+Current version: **1.5.0** — 876 tests passing.
 
 ## License
 

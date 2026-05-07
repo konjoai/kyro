@@ -11,6 +11,7 @@ from konjoai.api.routes import (
     agent as agent_route,
     audit as audit_route,
     eval as eval_route,
+    feedback as feedback_route,
     health as health_route,
     ingest,
     query,
@@ -49,6 +50,7 @@ app.include_router(vectro_route.router)
 app.include_router(agent_route.router)
 app.include_router(health_route.router)
 app.include_router(audit_route.router)
+app.include_router(feedback_route.router)
 
 
 def create_app() -> FastAPI:

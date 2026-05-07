@@ -157,6 +157,13 @@ class Settings(BaseSettings):
     audit_log_path: str = "logs/audit.jsonl"  # only used when audit_backend="jsonl"
     audit_max_memory_events: int = 1000     # ring-buffer capacity for the in-memory backend
 
+    # ── Feedback Collection (Sprint 25) ──────────────────────────────────────
+    # K3: off by default — POST /feedback and GET /feedback/summary return 404.
+    # K5: stdlib only — collections.deque + threading.Lock.
+    # OWASP: raw question text is NEVER accepted or stored — only question_hash.
+    feedback_enabled: bool = False          # master switch; off → endpoints return 404
+    feedback_max_events: int = 1000         # ring-buffer capacity (LRU eviction)
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

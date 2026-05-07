@@ -3,6 +3,45 @@
 All notable changes to KonjoOS are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v1.5.0] — Sprint 25: Feedback Collection
+
+### Added
+- `konjoai/feedback/` package (stdlib-only, zero new hard deps — K5):
+  - `konjoai/feedback/models.py` — `FeedbackEvent` dataclass with OWASP-compliant PII handling: raw question text is NEVER accepted or stored — only `question_hash` (the 16-hex-char SHA-256 prefix). `comment` text is stored as `comment_hash` only. Signal constants: `THUMBS_UP = "thumbs_up"`, `THUMBS_DOWN = "thumbs_down"`, `VALID_SIGNALS` frozenset.
+  - `konjoai/feedback/store.py` — `FeedbackStore`: thread-safe bounded `deque` ring buffer (LRU eviction), `record()`, `query()` (filterable by tenant/signal/question_hash, newest-first, limit-capped), `summary()` (total, thumbs_up, thumbs_down, avg_relevance, by_question per-hash breakdown), `clear()`, iterator support. `get_feedback_store()` singleton + `_reset_singleton()` test helper.
+  - `konjoai/feedback/__init__.py` — re-exports all public symbols.
+- `konjoai/api/routes/feedback.py` — Two endpoints:
+  - `POST /feedback` — submit a thumbs-up/down signal with optional `relevance_score` (0.0–1.0), `comment` (stored as hash), `model`, `latency_ms`. Returns HTTP 201 on success, HTTP 404 when disabled (K3), HTTP 422 on validation failure.
+  - `GET /feedback/summary` — aggregate statistics: `total`, `thumbs_up`, `thumbs_down`, `avg_relevance`, `by_question` per-hash breakdown. Filterable by `tenant_id`. Returns HTTP 404 when disabled.
+- `konjoai/api/app.py` — registers `feedback_route.router`.
+- `konjoai/config.py` — two new settings (all K3 opt-in):
+  - `feedback_enabled: bool = False` — master switch; when False both endpoints return 404.
+  - `feedback_max_events: int = 1000` — ring-buffer capacity (LRU eviction).
+- `tests/unit/test_feedback.py` — 55 new tests:
+  - `FeedbackEvent`: minimal and full construction, `as_dict()` omits None fields, signal constants, `VALID_SIGNALS`.
+  - `FeedbackStore`: construction, record, LRU eviction at max, query newest-first, filter by tenant/signal/question_hash, limit capping, empty store, summary counts/avg_relevance/by_question/tenant_filter, clear, len/iter, thread safety (20 threads × 50 writes), singleton, reset.
+  - Config: `feedback_enabled` default False, `feedback_max_events` default 1000.
+  - API (disabled): `POST /feedback` → 404, `GET /feedback/summary` → 404, 404 detail mentions `FEEDBACK_ENABLED`.
+  - API (enabled): `POST /feedback` → 201 for thumbs_up and thumbs_down, full response contract, with relevance_score, with all optional fields; invalid signal → 422, missing fields → 422, out-of-range score → 422; `GET /feedback/summary` → 200, response contract, reflects submitted feedback, tenant filter.
+  - OWASP PII contract: `FeedbackRequest` has no `question` field, `FeedbackEvent` has no `question` field, comment stored as `comment_hash` only, raw comment text absent from stored event.
+  - Package exports: all public symbols importable.
+
+### Changed
+- `pyproject.toml`, `konjoai/__init__.py`, `helm/kyro/Chart.yaml`, `docs/index.md`, `tests/unit/test_packaging.py`: version bumped `1.4.0 → 1.5.0`; added `test_feedback_importable` to packaging tests.
+
+### Konjo Invariants
+- **K1** (no silent failures): `FeedbackStore.record()` wraps writes in `try/except`; errors are emitted as `logger.warning()` and never propagate to the request path.
+- **K3** (graceful degradation): `feedback_enabled=False` (the default) makes both endpoints return HTTP 404. The store is only lazily instantiated when feedback is enabled.
+- **K5** (zero new hard deps): stdlib only — `collections.deque`, `threading.Lock`. No new packages required.
+- **K6** (backward compatible): two new config keys have sensible defaults; no existing config consumer is affected.
+- **K7** (multi-tenant safety): `FeedbackEvent.tenant_id` is populated from `request.state.tenant_id` when available; `GET /feedback/summary?tenant_id=<id>` filters by tenant.
+
+### Tests
+- Focused: `python -m pytest tests/unit/test_feedback.py -q` → **55 passed in <2s**
+- Full regression: `python -m pytest tests/unit/ -q` → **876 passed, 25 skipped** (was 853 — +55 new; pre-existing failures from missing optional packages unchanged)
+
+---
+
 ## [v1.4.0] — Sprint 24: Audit Logging
 
 ### Added
