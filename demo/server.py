@@ -18,7 +18,7 @@ encoder does. To exercise the real encoder instead, set
 
 Run::
 
-    python3 demo/server.py            # http://localhost:8765
+    python3 demo/server.py            # http://localhost:8766
     python3 demo/server.py --port 9000
 
 Then open ``demo/index.html`` (the page auto-detects the server on load).
@@ -523,7 +523,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Kyro demo server")
-    parser.add_argument("--port", type=int, default=8765, help="port (default 8765)")
+    parser.add_argument("--port", type=int, default=8766, help="port (default 8766)")
     parser.add_argument("--host", default="127.0.0.1", help="host (default 127.0.0.1)")
     args = parser.parse_args()
 
