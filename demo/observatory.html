@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kyro Observatory — live cache metrics</title>
+<meta name="description" content="Live dashboard for the Kyro semantic cache. Hit rate, latency, singleflight coalescing, and top queried terms — refreshed every 3 seconds." />
+<style>
+  :root {
+    --bg-0: #0a0612;
+    --bg-1: #120a1f;
+    --bg-2: #1a1030;
+    --bg-3: #241844;
+    --line: #2d1f54;
+    --line-2: #3a2870;
+    --ink:  #ece6ff;
+    --dim:  #9b8fc4;
+    --muted: #6b5d96;
+    --accent: #b48cff;
+    --accent-2: #d4b3ff;
+    --accent-3: #7e4dff;
+    --good: #6affd5;
+    --warn: #f6d35b;
+    --bad:  #ff5d8f;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background:
+      radial-gradient(ellipse at 20% -10%, rgba(180,140,255,0.10), transparent 60%),
+      radial-gradient(ellipse at 100% 110%, rgba(126,77,255,0.10), transparent 60%),
+      var(--bg-0);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .wrap {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+  header.head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 18px;
+    margin-bottom: 28px;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .brand .logo {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: 0.04em;
+    color: var(--accent-2);
+  }
+  .brand .sub {
+    font-family: var(--mono);
+    color: var(--dim);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .meta {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line-2);
+    background: var(--bg-1);
+  }
+  .pill .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--good);
+    box-shadow: 0 0 8px rgba(106,255,213,0.7);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .pill.bad .dot { background: var(--bad); box-shadow: 0 0 8px rgba(255,93,143,0.7); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.55; transform: scale(0.85); }
+  }
+  h1 {
+    font-size: 13px;
+    font-family: var(--mono);
+    color: var(--dim);
+    margin: 0 0 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 18px;
+  }
+  .card {
+    background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 22px 22px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+  .card h2 {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--dim);
+    margin: 0 0 14px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .col-3  { grid-column: span 3; }
+  .col-4  { grid-column: span 4; }
+  .col-5  { grid-column: span 5; }
+  .col-6  { grid-column: span 6; }
+  .col-7  { grid-column: span 7; }
+  .col-8  { grid-column: span 8; }
+  .col-12 { grid-column: span 12; }
+  @media (max-width: 960px) {
+    .col-3, .col-4, .col-5, .col-6, .col-7, .col-8 { grid-column: span 12; }
+  }
+
+  /* Gauge */
+  .gauge { display: flex; align-items: center; justify-content: center; padding: 6px 0; }
+  .gauge svg { width: 100%; max-width: 220px; height: auto; }
+  .gauge .ring-bg { stroke: var(--bg-3); }
+  .gauge .ring { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s; filter: drop-shadow(0 0 6px rgba(180,140,255,0.45)); }
+  .gauge .label-big {
+    fill: var(--ink);
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+  .gauge .label-sm {
+    fill: var(--dim);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-anchor: middle;
+  }
+
+  /* Stat blocks */
+  .stat .v {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .stat .v .unit {
+    font-size: 14px;
+    color: var(--dim);
+    margin-left: 4px;
+  }
+  .stat .sub {
+    margin-top: 8px;
+    color: var(--dim);
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+
+  /* Sparkline */
+  .spark { width: 100%; height: 88px; display: block; }
+  .spark .line { fill: none; stroke: var(--accent-2); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(212,179,255,0.4)); }
+  .spark .area { fill: url(#sparkGrad); opacity: 0.35; }
+  .spark .axis { stroke: var(--line); stroke-dasharray: 2 4; }
+  .spark .tick { fill: var(--muted); font-family: var(--mono); font-size: 9px; }
+  .spark .empty { fill: var(--muted); font-family: var(--mono); font-size: 11px; text-anchor: middle; }
+
+  /* Leaderboard */
+  table.lb {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  table.lb th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  table.lb td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(45,31,84,0.45);
+    color: var(--ink);
+    vertical-align: middle;
+  }
+  table.lb tr:last-child td { border-bottom: none; }
+  table.lb td.rank { color: var(--muted); width: 32px; }
+  table.lb td.term { color: var(--accent-2); }
+  table.lb td.bar {
+    width: 50%;
+    padding-right: 10px;
+  }
+  table.lb td.count { color: var(--dim); width: 64px; text-align: right; }
+  .barfill {
+    background: linear-gradient(90deg, var(--accent-3), var(--accent));
+    height: 8px;
+    border-radius: 999px;
+    transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 0 6px rgba(180,140,255,0.35);
+  }
+  .lb-empty {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 24px 8px;
+    text-align: center;
+  }
+
+  /* Footer + buttons */
+  .actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  button.btn {
+    background: var(--bg-3);
+    color: var(--ink);
+    border: 1px solid var(--line-2);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  button.btn:hover { background: var(--line); border-color: var(--accent); }
+  button.btn:active { transform: translateY(1px); }
+  button.btn.primary { background: var(--accent-3); border-color: var(--accent-3); color: white; }
+  button.btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+
+  footer.foot {
+    margin-top: 36px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.7;
+  }
+  footer.foot code {
+    color: var(--dim);
+    background: var(--bg-1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <div class="brand">
+      <span class="logo">kyro</span>
+      <span class="sub">observatory · live</span>
+    </div>
+    <div class="meta">
+      <span id="status" class="pill"><span class="dot"></span><span id="status-text">connecting…</span></span>
+      <span id="last-tick">—</span>
+      <div class="actions">
+        <button id="btn-replay" class="btn primary" type="button" title="Replay 20 queries across 3 tenants">replay corpus</button>
+        <button id="btn-reset" class="btn" type="button" title="Reset cache + counters">reset</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <!-- Hit rate gauge -->
+    <section class="card col-4">
+      <h2>Cache hit rate</h2>
+      <div class="gauge">
+        <svg viewBox="0 0 200 200" aria-label="cache hit rate gauge">
+          <defs>
+            <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"   stop-color="#7e4dff"/>
+              <stop offset="100%" stop-color="#d4b3ff"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-bg" cx="100" cy="100" r="80" fill="none" stroke-width="14"/>
+          <circle id="hit-ring" class="ring" cx="100" cy="100" r="80" fill="none" stroke="url(#ringGrad)" stroke-width="14"
+                  stroke-dasharray="502.65" stroke-dashoffset="502.65"
+                  transform="rotate(-90 100 100)"/>
+          <text id="hit-pct" class="label-big" x="100" y="96">0%</text>
+          <text class="label-sm" x="100" y="124">hit / total</text>
+        </svg>
+      </div>
+      <div class="stat" style="display:flex; justify-content:space-between; gap:10px; margin-top:6px;">
+        <div>
+          <div class="sub">hits</div>
+          <div class="v" style="font-size:18px;" id="stat-hits">0</div>
+        </div>
+        <div>
+          <div class="sub">misses</div>
+          <div class="v" style="font-size:18px;" id="stat-misses">0</div>
+        </div>
+        <div>
+          <div class="sub">size</div>
+          <div class="v" style="font-size:18px;" id="stat-size">0</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Latency sparkline -->
+    <section class="card col-8">
+      <h2>Average query latency · last 60</h2>
+      <svg id="spark" class="spark" viewBox="0 0 600 120" preserveAspectRatio="none" aria-label="latency sparkline">
+        <defs>
+          <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stop-color="#d4b3ff" stop-opacity="0.6"/>
+            <stop offset="100%" stop-color="#d4b3ff" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <line class="axis" x1="0" y1="60" x2="600" y2="60" />
+        <path id="spark-area" class="area" d=""/>
+        <path id="spark-line" class="line" d=""/>
+        <text id="spark-empty" class="empty" x="300" y="62">awaiting first query…</text>
+      </svg>
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:10px; gap:18px;">
+        <div class="stat">
+          <div class="sub">avg</div>
+          <div class="v" id="stat-avg">0<span class="unit">ms</span></div>
+        </div>
+        <div class="stat" style="text-align:right;">
+          <div class="sub">total queries</div>
+          <div class="v" id="stat-total">0</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Singleflight ratio -->
+    <section class="card col-5">
+      <h2>Singleflight coalescing</h2>
+      <div class="stat">
+        <div class="v"><span id="stat-ratio">0%</span></div>
+        <div class="sub" id="stat-ratio-sub">0 of 0 queries collapsed onto an in-flight leader</div>
+      </div>
+      <div style="margin-top:18px; height:8px; background: var(--bg-3); border-radius:999px; overflow:hidden;">
+        <div id="ratio-bar" class="barfill" style="width:0%;"></div>
+      </div>
+      <div class="sub" style="margin-top:14px; line-height:1.7;">
+        Stampede protection: when N concurrent requests ask the same fresh question,<br/>
+        only one fires the LLM. The rest wait for the first answer and read it from the cache.
+      </div>
+    </section>
+
+    <!-- Top terms leaderboard -->
+    <section class="card col-7">
+      <h2>Top 10 most queried terms</h2>
+      <table class="lb">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>term</th>
+            <th></th>
+            <th style="text-align:right;">count</th>
+          </tr>
+        </thead>
+        <tbody id="lb-body">
+          <tr><td colspan="4" class="lb-empty">no queries yet — run “replay corpus” to seed traffic</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    auto-refresh every 3s · GET <code>/metrics</code> · backed by <code>konjoai.cache.SemanticCache</code><br/>
+    ቆንጆ · 根性 · 康宙 — kyro observatory
+  </footer>
+</div>
+
+<script>
+  const REFRESH_MS   = 3000;
+  const HISTORY_LEN  = 60;
+  const RING_CIRCUM  = 2 * Math.PI * 80; // r=80 → 502.654...
+
+  const $ = (id) => document.getElementById(id);
+  const els = {
+    status: $('status'),
+    statusText: $('status-text'),
+    lastTick: $('last-tick'),
+    hitRing: $('hit-ring'),
+    hitPct: $('hit-pct'),
+    statHits: $('stat-hits'),
+    statMisses: $('stat-misses'),
+    statSize: $('stat-size'),
+    statAvg: $('stat-avg'),
+    statTotal: $('stat-total'),
+    statRatio: $('stat-ratio'),
+    statRatioSub: $('stat-ratio-sub'),
+    ratioBar: $('ratio-bar'),
+    sparkLine: $('spark-line'),
+    sparkArea: $('spark-area'),
+    sparkEmpty: $('spark-empty'),
+    lbBody: $('lb-body'),
+    btnReplay: $('btn-replay'),
+    btnReset: $('btn-reset'),
+  };
+
+  function fmtNum(n) {
+    if (n === undefined || n === null || Number.isNaN(n)) return '0';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return String(n);
+  }
+  function fmtMs(n) {
+    if (!n || n < 1)  return n ? n.toFixed(2) : '0';
+    if (n < 100) return n.toFixed(1);
+    return Math.round(n).toString();
+  }
+
+  function setStatus(ok, msg) {
+    els.status.classList.toggle('bad', !ok);
+    els.statusText.textContent = msg;
+  }
+
+  function renderGauge(rate) {
+    const pct = Math.max(0, Math.min(1, rate));
+    const offset = RING_CIRCUM * (1 - pct);
+    els.hitRing.setAttribute('stroke-dashoffset', offset.toFixed(2));
+    els.hitPct.textContent = (pct * 100).toFixed(1) + '%';
+  }
+
+  function renderSparkline(history) {
+    if (!history || history.length === 0) {
+      els.sparkLine.setAttribute('d', '');
+      els.sparkArea.setAttribute('d', '');
+      els.sparkEmpty.style.display = '';
+      return;
+    }
+    els.sparkEmpty.style.display = 'none';
+    const W = 600, H = 120, PAD_Y = 8;
+    const max = Math.max(...history, 1);
+    const min = Math.min(...history, 0);
+    const range = Math.max(max - min, 1);
+    // Right-align: newest sample at x=W. Width per sample reserves room for HISTORY_LEN slots.
+    const slotW = W / HISTORY_LEN;
+    const startIdx = HISTORY_LEN - history.length;
+    const pts = history.map((v, i) => {
+      const x = (startIdx + i) * slotW + slotW / 2;
+      const y = H - PAD_Y - ((v - min) / range) * (H - 2 * PAD_Y);
+      return [x, y];
+    });
+    const lineD = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    const areaD = lineD + ` L${pts[pts.length-1][0].toFixed(1)},${H} L${pts[0][0].toFixed(1)},${H} Z`;
+    els.sparkLine.setAttribute('d', lineD);
+    els.sparkArea.setAttribute('d', areaD);
+  }
+
+  function renderLeaderboard(top) {
+    if (!top || top.length === 0) {
+      els.lbBody.innerHTML = '<tr><td colspan="4" class="lb-empty">no queries yet — run “replay corpus” to seed traffic</td></tr>';
+      return;
+    }
+    const max = Math.max(...top.map((t) => t.count), 1);
+    const rows = top.slice(0, 10).map((t, i) => {
+      const pct = Math.round((t.count / max) * 100);
+      return `<tr>
+        <td class="rank">${i + 1}</td>
+        <td class="term">${escapeHtml(t.term)}</td>
+        <td class="bar"><div class="barfill" style="width:${pct}%;"></div></td>
+        <td class="count">${t.count}</td>
+      </tr>`;
+    });
+    els.lbBody.innerHTML = rows.join('');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  async function fetchMetrics() {
+    const res = await fetch('/metrics', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`/metrics ${res.status}`);
+    return res.json();
+  }
+
+  function applyMetrics(m) {
+    renderGauge(m.cache_hit_rate ?? 0);
+    els.statHits.textContent   = fmtNum(m.total_hits);
+    els.statMisses.textContent = fmtNum(m.total_misses);
+    els.statSize.textContent   = fmtNum(m.cache_size);
+    els.statAvg.innerHTML      = fmtMs(m.avg_latency_ms ?? 0) + '<span class="unit">ms</span>';
+    els.statTotal.textContent  = fmtNum(m.total_queries);
+
+    const ratio = m.singleflight_ratio ?? 0;
+    els.statRatio.textContent = (ratio * 100).toFixed(1) + '%';
+    els.ratioBar.style.width = (ratio * 100).toFixed(1) + '%';
+    els.statRatioSub.textContent =
+      `${m.singleflight_collapsed ?? 0} of ${m.total_queries ?? 0} queries collapsed onto an in-flight leader`;
+
+    renderSparkline(m.latency_history || []);
+    renderLeaderboard(m.top_terms || []);
+
+    const t = new Date();
+    els.lastTick.textContent = 'tick · ' + t.toLocaleTimeString();
+  }
+
+  let inflight = false;
+  async function tick() {
+    if (inflight) return;
+    inflight = true;
+    try {
+      const m = await fetchMetrics();
+      applyMetrics(m);
+      setStatus(true, 'live');
+    } catch (e) {
+      setStatus(false, 'offline · is the demo server running?');
+    } finally {
+      inflight = false;
+    }
+  }
+
+  async function replayCorpus() {
+    els.btnReplay.disabled = true;
+    const original = els.btnReplay.textContent;
+    els.btnReplay.textContent = 'replaying…';
+    try {
+      const res = await fetch('/api/sample_queries', { cache: 'no-store' });
+      if (!res.ok) throw new Error('sample_queries ' + res.status);
+      const corpus = await res.json();
+      const queries = (corpus.queries || []).map((q) => q.question);
+      // Two passes — second pass shows hits.
+      const sequence = [...queries, ...queries];
+      for (const q of sequence) {
+        await fetch('/api/cache/ask', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ question: q }),
+        }).catch(() => {});
+      }
+      await tick();
+    } finally {
+      els.btnReplay.disabled = false;
+      els.btnReplay.textContent = original;
+    }
+  }
+
+  async function resetAll() {
+    els.btnReset.disabled = true;
+    try {
+      await fetch('/api/cache/reset', { method: 'POST' });
+      await tick();
+    } finally {
+      els.btnReset.disabled = false;
+    }
+  }
+
+  els.btnReplay.addEventListener('click', replayCorpus);
+  els.btnReset.addEventListener('click', resetAll);
+
+  tick();
+  setInterval(tick, REFRESH_MS);
+</script>
+</body>
+</html>

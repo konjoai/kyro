@@ -3,6 +3,60 @@
 All notable changes to KonjoOS are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [unreleased] — K3: Observatory live
+
+### Added
+- `demo/observatory.html` — self-contained live dashboard. Dark theme, purple
+  accent. Auto-refreshes every 3s by polling `GET /metrics`. Renders:
+  - SVG ring gauge for cache hit rate (0–100%).
+  - SVG sparkline of the last 60 query latencies.
+  - Singleflight coalescing ratio (collapsed / total) with a progress bar.
+  - Top-10 most-queried terms leaderboard (stop-words stripped, stems counted).
+  - "replay corpus" button that fires the 20-query × 3-tenant seed corpus
+    twice through `POST /api/cache/ask` so visitors see the hit-rate climb live.
+  - "reset" button wired to `POST /api/cache/reset`.
+- `demo/sample_queries.json` — 20 realistic RAG queries across three tenants
+  (`acme-support`, `konjo-devrel`, `lumen-research`). Served at
+  `GET /api/sample_queries` for the dashboard's replay button.
+- `demo/server.py` — `GET /metrics` endpoint backed by real counters from
+  `konjoai.cache.SemanticCache.stats()` plus a synchronous singleflight gate
+  that mirrors `AsyncSemanticCache.get_or_compute` semantics (concurrent
+  callers for the same normalised question collapse onto one LLM synth).
+  Metric shape:
+  - `cache_hit_rate` (float 0–1) — pulled from `SemanticCache.stats()`.
+  - `avg_latency_ms` (float) — mean of `latency_history`.
+  - `singleflight_ratio` (float 0–1) — `singleflight_collapsed / total_queries`.
+  - `total_queries` (int) — every `ask()` call (hits + misses + collapses).
+  - `top_terms` (list of `{term, count}`) — Counter over content words after
+    stop-word and length filtering, capped at 10.
+  - `latency_history` (list of float, length ≤ 60) — ring buffer of recent ms.
+  - Plus convenience fields: `total_hits`, `total_misses`, `cache_size`,
+    `singleflight_collapsed`, `calls_avoided`, `time_saved_ms`, `dollars_saved`,
+    `history_capacity`, `threshold`, `cache_max_size`.
+- `tests/unit/test_demo_metrics.py` — 7 new tests pinning the dashboard
+  contract: empty-state shape, field types, hit-rate equals `SemanticCache`
+  ground truth, latency history bounded + chronological, leaderboard cap +
+  stop-word filter, singleflight ratio under concurrent load, sample-corpus
+  shape (20 queries × 3 tenants).
+
+### Changed
+- `demo/server.py` — `ask()` now records latency into a 60-slot ring buffer,
+  increments stop-word-stripped term counters, and routes misses through the
+  new singleflight gate. `reset()` clears the new counters and the inflight
+  registry. The handler exposes new GET routes: `/observatory`, `/metrics`,
+  `/api/sample_queries`. Static-serving was DRYed into `_serve_static()`.
+
+### Konjo gates
+- **K1**: `ask()` waiter path tolerates a leader compute failure — `event.set()`
+  fires from `finally`, so waiters never block forever and the inflight slot
+  is always cleared.
+- **K3**: every metric is a *real* count — `cache_hit_rate` is read straight
+  from `SemanticCache.stats()`, `singleflight_collapsed` increments only when
+  a thread genuinely waited on a peer's `Event`. No mocks.
+- **K6**: purely additive — the existing `/api/cache/*` routes, `stats()`,
+  `probe()`, and `seed()` are untouched; 891 tests pass (+7, was 884), 19
+  pre-existing failures unchanged.
+
 ## [v1.5.0] — Sprint 25: Feedback Collection
 
 ### Added

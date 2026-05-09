@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "description": "Realistic RAG queries across three tenant personas. Replayed twice by the observatory to demonstrate hit-rate climb + paraphrase coalescing.",
+  "tenants": [
+    { "tenant_id": "acme-support",   "persona": "customer-support agent for an e-commerce store" },
+    { "tenant_id": "konjo-devrel",   "persona": "developer evaluating Kyro for a RAG deployment" },
+    { "tenant_id": "lumen-research", "persona": "research analyst asking factual reference questions" }
+  ],
+  "queries": [
+    { "tenant_id": "acme-support",   "question": "What is your refund policy?" },
+    { "tenant_id": "acme-support",   "question": "How do I return a damaged item?" },
+    { "tenant_id": "acme-support",   "question": "How fast does shipping arrive?" },
+    { "tenant_id": "acme-support",   "question": "When will my order be delivered?" },
+    { "tenant_id": "acme-support",   "question": "What is the return window for refunds?" },
+    { "tenant_id": "acme-support",   "question": "Do you offer free shipping over $50?" },
+    { "tenant_id": "acme-support",   "question": "What payment methods do you accept?" },
+
+    { "tenant_id": "konjo-devrel",   "question": "How do I install Kyro?" },
+    { "tenant_id": "konjo-devrel",   "question": "What language is Kyro written in?" },
+    { "tenant_id": "konjo-devrel",   "question": "Is Kyro open source?" },
+    { "tenant_id": "konjo-devrel",   "question": "What is your SLA?" },
+    { "tenant_id": "konjo-devrel",   "question": "Does Kyro support Redis as a cache backend?" },
+    { "tenant_id": "konjo-devrel",   "question": "How does the singleflight stampede protection work?" },
+    { "tenant_id": "konjo-devrel",   "question": "What does Kyro actually do?" },
+
+    { "tenant_id": "lumen-research", "question": "What is the capital of France?" },
+    { "tenant_id": "lumen-research", "question": "What is the capital of Germany?" },
+    { "tenant_id": "lumen-research", "question": "What is the capital of the UK?" },
+    { "tenant_id": "lumen-research", "question": "What is the meaning of life?" },
+    { "tenant_id": "lumen-research", "question": "Tell me about the capital of France" },
+    { "tenant_id": "lumen-research", "question": "Which city is the capital of Germany?" }
+  ]
+}

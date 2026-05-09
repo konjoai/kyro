@@ -33,6 +33,7 @@ import re
 import sys
 import threading
 import time
+from collections import Counter, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -169,6 +170,7 @@ class DemoState:
 
     SIMULATED_LLM_MS = 800.0
     COST_PER_LLM_CALL_USD = 0.002
+    LATENCY_HISTORY_LEN = 60
 
     def __init__(self) -> None:
         # Configured for the demo: smaller cache + a permissive threshold so
@@ -182,6 +184,24 @@ class DemoState:
         self._dollars_saved = 0.0
         self._seed_pairs: list[tuple[str, str]] = []
         self._seeded = False
+
+        # Observatory accounting (K3 — real counters, never mocked):
+        # ``_total_queries``    — every ask() call (hit + miss + collapsed waiters).
+        # ``_singleflight_collapsed`` — concurrent callers that joined an in-flight
+        #   compute instead of firing their own. Mirrors AsyncSemanticCache._stampedes_collapsed.
+        # ``_latency_history``  — ring buffer of last 60 ask() latencies in ms.
+        # ``_top_terms``        — Counter over content words (stop-words stripped via _STOP).
+        self._total_queries = 0
+        self._singleflight_collapsed = 0
+        self._latency_history: deque[float] = deque(maxlen=self.LATENCY_HISTORY_LEN)
+        self._top_terms: Counter[str] = Counter()
+
+        # Real synchronous singleflight: one Event per inflight normalised key.
+        # A second caller for the same key blocks on the Event instead of firing
+        # its own LLM synth — exactly the stampede-collapse semantics that
+        # AsyncSemanticCache.get_or_compute provides on the async side.
+        self._inflight: dict[str, threading.Event] = {}
+        self._inflight_lock = threading.Lock()
 
     # ── Embedded queries inspected against real cache state ─────────────
 
@@ -243,10 +263,18 @@ class DemoState:
         }
 
     def ask(self, question: str) -> dict[str, Any]:
-        """One full demo lookup. Returns real timings + real cache state."""
+        """One full demo lookup. Returns real timings + real cache state.
+
+        Also feeds the observatory: every call updates ``_total_queries``,
+        appends to ``_latency_history``, and increments ``_top_terms``.
+        Concurrent callers for the same normalised question collapse onto
+        a single LLM synth via the singleflight gate.
+        """
         question = (question or "").strip()
         if not question:
             return {"error": "question must be non-empty"}
+
+        ask_t0 = time.perf_counter()
 
         # Embed.
         embed_t0 = time.perf_counter()
@@ -266,10 +294,12 @@ class DemoState:
         if cached is not None:
             # Real hit — kyro returned a cached response.
             answer = cached.answer if hasattr(cached, "answer") else str(cached)
+            latency_ms = (time.perf_counter() - ask_t0) * 1000.0
             with self._lock:
                 self._calls_avoided += 1
                 self._time_saved_ms += self.SIMULATED_LLM_MS
                 self._dollars_saved += self.COST_PER_LLM_CALL_USD
+                self._record_query(question, latency_ms)
             return {
                 "hit": True,
                 "score": round(float(best_sim), 4),
@@ -279,23 +309,71 @@ class DemoState:
                 "matched_question": best_question,
                 "embed_ms": round(embed_ms, 3),
                 "cache_lookup_ms": round(lookup_ms, 3),
-                "latency_ms": round(embed_ms + lookup_ms, 3),
+                "latency_ms": round(latency_ms, 3),
                 "would_have_been_ms": self.SIMULATED_LLM_MS,
                 "source": "kyro.SemanticCache.lookup()",
             }
 
-        # Miss — synthesise an answer (a real deployment hands off to an LLM
-        # here). We sleep briefly to make the latency contrast feel real.
-        synth_t0 = time.perf_counter()
-        time.sleep(0.18)
-        answer = synthesise_answer(question)
-        synth_ms = (time.perf_counter() - synth_t0) * 1000.0
+        # Miss — singleflight gate: if another thread is already synthesising
+        # the same normalised question, wait for it instead of firing our own.
+        # The waiter then re-runs lookup() and is served from the cache.
+        key = self.cache._normalise(question)  # type: ignore[attr-defined]
+        with self._inflight_lock:
+            event = self._inflight.get(key)
+            is_leader = event is None
+            if is_leader:
+                event = threading.Event()
+                self._inflight[key] = event
 
-        # Store via the real cache. Wrap in a tiny object so the .answer
-        # attribute lookup on the next hit succeeds.
-        store_t0 = time.perf_counter()
-        self.cache.store(question, q_vec, _CachedAnswer(answer))
-        store_ms = (time.perf_counter() - store_t0) * 1000.0
+        if not is_leader:
+            event.wait(timeout=10.0)
+            cached = self.cache.lookup(question, q_vec)
+            latency_ms = (time.perf_counter() - ask_t0) * 1000.0
+            with self._lock:
+                self._singleflight_collapsed += 1
+                if cached is not None:
+                    self._calls_avoided += 1
+                    self._time_saved_ms += self.SIMULATED_LLM_MS
+                    self._dollars_saved += self.COST_PER_LLM_CALL_USD
+                self._record_query(question, latency_ms)
+            answer = (
+                cached.answer if cached is not None and hasattr(cached, "answer")
+                else str(cached) if cached is not None
+                else f'I would ask the LLM about "{question}".'
+            )
+            return {
+                "hit": True,
+                "collapsed": True,
+                "score": round(float(best_sim), 4) if best_sim >= 0 else None,
+                "score_pct": round(float(best_sim) * 100.0, 2) if best_sim >= 0 else None,
+                "threshold": self.cache._threshold,  # type: ignore[attr-defined]
+                "cached_answer": answer,
+                "matched_question": best_question,
+                "embed_ms": round(embed_ms, 3),
+                "cache_lookup_ms": round(lookup_ms, 3),
+                "latency_ms": round(latency_ms, 3),
+                "would_have_been_ms": self.SIMULATED_LLM_MS,
+                "source": "demo singleflight (collapsed onto leader)",
+            }
+
+        # Leader — synthesise + store + signal waiters.
+        try:
+            synth_t0 = time.perf_counter()
+            time.sleep(0.18)
+            answer = synthesise_answer(question)
+            synth_ms = (time.perf_counter() - synth_t0) * 1000.0
+
+            store_t0 = time.perf_counter()
+            self.cache.store(question, q_vec, _CachedAnswer(answer))
+            store_ms = (time.perf_counter() - store_t0) * 1000.0
+        finally:
+            event.set()
+            with self._inflight_lock:
+                self._inflight.pop(key, None)
+
+        latency_ms = (time.perf_counter() - ask_t0) * 1000.0
+        with self._lock:
+            self._record_query(question, latency_ms)
 
         return {
             "hit": False,
@@ -308,10 +386,65 @@ class DemoState:
             "cache_lookup_ms": round(lookup_ms, 3),
             "synth_ms": round(synth_ms, 3),
             "store_ms": round(store_ms, 3),
-            "latency_ms": round(embed_ms + lookup_ms + synth_ms + store_ms, 3),
+            "latency_ms": round(latency_ms, 3),
             "would_have_been_ms": self.SIMULATED_LLM_MS,
             "source": "kyro.SemanticCache.store()",
         }
+
+    # ── Observatory accounting ──────────────────────────────────────────
+
+    def _record_query(self, question: str, latency_ms: float) -> None:
+        """Update observatory counters. Caller MUST hold ``self._lock``."""
+        self._total_queries += 1
+        self._latency_history.append(round(float(latency_ms), 3))
+        for tok in re.findall(r"[a-z']+", question.lower()):
+            if len(tok) <= 1 or tok in _STOP:
+                continue
+            stem = _stem(tok)
+            if stem and stem not in _STOP and len(stem) > 1:
+                self._top_terms[stem] += 1
+
+    def metrics(self) -> dict[str, Any]:
+        """Live observatory feed. Real counters wired to SemanticCache stats.
+
+        Shape (contract — exercised by tests/unit/test_demo_metrics.py):
+            cache_hit_rate     float in [0, 1]
+            avg_latency_ms     float
+            singleflight_ratio float in [0, 1]  (collapsed / total)
+            total_queries      int
+            top_terms          list[{term, count}]   length <= 10
+            latency_history    list[float]           length <= 60
+        """
+        cache_stats = self.cache.stats()
+        with self._lock:
+            history = list(self._latency_history)
+            avg_latency = sum(history) / len(history) if history else 0.0
+            ratio = (
+                self._singleflight_collapsed / self._total_queries
+                if self._total_queries > 0 else 0.0
+            )
+            top = [
+                {"term": term, "count": count}
+                for term, count in self._top_terms.most_common(10)
+            ]
+            return {
+                "cache_hit_rate": float(cache_stats["hit_rate"]),
+                "avg_latency_ms": round(avg_latency, 3),
+                "singleflight_ratio": round(ratio, 4),
+                "total_queries": self._total_queries,
+                "singleflight_collapsed": self._singleflight_collapsed,
+                "top_terms": top,
+                "latency_history": history,
+                "cache_size": cache_stats["size"],
+                "cache_max_size": cache_stats["max_size"],
+                "threshold": cache_stats["threshold"],
+                "total_hits": cache_stats["total_hits"],
+                "total_misses": cache_stats["total_misses"],
+                "calls_avoided": self._calls_avoided,
+                "time_saved_ms": round(self._time_saved_ms, 1),
+                "dollars_saved": round(self._dollars_saved, 4),
+                "history_capacity": self.LATENCY_HISTORY_LEN,
+            }
 
     def seed(self) -> dict[str, Any]:
         """Populate the cache so first-time demo visitors see hits immediately."""
@@ -375,6 +508,16 @@ class DemoState:
             self._dollars_saved = 0.0
             self._seeded = False
             self._seed_pairs = []
+            self._total_queries = 0
+            self._singleflight_collapsed = 0
+            self._latency_history.clear()
+            self._top_terms.clear()
+        with self._inflight_lock:
+            self._inflight.clear()
+        # SemanticCache.stats() keeps cumulative hit/miss across invalidates
+        # by design. For observatory parity, snap them to zero too.
+        self.cache._total_hits = 0  # type: ignore[attr-defined]
+        self.cache._total_misses = 0  # type: ignore[attr-defined]
         return {"reset": True}
 
 
@@ -423,6 +566,8 @@ def synthesise_answer(question: str) -> str:
 
 _state = DemoState()
 _HTML_PATH = Path(__file__).parent / "index.html"
+_OBSERVATORY_PATH = Path(__file__).parent / "observatory.html"
+_SAMPLE_QUERIES_PATH = Path(__file__).parent / "sample_queries.json"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -468,7 +613,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
-            return self._serve_html()
+            return self._serve_static(_HTML_PATH, "text/html; charset=utf-8")
+        if path in ("/observatory", "/observatory.html"):
+            return self._serve_static(_OBSERVATORY_PATH, "text/html; charset=utf-8")
         if path == "/api/health":
             return self._send_json(
                 {
@@ -481,6 +628,10 @@ class Handler(BaseHTTPRequestHandler):
             )
         if path == "/api/cache/stats":
             return self._send_json(_state.stats())
+        if path == "/metrics":
+            return self._send_json(_state.metrics())
+        if path == "/api/sample_queries":
+            return self._serve_static(_SAMPLE_QUERIES_PATH, "application/json; charset=utf-8")
         return self._send_json({"error": f"no route for GET {path}"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -503,18 +654,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(_state.reset())
         return self._send_json({"error": f"no route for POST {path}"}, status=404)
 
-    # Static HTML ──────────────────────────────────────────────────────
+    # Static files ─────────────────────────────────────────────────────
 
-    def _serve_html(self) -> None:
-        if not _HTML_PATH.exists():
+    def _serve_static(self, path: Path, content_type: str) -> None:
+        if not path.exists():
             self.send_response(404)
             self._send_cors()
             self.end_headers()
-            self.wfile.write(b"demo/index.html not found next to server.py")
+            self.wfile.write(f"{path.name} not found next to server.py".encode())
             return
-        body = _HTML_PATH.read_bytes()
+        body = path.read_bytes()
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self._send_cors()
         self.end_headers()
@@ -539,8 +690,11 @@ def main() -> None:
     )
     log.info("Endpoints:")
     log.info("  GET  /                  → demo/index.html")
+    log.info("  GET  /observatory       → demo/observatory.html (live metrics)")
     log.info("  GET  /api/health        → liveness")
     log.info("  GET  /api/cache/stats   → real SemanticCache.stats()")
+    log.info("  GET  /metrics           → live observatory feed (cache + latency + singleflight)")
+    log.info("  GET  /api/sample_queries→ demo seed corpus (20 queries × 3 tenants)")
     log.info("  POST /api/cache/ask     → real cosine + lookup, JSON {question}")
     log.info("  POST /api/cache/probe   → read-only score, no mutation")
     log.info("  POST /api/cache/seed    → seed 8 example Q/A pairs")
