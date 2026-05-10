@@ -20,6 +20,12 @@ import pytest
 
 import konjoai.auth.jwt_auth as _jwt_module
 from konjoai.auth.jwt_auth import _HAS_JWT, TenantClaims, decode_token
+
+try:
+    import qdrant_client as _qc  # noqa: F401
+    _HAS_QDRANT = True
+except ImportError:
+    _HAS_QDRANT = False
 from konjoai.auth.tenant import (
     ANONYMOUS_TENANT,
     _current_tenant_id,
@@ -307,6 +313,7 @@ class TestGetTenantIdDep:
 # ── QdrantStore tenant integration (unit-level mocking) ───────────────────────
 
 
+@pytest.mark.skipif(not _HAS_QDRANT, reason="qdrant-client not installed")
 class TestQdrantStoreTenantScoping:
     def test_upsert_adds_tenant_id_to_payload(self) -> None:
         """When tenant context is set, upsert injects tenant_id into payload."""

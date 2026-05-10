@@ -241,31 +241,34 @@ class TestKyroMetricsDisabled:
 
 @pytest.mark.skipif(not _HAS_PROMETHEUS, reason="prometheus-client not installed")
 class TestKyroMetricsEnabled:
+    # Share a single KyroMetrics instance across all methods in this class so
+    # we only register the prometheus counters once — registering the same
+    # metric name twice raises ValueError in prometheus-client >= 0.20.
+    _m: KyroMetrics | None = None
+
+    @classmethod
+    def setup_class(cls) -> None:
+        cls._m = KyroMetrics(enabled=True)
+
     def test_available_true_when_enabled(self) -> None:
-        m = KyroMetrics(enabled=True)
-        assert m.available is True
+        assert self._m.available is True
 
     def test_exposition_non_empty(self) -> None:
-        m = KyroMetrics(enabled=True)
-        text = m.exposition()
+        text = self._m.exposition()
         assert isinstance(text, str)
         assert len(text) > 0
 
     def test_record_step_does_not_raise(self) -> None:
-        m = KyroMetrics(enabled=True)
-        m.record_step("rerank", 5.0)  # must not raise
+        self._m.record_step("rerank", 5.0)
 
     def test_inc_query_does_not_raise(self) -> None:
-        m = KyroMetrics(enabled=True)
-        m.inc_query("aggregation")
+        self._m.inc_query("aggregation")
 
     def test_inc_error_does_not_raise(self) -> None:
-        m = KyroMetrics(enabled=True)
-        m.inc_error("generate")
+        self._m.inc_error("generate")
 
     def test_inc_cache_hit_does_not_raise(self) -> None:
-        m = KyroMetrics(enabled=True)
-        m.inc_cache_hit()
+        self._m.inc_cache_hit()
 
 
 # ---------------------------------------------------------------------------

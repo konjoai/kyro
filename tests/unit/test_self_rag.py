@@ -214,9 +214,8 @@ class TestSelfRAGPipelineRun:
         assert result.answer == "Python is a programming language."
         assert result.iterations >= 1
 
-    @patch("sentence_transformers.CrossEncoder")
-    def test_result_has_correct_fields(self, mock_ce_cls):
-        mock_ce_cls.return_value.predict.return_value = [0.85]
+    def test_result_has_correct_fields(self):
+        # SupportScorer._load_model falls back to jaccard when sentence-transformers absent
         doc = _make_doc("Python is a high-level programming language.")
         with patch("konjoai.retrieve.self_rag.decide_retrieve", return_value=RetrieveDecision.YES):
             result = self.pipeline.run(
@@ -230,9 +229,8 @@ class TestSelfRAGPipelineRun:
         assert result.iterations >= 1
         assert len(result.document_critiques) == 1
 
-    @patch("sentence_transformers.CrossEncoder")
-    def test_document_critique_populated(self, mock_ce_cls):
-        mock_ce_cls.return_value.predict.return_value = [0.85]
+    def test_document_critique_populated(self):
+        # SupportScorer._load_model falls back to jaccard when sentence-transformers absent
         doc = _make_doc("Python is interpreted and dynamically typed.")
         with patch("konjoai.retrieve.self_rag.decide_retrieve", return_value=RetrieveDecision.YES):
             result = self.pipeline.run(

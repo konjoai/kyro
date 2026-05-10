@@ -6,6 +6,12 @@ from konjoai.retrieve.hybrid import reciprocal_rank_fusion
 from konjoai.retrieve.sparse import BM25Index
 from konjoai.store.qdrant import SearchResult
 
+try:
+    import rank_bm25 as _rb  # noqa: F401
+    _HAS_BM25 = True
+except ImportError:
+    _HAS_BM25 = False
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -23,6 +29,7 @@ def _bm25r(content: str, score: float = 1.0):
 # BM25Index
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skipif(not _HAS_BM25, reason="rank-bm25 not installed")
 class TestBM25Index:
     def test_search_before_build_raises(self) -> None:
         idx = BM25Index()
