@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "observatory",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "7890", "--directory", "demo"],
+      "port": 7890
+    }
+  ]
+}

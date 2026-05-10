@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Kyro Observatory</title>
+<style>
+  :root {
+    --mono: ui-monospace,"SF Mono","Menlo",Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",system-ui,sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    overflow: hidden; width: 100%; height: 100%;
+    background: #030812; color: #cfe7ff;
+    font-family: var(--mono); font-size: 11px;
+    -webkit-font-smoothing: antialiased;
+  }
+  canvas#c {
+    display: block; position: fixed; inset: 0; z-index: 0;
+    will-change: transform;
+  }
+  /* ── Overlay UI ─────────────────────────────────────────────────── */
+  #ui {
+    position: fixed; inset: 0; z-index: 10;
+    pointer-events: none;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 12px 14px 10px;
+    gap: 0;
+  }
+  /* ── Top bar ──────────────────────────────────────────────────── */
+  #topbar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: nowrap;
+  }
+  .obs-logo {
+    display: flex; align-items: center; gap: 7px; flex-shrink: 0;
+    border: 1px solid rgba(106,255,213,0.3); border-radius: 8px;
+    padding: 5px 11px;
+    background: rgba(3,8,18,0.75); backdrop-filter: blur(10px);
+    letter-spacing: 0.14em; text-transform: uppercase;
+    font-size: 10.5px; font-weight: 700; color: #6affd5;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    background: #6affd5; box-shadow: 0 0 9px #6affd5;
+    animation: blink 1.9s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .obs-sub { color: rgba(90,120,154,0.9); font-size: 10px; letter-spacing: 0.04em; }
+  /* ── Stats strip ──────────────────────────────────────────────── */
+  #statsrow {
+    margin-left: auto; display: flex; gap: 0; align-items: stretch;
+    background: rgba(3,8,18,0.72); backdrop-filter: blur(10px);
+    border: 1px solid rgba(106,255,213,0.13); border-radius: 9px;
+    overflow: hidden;
+  }
+  .stat {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 1px;
+    padding: 6px 14px; min-width: 62px;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .stat:last-child { border-right: 0; }
+  .stat-val {
+    font-size: 17px; font-weight: 700; letter-spacing: -0.02em;
+    color: #e8f4ff; line-height: 1;
+  }
+  .stat-lbl {
+    font-size: 8.5px; color: rgba(90,120,154,0.8);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  #hitRateVal { transition: color 0.5s ease; }
+  /* ── Singleflight badge ───────────────────────────────────────── */
+  #sfBadge {
+    position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+    pointer-events: none; z-index: 20;
+    background: rgba(3,8,18,0.88); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.35); border-radius: 999px;
+    padding: 5px 18px; font-size: 11px; color: #fff; letter-spacing: 0.07em;
+    text-shadow: 0 0 14px rgba(106,255,213,0.9);
+    opacity: 0; transition: opacity 0.28s ease;
+    white-space: nowrap;
+  }
+  /* ── Bottom row ───────────────────────────────────────────────── */
+  #bottom { display: flex; align-items: flex-end; gap: 10px; }
+  #ekgWrap {
+    flex: 1; background: rgba(3,8,18,0.68); backdrop-filter: blur(10px);
+    border: 1px solid rgba(106,255,213,0.13); border-radius: 10px;
+    padding: 8px 12px;
+  }
+  .panel-lbl {
+    font-size: 8.5px; color: rgba(90,120,154,0.8); text-transform: uppercase;
+    letter-spacing: 0.1em; margin-bottom: 5px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-live { color: #6affd5; }
+  canvas#ekg { display: block; height: 46px; width: 100%; }
+  #queryWrap {
+    width: 270px; pointer-events: all; flex-shrink: 0;
+    background: rgba(3,8,18,0.72); backdrop-filter: blur(10px);
+    border: 1px solid rgba(106,255,213,0.2); border-radius: 10px;
+    padding: 8px 12px;
+  }
+  #queryInput {
+    width: 100%; background: transparent; border: 0; outline: 0;
+    color: #e8f4ff; font-family: var(--mono); font-size: 12px;
+    caret-color: #6affd5;
+  }
+  #queryInput::placeholder { color: rgba(90,120,154,0.7); }
+  /* ── Legend ───────────────────────────────────────────────────── */
+  #legend {
+    position: fixed; bottom: 96px; right: 14px; z-index: 10;
+    background: rgba(3,8,18,0.65); backdrop-filter: blur(10px);
+    border: 1px solid rgba(106,255,213,0.1); border-radius: 10px;
+    padding: 9px 12px; display: flex; flex-direction: column; gap: 5px;
+  }
+  .leg { display: flex; align-items: center; gap: 7px;
+    font-size: 8.5px; color: rgba(90,120,154,0.85);
+    text-transform: uppercase; letter-spacing: 0.07em; }
+  .leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div id="topbar">
+    <div class="obs-logo"><span class="live-dot"></span>Kyro Observatory</div>
+    <span class="obs-sub">v1.3.0 &middot; semantic cache &middot; singleflight</span>
+    <div id="statsrow">
+      <div class="stat"><span class="stat-val" id="hitRateVal">—</span><span class="stat-lbl">hit&nbsp;rate</span></div>
+      <div class="stat"><span class="stat-val" id="hitsVal">0</span><span class="stat-lbl">hits</span></div>
+      <div class="stat"><span class="stat-val" id="missesVal">0</span><span class="stat-lbl">misses</span></div>
+      <div class="stat"><span class="stat-val" id="savedVal">0.0s</span><span class="stat-lbl">saved</span></div>
+      <div class="stat"><span class="stat-val" id="inflightVal">0</span><span class="stat-lbl">in-flight</span></div>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div id="ekgWrap">
+      <div class="panel-lbl">
+        <span>cache hit-rate · EKG</span>
+        <span class="panel-live">● live</span>
+      </div>
+      <canvas id="ekg"></canvas>
+    </div>
+    <div id="queryWrap">
+      <div class="panel-lbl">inject query → river</div>
+      <input id="queryInput" type="text"
+             placeholder="type a question…"
+             autocomplete="off" spellcheck="false"/>
+    </div>
+  </div>
+</div>
+
+<div id="sfBadge"></div>
+
+<div id="legend">
+  <div class="leg"><div class="leg-dot" style="background:#e0f0ff;box-shadow:0 0 7px #88ccff"></div>fresh hit (ice-blue)</div>
+  <div class="leg"><div class="leg-dot" style="background:#ffd700;box-shadow:0 0 7px #ff9900"></div>aged entry (gold)</div>
+  <div class="leg"><div class="leg-dot" style="background:#ff7070;box-shadow:0 0 7px #ff4444"></div>cache miss</div>
+  <div class="leg"><div class="leg-dot" style="background:#fff;box-shadow:0 0 7px #fff"></div>injected / fused</div>
+</div>
+
+<script>
+'use strict';
+/* ── Config ─────────────────────────────────────────────────────────── */
+const N           = 160;
+const MAX_SPD     = 3.4;
+const DAMP        = 0.974;
+const REP_R       = 30;
+const REP_F       = 55;
+const AGE_MAX     = 200;       // frames to lerp ice-blue → gold  (~3.3 s)
+const BAND_MID    = 0.44;      // cache band vertical centre (frac of H)
+const BAND_HALF   = 0.12;      // half-height (frac of H)
+const HIT_PROB    = 0.63;      // baseline cache-hit probability
+const LLM_MS      = 800;       // simulated cold-path cost (ms)
+const SF_EVERY    = 5000;      // ms between singleflight events
+const SF_DUR      = 420;       // ms for fusion animation
+const SF_N        = 4;         // followers per fusion event
+const FLASH_LIFE  = 30;        // frames
+const EKG_LEN     = 220;       // sparkline history points
+const EKG_TICK    = 28;        // frames between EKG samples
+
+/* ── Globals (sized on load) ─────────────────────────────────────────── */
+let W, H, BW, BH;
+let bandMid, bandTop, bandBot;
+
+/* ── Canvas ─────────────────────────────────────────────────────────── */
+const C    = document.getElementById('c');
+const ctx  = C.getContext('2d');
+const EKG  = document.getElementById('ekg');
+const ectx = EKG.getContext('2d');
+
+function resize() {
+  W  = C.width  = window.innerWidth;
+  H  = C.height = window.innerHeight;
+  BW = EKG.width  = EKG.parentElement.clientWidth - 24;
+  BH = EKG.height = 46;
+  bandMid = H * BAND_MID;
+  bandTop = bandMid - H * BAND_HALF;
+  bandBot = bandMid + H * BAND_HALF;
+}
+
+/* ── Utilities ────────────────────────────────────────────────────── */
+const TAU   = Math.PI * 2;
+const rnd   = Math.random.bind(Math);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const lerp  = (a,b,t) => a + (b-a) * clamp(t,0,1);
+
+// Spring overshoot — approx cubic-bezier(0.34, 1.56, 0.64, 1)
+function springEase(t) {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t-1,3) + c1 * Math.pow(t-1,2);
+}
+// Fast ease-out — approx cubic-bezier(0.23, 1, 0.32, 1)
+function easeOut(t) { return 1 - Math.pow(1-t, 3); }
+
+/* colour component lerp over particle age */
+const ICE_F  = [224, 240, 255]; const ICE_S  = [136, 204, 255];
+const GOLD_F = [255, 215,   0]; const GOLD_S = [255, 153,   0];
+const MISS_F = [255, 112, 112]; const MISS_S = [255,  68,  68];
+
+function pColor(p) {
+  if (p.injected) return { fill:'#ffffff', shadow:'rgba(255,255,255,0.85)' };
+  if (p.miss) {
+    const t2 = Math.min(1, p.age/100);
+    return {
+      fill:   `rgb(${lerp(ICE_F[0],MISS_F[0],t2)|0},${lerp(ICE_F[1],MISS_F[1],t2)|0},${lerp(ICE_F[2],MISS_F[2],t2)|0})`,
+      shadow: `rgb(${lerp(ICE_S[0],MISS_S[0],t2)|0},${lerp(ICE_S[1],MISS_S[1],t2)|0},${lerp(ICE_S[2],MISS_S[2],t2)|0})`,
+    };
+  }
+  const t2 = Math.min(1, p.age/AGE_MAX);
+  return {
+    fill:   `rgb(${lerp(ICE_F[0],GOLD_F[0],t2)|0},${lerp(ICE_F[1],GOLD_F[1],t2)|0},${lerp(ICE_F[2],GOLD_F[2],t2)|0})`,
+    shadow: `rgb(${lerp(ICE_S[0],GOLD_S[0],t2)|0},${lerp(ICE_S[1],GOLD_S[1],t2)|0},${lerp(ICE_S[2],GOLD_S[2],t2)|0})`,
+  };
+}
+
+/* ── Wave functions (cache band membrane) ───────────────────────────── */
+function wTop(x, t) {
+  return bandTop + 5*Math.sin(x*0.05 + t*0.003) + 2.5*Math.sin(x*0.09 - t*0.005);
+}
+function wBot(x, t) {
+  return bandBot + 4*Math.sin(x*0.06 + t*0.0035 + 1.1) + 2*Math.sin(x*0.10 - t*0.006);
+}
+
+/* ── Particle pool ─────────────────────────────────────────────────── */
+let particles = [];
+let simHits = 0, simMisses = 0;
+let ekgAccH = 0, ekgAccM = 0;
+
+function spawn(opts = {}) {
+  const miss = opts.miss ?? (rnd() > HIT_PROB);
+  const bh   = bandBot - bandTop;
+  const p = {
+    x:       opts.x  ?? rnd() * W,
+    y:       opts.y  ?? (bandTop + 12 + rnd() * (bh - 24)),
+    vx:      opts.vx ?? (1.3 + rnd() * 1.5),
+    vy:      opts.vy ?? ((rnd()-0.5) * 0.7),
+    mass:    0.6 + rnd() * 1.4,
+    age:     opts.age ?? Math.floor(rnd() * AGE_MAX),
+    r:       opts.r   ?? (2.0 + rnd() * 1.4),
+    miss,
+    injected: opts.injected ?? false,
+    fusing:   false,
+    alive:    true,
+  };
+  if (!opts.injected && opts.count !== false) {
+    if (miss) { simMisses++; ekgAccM++; }
+    else      { simHits++;   ekgAccH++; }
+  }
+  return p;
+}
+
+function initParticles() {
+  particles = [];
+  for (let i = 0; i < N; i++) particles.push(spawn());
+}
+
+/* ── Corpus islands ─────────────────────────────────────────────────── */
+const ISLANDS = [
+  { name:'legal',     cxf:0.11, cyf:0.20, baseR:52, hex:'#ff9900', hex2:'#ffcc44', phase:0.0   },
+  { name:'medical',   cxf:0.85, cyf:0.17, baseR:46, hex:'#00ffcc', hex2:'#88ffee', phase:2.09  },
+  { name:'technical', cxf:0.52, cyf:0.72, baseR:58, hex:'#00ff88', hex2:'#44ffaa', phase:4.19  },
+];
+
+function drawIslands(t) {
+  ISLANDS.forEach(isl => {
+    const cx = isl.cxf * W, cy = isl.cyf * H;
+    const a1 = 0.28 + 0.20 * Math.sin(t * 0.002   + isl.phase);
+    const a2 = 0.14 + 0.10 * Math.sin(t * 0.002   + isl.phase + 0.8);
+    const a3 = 0.06 + 0.04 * Math.sin(t * 0.002   + isl.phase + 1.7);
+    // outer ambient glow
+    let g = ctx.createRadialGradient(cx,cy,0,cx,cy,isl.baseR*3.5);
+    g.addColorStop(0, isl.hex + Math.round(a3*255).toString(16).padStart(2,'0'));
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy,isl.baseR*3.5,0,TAU); ctx.fill();
+    // mid glow
+    g = ctx.createRadialGradient(cx,cy,0,cx,cy,isl.baseR*2.0);
+    g.addColorStop(0, isl.hex + Math.round(a2*255).toString(16).padStart(2,'0'));
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy,isl.baseR*2.0,0,TAU); ctx.fill();
+    // inner bright core
+    g = ctx.createRadialGradient(cx,cy,0,cx,cy,isl.baseR);
+    g.addColorStop(0,   isl.hex2 + Math.round(a1*255).toString(16).padStart(2,'0'));
+    g.addColorStop(0.55, isl.hex + Math.round(a1*0.45*255).toString(16).padStart(2,'0'));
+    g.addColorStop(1,   'transparent');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx,cy,isl.baseR,0,TAU); ctx.fill();
+    // label
+    ctx.save();
+    ctx.globalAlpha = a1 * 1.35;
+    ctx.shadowBlur  = 10 + 5*Math.sin(t*0.002+isl.phase);
+    ctx.shadowColor = isl.hex;
+    ctx.fillStyle   = isl.hex;
+    ctx.font        = `${8 + 2*a1}px var(--mono, monospace)`;
+    ctx.textAlign   = 'center';
+    ctx.fillText(isl.name.toUpperCase(), cx, cy + isl.baseR + 15);
+    ctx.restore();
+  });
+}
+
+/* ── Cache band membrane ─────────────────────────────────────────────── */
+function drawMembrane(t) {
+  const steps = Math.ceil(W / 3);
+  const dx    = W / steps;
+
+  // fill band interior
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = i * dx;
+    i === 0 ? ctx.moveTo(x, wTop(x,t)) : ctx.lineTo(x, wTop(x,t));
+  }
+  for (let i = steps; i >= 0; i--) {
+    ctx.lineTo(i*dx, wBot(i*dx, t));
+  }
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, bandTop, 0, bandBot);
+  fill.addColorStop(0,   'rgba(106,255,213,0.048)');
+  fill.addColorStop(0.5, 'rgba(40,120,200,0.06)');
+  fill.addColorStop(1,   'rgba(106,255,213,0.030)');
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.restore();
+
+  // wave lines
+  for (const [fn, col, alpha] of [
+    [wTop, 'rgba(106,255,213,0.7)', 0.85],
+    [wBot, 'rgba(80,200,180,0.55)', 0.65],
+  ]) {
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const x = i * dx;
+      i === 0 ? ctx.moveTo(x, fn(x,t)) : ctx.lineTo(x, fn(x,t));
+    }
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 1.3;
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur  = 10;
+    ctx.shadowColor = col;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/* ── Physics update ─────────────────────────────────────────────────── */
+function updateParticles(t) {
+  const L = particles.length;
+
+  // pairwise repulsion
+  for (let i = 0; i < L-1; i++) {
+    const pi = particles[i];
+    if (!pi.alive || pi.fusing) continue;
+    for (let j = i+1; j < L; j++) {
+      const pj = particles[j];
+      if (!pj.alive || pj.fusing) continue;
+      const dx = pi.x-pj.x, dy = pi.y-pj.y;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < REP_R*REP_R && d2 > 0.5) {
+        const f = REP_F / (d2 * (pi.mass+pj.mass));
+        pi.vx += f*dx/pi.mass;  pi.vy += f*dy/pi.mass;
+        pj.vx -= f*dx/pj.mass;  pj.vy -= f*dy/pj.mass;
+      }
+    }
+  }
+
+  for (let i = 0; i < L; i++) {
+    const p = particles[i];
+    if (!p.alive || p.fusing) continue;
+
+    // turbulence field — spec exact
+    p.vx += Math.sin(p.y * 0.01 + t * 0.002) * 0.3;
+    p.vy += Math.cos(p.x * 0.01 + t * 0.002) * 0.3;
+
+    // cache band wave bounce — spec: reverse vy at band boundaries
+    const tw = wTop(p.x, t), bw = wBot(p.x, t);
+    if (p.y <= tw && p.vy < 0) { p.vy =  Math.abs(p.vy) * 0.72; p.y = tw + 1.5; }
+    if (p.y >= bw && p.vy > 0) { p.vy = -Math.abs(p.vy) * 0.72; p.y = bw - 1.5; }
+
+    // damping + speed cap
+    p.vx *= DAMP; p.vy *= DAMP;
+    const spd = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+    if (spd > MAX_SPD) { const s = MAX_SPD/spd; p.vx *= s; p.vy *= s; }
+
+    p.x += p.vx; p.y += p.vy; p.age++;
+    if (p.injected && p.age > AGE_MAX*0.55) p.injected = false;
+
+    // recycle off right edge — back to left, fresh state
+    if (p.x > W + 12) {
+      const miss = rnd() > HIT_PROB;
+      p.x   = -10;
+      p.y   = bandTop + 12 + rnd() * (bandBot - bandTop - 24);
+      p.vx  = 1.3 + rnd() * 1.5;
+      p.vy  = (rnd()-0.5) * 0.7;
+      p.age = 0; p.miss = miss; p.injected = false;
+      if (miss) { simMisses++; ekgAccM++; }
+      else      { simHits++;   ekgAccH++; }
+    }
+  }
+}
+
+/* ── Draw particles ─────────────────────────────────────────────────── */
+function drawParticles() {
+  particles.forEach(p => {
+    if (!p.alive) return;
+    const c  = pColor(p);
+    const sz = p.injected ? 1.5 : 1.0;
+    ctx.save();
+    ctx.shadowBlur  = p.injected ? 18 : p.miss ? 8 : 11;
+    ctx.shadowColor = c.shadow;
+    ctx.fillStyle   = c.fill;
+    ctx.globalAlpha = p.injected ? 0.98 : 0.82;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * sz, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+/* ── Singleflight ──────────────────────────────────────────────────── */
+let sfActive = false, sfStart = 0, sfLeader = null, sfFollowers = [];
+
+function triggerSF() {
+  if (sfActive) return;
+  const free = particles.filter(p => !p.fusing && !p.miss && p.alive);
+  if (free.length < SF_N+2) return;
+  const pool = free.slice().sort(() => rnd()-0.5);
+  sfLeader    = pool[0];
+  sfFollowers = pool.slice(1, SF_N+1);
+  sfFollowers.forEach(p => { p.fusing = true; p._sfX0 = p.x; p._sfY0 = p.y; });
+  sfActive = true; sfStart = performance.now();
+  document.getElementById('inflightVal').textContent = SF_N;
+  const badge = document.getElementById('sfBadge');
+  badge.textContent = `⚡ singleflight — ${SF_N} queries collapsed to 1`;
+  badge.style.opacity = '1';
+  setTimeout(() => { badge.style.opacity = '0'; }, 2400);
+}
+
+function updateSF(now) {
+  if (!sfActive) return;
+  const prog = Math.min(1, (now - sfStart) / SF_DUR);
+  const ease = springEase(prog);
+  sfFollowers.forEach(p => {
+    p.x = lerp(p._sfX0, sfLeader.x, ease);
+    p.y = lerp(p._sfY0, sfLeader.y, ease);
+  });
+  // Draw converging trails
+  ctx.save();
+  sfFollowers.forEach(p => {
+    const a = (1-prog) * 0.65;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(sfLeader.x, sfLeader.y);
+    ctx.strokeStyle = `rgba(255,255,255,${a})`;
+    ctx.lineWidth   = 1.4*(1-prog*0.6);
+    ctx.shadowBlur  = 12; ctx.shadowColor = '#ffffff';
+    ctx.stroke();
+  });
+  ctx.restore();
+  if (prog >= 1) {
+    addFlash(sfLeader.x, sfLeader.y);
+    sfFollowers.forEach(p => {
+      p.fusing = false; p.age = 0; p.injected = false; p.miss = false;
+      p.x = sfLeader.x + (rnd()-0.5)*18; p.y = sfLeader.y + (rnd()-0.5)*10;
+      p.vx = 2.2 + rnd()*1.4; p.vy = (rnd()-0.5)*0.5;
+    });
+    sfActive = false;
+    simHits += SF_N; ekgAccH += SF_N;
+    document.getElementById('inflightVal').textContent = '0';
+  }
+}
+
+/* ── Flash effects ─────────────────────────────────────────────────── */
+let flashes = [];
+function addFlash(x, y) { flashes.push({x, y, age:0}); }
+
+function drawFlashes() {
+  flashes = flashes.filter(f => f.age < FLASH_LIFE);
+  flashes.forEach(f => {
+    const t  = f.age / FLASH_LIFE;
+    const eo = easeOut(t);
+    const a  = Math.pow(1-t, 2);
+    ctx.save();
+    // expanding ring
+    ctx.shadowBlur  = 40; ctx.shadowColor = 'rgba(255,255,255,0.9)';
+    ctx.strokeStyle = `rgba(255,255,255,${a})`;
+    ctx.lineWidth   = 2.5*(1-t);
+    ctx.beginPath(); ctx.arc(f.x, f.y, eo*62, 0, TAU); ctx.stroke();
+    // inner dot
+    ctx.shadowBlur = 22;
+    ctx.fillStyle  = `rgba(255,255,255,${a*1.3})`;
+    ctx.beginPath(); ctx.arc(f.x, f.y, 6*(1-t)+1, 0, TAU); ctx.fill();
+    ctx.restore();
+    f.age++;
+  });
+}
+
+/* ── EKG sparkline ─────────────────────────────────────────────────── */
+let ekgData = [];
+let ekgTick = 0;
+
+// Pre-seed with realistic variation so EKG is immediately visible
+function seedEkg() {
+  ekgData = [];
+  for (let i = 0; i < EKG_LEN; i++) {
+    const base = HIT_PROB + Math.sin(i * 0.09) * 0.06;
+    ekgData.push(clamp(base + (rnd()-0.5)*0.14, 0.05, 0.98));
+  }
+}
+
+function sampleEkg() {
+  ekgTick++;
+  if (ekgTick < EKG_TICK) return;
+  ekgTick = 0;
+  const total = ekgAccH + ekgAccM;
+  const rate  = total > 0 ? ekgAccH/total : HIT_PROB + (rnd()-0.5)*0.12;
+  ekgAccH = 0; ekgAccM = 0;
+  ekgData.push(clamp(rate, 0, 1));
+  if (ekgData.length > EKG_LEN) ekgData.shift();
+}
+
+function drawEkg(frame) {
+  ectx.clearRect(0, 0, BW, BH);
+  if (ekgData.length < 2) return;
+  const sx = BW / (EKG_LEN-1);
+  const latest = ekgData[ekgData.length-1];
+  const col  = latest > 0.8 ? '#00ff88' : latest > 0.5 ? '#ffaa00' : '#ff4444';
+  const colR = latest > 0.8 ? '0,255,136' : latest > 0.5 ? '255,170,0' : '255,68,68';
+
+  // area fill
+  ectx.save();
+  ectx.beginPath();
+  ekgData.forEach((v,i) => {
+    const x = i*sx, y = BH - v*(BH-5) - 2;
+    i===0 ? ectx.moveTo(x,y) : ectx.lineTo(x,y);
+  });
+  ectx.lineTo((ekgData.length-1)*sx, BH); ectx.lineTo(0, BH); ectx.closePath();
+  const ag = ectx.createLinearGradient(0,0,0,BH);
+  ag.addColorStop(0, `rgba(${colR},0.18)`); ag.addColorStop(1, `rgba(${colR},0)`);
+  ectx.fillStyle = ag; ectx.fill(); ectx.restore();
+
+  // line
+  ectx.save();
+  ectx.beginPath();
+  ekgData.forEach((v,i) => {
+    const x = i*sx, y = BH - v*(BH-5) - 2;
+    i===0 ? ectx.moveTo(x,y) : ectx.lineTo(x,y);
+  });
+  ectx.strokeStyle = col; ectx.lineWidth = 1.6;
+  ectx.shadowBlur = 7; ectx.shadowColor = `rgba(${colR},0.7)`;
+  ectx.stroke(); ectx.restore();
+
+  // glowing head dot — spec: shadowBlur:20, shadowColor shifts green→amber→red by hit rate
+  const hx = (ekgData.length-1)*sx;
+  const hy = BH - latest*(BH-5) - 2;
+  ectx.save();
+  ectx.shadowBlur  = 20; ectx.shadowColor = `rgba(${colR},0.9)`;
+  ectx.fillStyle   = col;
+  ectx.beginPath(); ectx.arc(hx, hy, 3.5, 0, TAU); ectx.fill();
+  // blink ring
+  const blink = 0.35 + 0.35*Math.sin(frame * 0.13);
+  ectx.globalAlpha = blink;
+  ectx.beginPath(); ectx.arc(hx, hy, 6.5, 0, TAU);
+  ectx.strokeStyle = col; ectx.lineWidth = 1;
+  ectx.stroke();
+  ectx.restore();
+}
+
+/* ── Stats DOM update ──────────────────────────────────────────────── */
+function updateStats(frame) {
+  if (frame % 10 !== 0) return;
+  const total = simHits + simMisses;
+  const rate  = total > 0 ? simHits/total : HIT_PROB;
+  const pct   = Math.round(rate*100);
+  const rEl   = document.getElementById('hitRateVal');
+  rEl.textContent = pct + '%';
+  rEl.style.color = rate > 0.8 ? '#6affd5' : rate > 0.5 ? '#ffaa00' : '#ff6464';
+  document.getElementById('hitsVal').textContent   = simHits;
+  document.getElementById('missesVal').textContent = simMisses;
+  document.getElementById('savedVal').textContent  = (simHits * LLM_MS / 1000).toFixed(1) + 's';
+}
+
+/* ── Query injection ────────────────────────────────────────────────── */
+const qInput = document.getElementById('queryInput');
+let lastInject = 0;
+qInput.addEventListener('keyup', () => {
+  const now = performance.now();
+  if (now - lastInject < 38) return;
+  lastInject = now;
+  const rect = qInput.closest('#queryWrap').getBoundingClientRect();
+  particles.push(spawn({
+    x: rect.left + 8, y: rect.top + rect.height/2,
+    vx: 3.2 + rnd()*2, vy: (rnd()-0.5)*1.5,
+    r: 2.6, age: 0, miss: false, injected: true, count: false,
+  }));
+  if (particles.length > N + 40) particles.splice(N, particles.length - N);
+});
+
+/* ── Main loop ─────────────────────────────────────────────────────── */
+let frame = 0;
+let lastSF = 0;
+let t0 = 0;   // captured on first frame to normalise turbulence time
+
+function loop(now) {
+  if (frame === 0) t0 = now;
+  frame++;
+
+  // singleflight trigger
+  if (now - lastSF > SF_EVERY && !sfActive) { lastSF = now; triggerSF(); }
+
+  // deep space background
+  ctx.clearRect(0,0,W,H);
+  const bg = ctx.createRadialGradient(W*.5,H*.38,0, W*.5,H*.4, Math.max(W,H)*0.8);
+  bg.addColorStop(0, '#041018'); bg.addColorStop(0.6,'#021010'); bg.addColorStop(1,'#030812');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  // faint grid
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,255,136,0.034)'; ctx.lineWidth = 0.5;
+  for (let x=0; x<W; x+=52) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y=0; y<H; y+=52) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.restore();
+
+  const tSim = now - t0;   // ms since animation start — turbulence stays phase-agnostic
+  drawIslands(tSim);
+  drawMembrane(tSim);
+  updateParticles(tSim);
+  drawParticles();
+  updateSF(now);
+  drawFlashes();
+  sampleEkg();
+  drawEkg(frame);
+  updateStats(frame);
+
+  requestAnimationFrame(loop);
+}
+
+/* ── Boot — defer until layout is ready ────────────────────────────── */
+window.addEventListener('resize', resize);
+window.addEventListener('load', () => {
+  resize();
+  seedEkg();
+  initParticles();
+  // prime stats counters so the display shows real numbers immediately
+  simHits   = particles.filter(p => !p.miss).length;
+  simMisses = particles.filter(p =>  p.miss).length;
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
