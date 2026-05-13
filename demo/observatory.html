@@ -244,6 +244,34 @@
   .nav-link { color: var(--ink-dim); text-decoration: none; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
   .nav-link:hover { color: var(--hit); }
   .scroll-fade { mask-image: linear-gradient(180deg, transparent, #000 12px, #000 calc(100% - 12px), transparent); }
+
+  /* ── Slot-machine cost counter ──────────────────────────────────────── */
+  @keyframes slot-roll-in {
+    from { transform: translateY(-1.4em); opacity: 0; }
+    to   { transform: translateY(0);      opacity: 1; }
+  }
+  .slot-digit { display: inline-block; will-change: transform;
+    animation: slot-roll-in 400ms cubic-bezier(0.23,1,0.32,1) both; }
+
+  /* ── Magnetic tile repulsion ────────────────────────────────────────── */
+  .tile { will-change: transform; cursor: default; }
+
+  /* ── Tenant cost bars ───────────────────────────────────────────────── */
+  #tenantBars { display: flex; flex-direction: column; gap: 5px; }
+  .tb-row { display: flex; align-items: center; gap: 6px; }
+  .tb-label { color: var(--ink-dim); font-size: 10.5px; min-width: 52px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tb-track { flex: 1; height: 7px; background: rgba(255,255,255,0.06);
+    border-radius: 999px; overflow: hidden; }
+  .tb-fill { height: 100%; width: 0%; border-radius: 999px; will-change: width;
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    box-shadow: 0 0 7px rgba(167,139,250,0.45); }
+  .tb-val { color: var(--ink-dim); font-size: 10.5px; min-width: 40px;
+    text-align: right; font-variant-numeric: tabular-nums; }
+  .tb-empty { color: var(--ink-faint); font-size: 10.5px; }
+
+  /* ── Scroll-entrance (initial hidden state set via JS) ──────────────── */
+  .stagger-target { will-change: transform; }
 </style>
 </head>
 <body>
@@ -322,6 +350,10 @@
       <div class="row"><span>calls avoided</span><span id="rowAvoid">—</span></div>
       <div class="row"><span>time saved</span><span id="rowTime">—</span></div>
     </div>
+    <div class="panel">
+      <h2>Tenant Cost Savings</h2>
+      <div id="tenantBars"><span class="tb-empty">no tenant data yet</span></div>
+    </div>
   </aside>
 
   <footer class="islands" id="islands">
@@ -368,6 +400,37 @@
   // Drag-to-query
   let drag = null; // {x, y, held, timer}
 
+  // ── Token river state ────────────────────────────────────────────────
+  const TOKEN_TYPES = {
+    FACTUAL:  { color: '#ffffff', shadow: 'rgba(255,255,255,0.85)' },
+    FAQ:      { color: '#22d3ee', shadow: 'rgba(34,211,238,0.85)'  },
+    CODE:     { color: '#fbbf24', shadow: 'rgba(251,191,36,0.85)'  },
+    CREATIVE: { color: '#a78bfa', shadow: 'rgba(167,139,250,0.85)' },
+  };
+  const TOKEN_LIST = Object.keys(TOKEN_TYPES);
+  const tokens = [];
+
+  // ── Threshold gate metadata (mirrors Sprint 26 QueryType defaults) ───
+  const GATE_META = [
+    { label: 'FAC', thresh: 0.94, color: '#ffffff' },
+    { label: 'FAQ', thresh: 0.85, color: '#22d3ee' },
+    { label: 'COD', thresh: 0.92, color: '#fbbf24' },
+    { label: 'CRE', thresh: 0.75, color: '#a78bfa' },
+  ];
+
+  // ── Hit burst + miss ripple queues ───────────────────────────────────
+  const hitBursts   = [];
+  const missRipples = [];
+
+  // ── Magnetic tile state ──────────────────────────────────────────────
+  const magnetTiles = [...document.querySelectorAll('.tile')];
+  const magnetSt    = new WeakMap();
+  magnetTiles.forEach(el => magnetSt.set(el, { tx: 0, ty: 0, cx: 0, cy: 0 }));
+
+  // ── Cost counter state ───────────────────────────────────────────────
+  let _prevDollars = -1;
+  let _prevTenantHash = '';
+
   // ── Canvas + sizing ─────────────────────────────────────────────────
   const canvas = document.getElementById("river-canvas");
   const ctx    = canvas.getContext("2d");
@@ -384,6 +447,198 @@
     BAND_BOT = H / 2 + 46;
   }
   window.addEventListener("resize", resize);
+
+  // ── Token class (typed spline-path particles) ───────────────────────
+  class Token {
+    constructor(outcome = 'hit') {
+      this.type    = TOKEN_LIST[Math.floor(Math.random() * TOKEN_LIST.length)];
+      this.outcome = outcome;
+      this.t       = 0;
+      this.speed   = 0.004 + Math.random() * 0.004;
+      this.trail   = [];
+      this.gone    = false;
+      this.opacity = 1;
+      const sy = BAND_TOP + Math.random() * (BAND_BOT - BAND_TOP);
+      const ey = outcome === 'hit' ? BAND_TOP + 16 : BAND_BOT - 16;
+      this.p = { x0: 14, y0: sy, cx: W * 0.52 + (Math.random() - 0.5) * W * 0.12,
+                 cy: sy + (Math.random() - 0.5) * 48, x1: W - 14, y1: ey };
+    }
+    pos(t) {
+      const { x0, y0, cx, cy, x1, y1 } = this.p, m = 1 - t;
+      return { x: m*m*x0 + 2*m*t*cx + t*t*x1, y: m*m*y0 + 2*m*t*cy + t*t*y1 };
+    }
+    step() {
+      if (this.t >= 1) { this.opacity -= 0.055; if (this.opacity <= 0) this.gone = true; return; }
+      this.t = Math.min(1, this.t + this.speed);
+      const p = this.pos(this.t);
+      this.trail.push({ x: p.x, y: p.y, a: 1 });
+      for (const pt of this.trail) pt.a *= 0.80;
+      if (this.trail.length > 14) this.trail.shift();
+    }
+    draw() {
+      const s = TOKEN_TYPES[this.type];
+      const p = this.pos(Math.min(this.t, 1));
+      ctx.save();
+      for (const pt of this.trail) {
+        ctx.globalAlpha = pt.a * this.opacity * 0.32;
+        ctx.fillStyle = s.color;
+        ctx.beginPath(); ctx.arc(pt.x, pt.y, 1.3, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = this.opacity;
+      ctx.shadowBlur = 10; ctx.shadowColor = s.shadow;
+      ctx.fillStyle = s.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2.8, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // ── Threshold gate draw ──────────────────────────────────────────────
+  function drawThresholdGates(now) {
+    const startX  = W * 0.27;
+    const span    = W * 0.38;
+    const spacing = span / (GATE_META.length - 1);
+    GATE_META.forEach(({ label, thresh, color }, i) => {
+      const gx     = startX + i * spacing;
+      const ty     = BAND_BOT - (BAND_BOT - BAND_TOP) * thresh;
+      const pulse  = 0.22 + 0.10 * Math.sin(now * 0.002 + i * 1.1);
+      ctx.save();
+      ctx.setLineDash([3, 7]);
+      ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = pulse;
+      ctx.beginPath(); ctx.moveTo(gx, BAND_TOP + 2); ctx.lineTo(gx, BAND_BOT - 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.72;
+      ctx.shadowBlur = 7; ctx.shadowColor = color;
+      ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(gx - 6, ty); ctx.lineTo(gx + 6, ty); ctx.stroke();
+      ctx.globalAlpha = 0.42; ctx.fillStyle = color;
+      ctx.font = '8px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(label, gx, BAND_TOP - 4);
+      ctx.fillText((thresh * 100 | 0) + '%', gx, ty - 4);
+      ctx.restore();
+    });
+  }
+
+  // ── Hit burst ────────────────────────────────────────────────────────
+  function triggerHitBurst(x, y) {
+    const burst = [];
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU, spd = 1.1 + Math.random() * 2.2;
+      burst.push({ x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd, age: 0 });
+    }
+    hitBursts.push(burst);
+  }
+
+  function drawHitBursts() {
+    for (let i = hitBursts.length - 1; i >= 0; i--) {
+      const burst = hitBursts[i];
+      let dead = true;
+      ctx.save();
+      for (const p of burst) {
+        p.x += p.vx; p.y += p.vy; p.vx *= 0.91; p.vy *= 0.91; p.age++;
+        if (p.age < 36) {
+          dead = false;
+          const t = p.age / 36;
+          ctx.globalAlpha = (1 - t) * 0.78;
+          ctx.shadowBlur = 6; ctx.shadowColor = '#a78bfa';
+          ctx.fillStyle = '#a78bfa';
+          ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 * (1 - t) + 0.4, 0, TAU); ctx.fill();
+        }
+      }
+      ctx.restore();
+      if (dead) hitBursts.splice(i, 1);
+    }
+  }
+
+  // ── Miss ripple ──────────────────────────────────────────────────────
+  function triggerMissRipple(x, y) {
+    missRipples.push({ x, y, age: 0, maxAge: 40 });
+  }
+
+  function drawMissRipples() {
+    for (let i = missRipples.length - 1; i >= 0; i--) {
+      const r = missRipples[i];
+      const t = r.age / r.maxAge;
+      ctx.save();
+      ctx.globalAlpha = (1 - t) * 0.55;
+      ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.5;
+      ctx.shadowBlur = 9; ctx.shadowColor = '#ef4444';
+      ctx.beginPath(); ctx.arc(r.x, r.y, t * 46, 0, TAU); ctx.stroke();
+      ctx.restore();
+      r.age++;
+      if (r.age >= r.maxAge) missRipples.splice(i, 1);
+    }
+  }
+
+  // ── Magnetic chip repulsion ──────────────────────────────────────────
+  document.addEventListener('mousemove', e => {
+    magnetTiles.forEach(el => {
+      const rect = el.getBoundingClientRect();
+      const dx   = e.clientX - (rect.left + rect.width  / 2);
+      const dy   = e.clientY - (rect.top  + rect.height / 2);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const st   = magnetSt.get(el);
+      if (dist < 80 && dist > 0.5) {
+        const f = (80 - dist) / 80;
+        st.tx = -(dx / dist) * f * 14;
+        st.ty = -(dy / dist) * f * 14;
+      } else {
+        st.tx *= 0.88; st.ty *= 0.88;
+      }
+      st.cx += (st.tx - st.cx) * 0.10;
+      st.cy += (st.ty - st.cy) * 0.10;
+      el.style.transform = `translate(${st.cx.toFixed(2)}px,${st.cy.toFixed(2)}px)`;
+    });
+  });
+  document.addEventListener('mouseleave', () => {
+    magnetTiles.forEach(el => { const s = magnetSt.get(el); s.tx = 0; s.ty = 0; });
+  });
+
+  // ── Kinetic cost counter (slot-machine roll) ─────────────────────────
+  function animateCostCounter(dollars) {
+    if (dollars === _prevDollars) return;
+    _prevDollars = dollars;
+    const el = document.getElementById('tileDollars');
+    if (!el) return;
+    el.innerHTML = [...('$' + dollars.toFixed(3))].map((ch, i) =>
+      `<span class="slot-digit" style="animation-delay:${i * 40}ms">${ch}</span>`
+    ).join('');
+  }
+
+  // ── Tenant cost bars ─────────────────────────────────────────────────
+  function renderTenantBars(tenants) {
+    const el = document.getElementById('tenantBars');
+    if (!el) return;
+    const hash = tenants.map(t => t.tenant_id + t.estimated_cost_saved_usd).join('|');
+    if (hash === _prevTenantHash) return;
+    _prevTenantHash = hash;
+    if (!tenants.length) {
+      el.innerHTML = '<span class="tb-empty">no tenant data yet</span>'; return;
+    }
+    const maxC = Math.max(...tenants.map(t => t.estimated_cost_saved_usd), 0.0001);
+    el.innerHTML = tenants.slice(0, 6).map(t => {
+      const pct = (t.estimated_cost_saved_usd / maxC * 100).toFixed(1);
+      return `<div class="tb-row">
+        <span class="tb-label">${(t.tenant_id||'—').slice(0,14)}</span>
+        <div class="tb-track"><div class="tb-fill" data-p="${pct}"></div></div>
+        <span class="tb-val">$${t.estimated_cost_saved_usd.toFixed(3)}</span>
+      </div>`;
+    }).join('');
+    // Spring-overshoot bar animation after paint
+    requestAnimationFrame(() => {
+      el.querySelectorAll('.tb-fill').forEach(bar => {
+        bar.style.transition = 'width 600ms cubic-bezier(0.34,1.56,0.64,1)';
+        bar.style.width = bar.dataset.p + '%';
+      });
+    });
+  }
+
+  async function pullTenants() {
+    try {
+      const r = await fetch(API + '/tenants');
+      if (!r.ok) return;
+      renderTenantBars((await r.json()).tenants || []);
+    } catch {}
+  }
 
   // ── Ambient particle ────────────────────────────────────────────────
   class Ambient {
@@ -684,7 +939,15 @@
 
     drawSFChains();
     drawDragOrb();
+    drawHitBursts();
+    drawMissRipples();
     drawSeismograph();
+    drawThresholdGates(performance.now());
+    // token river — draw after gates so tokens pass "through" the bars
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      tokens[i].step(); tokens[i].draw();
+      if (tokens[i].gone) tokens.splice(i, 1);
+    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -727,7 +990,7 @@
     setText("rowMiss",   s.total_misses ?? 0);
     setText("rowAvoid",  s.calls_avoided ?? 0);
     setText("rowTime",   ((s.time_saved_seconds ?? 0).toFixed(2)) + "s");
-    setText("tileDollars", "$" + ((s.dollars_saved ?? 0).toFixed(3)));
+    animateCostCounter(s.dollars_saved ?? 0);
     setText("tileBackend", s.backend ? s.backend.replace("konjoai.cache.", "") : "memory");
     // island breathing speed: fast if high query rate
     const fast = total > 20 && hitRate > 0.6;
@@ -911,6 +1174,8 @@
         state.hits++;
         emit("hit");
         triggerResonance();
+        triggerHitBurst(W * 0.84, (BAND_TOP + BAND_BOT) / 2);
+        tokens.push(new Token("hit"));
         addTimelineSample(j.latency_ms || 5, true);
         if (j.collapsed) { state.collapses++; triggerSFChain(); }
         out.innerHTML = `<b style="color:var(--hit)">HIT</b> · score ${j.score_pct ?? "?"}% · ${(j.latency_ms || 0).toFixed(2)}ms<br><span style="opacity:0.7">${j.cached_answer}</span>`;
@@ -918,6 +1183,8 @@
         state.misses++;
         emit("miss");
         triggerMissImpact(W * 0.4);
+        triggerMissRipple(W * 0.4, (BAND_TOP + BAND_BOT) / 2);
+        tokens.push(new Token("miss"));
         addTimelineSample(j.latency_ms || 200, false);
         out.innerHTML = `<b style="color:var(--miss)">MISS</b> · stored · ${(j.latency_ms || 0).toFixed(2)}ms<br><span style="opacity:0.7">${j.cached_answer}</span>`;
       }
@@ -938,6 +1205,7 @@
       const p95    = sorted.length ? sorted[Math.min(sorted.length-1, Math.floor(sorted.length*0.95))] : 0;
       setText("tileAvg", avg.toFixed(1) + "<small>ms</small>");
       setText("tileP95", p95.toFixed(1) + "<small>ms</small>");
+      pullTenants();
     } catch {}
   }
 
@@ -985,6 +1253,36 @@
       const isHit = Math.random() < 0.65;
       addTimelineSample(isHit ? 3 + Math.random() * 12 : 150 + Math.random() * 400, isHit);
     }
+    // ── Scroll-entrance stagger ──────────────────────────────────────
+    const staggerEls = [...document.querySelectorAll('.panel, .tile')];
+    staggerEls.forEach(el => {
+      el.classList.add('stagger-target');
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(30px)';
+    });
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (!entry.isIntersecting) return;
+        const delay = i * 90;
+        entry.target.style.transition =
+          `opacity 550ms cubic-bezier(0.22,1,0.36,1) ${delay}ms,` +
+          `transform 550ms cubic-bezier(0.22,1,0.36,1) ${delay}ms`;
+        entry.target.style.opacity = '1';
+        entry.target.style.transform = 'translateY(0)';
+        io.unobserve(entry.target);
+      });
+    }, { threshold: 0.05 });
+    staggerEls.forEach(el => io.observe(el));
+
+    // ── Ambient token river spawning ─────────────────────────────────
+    setInterval(() => {
+      if (tokens.length < 22) {
+        const total = state.hits + state.misses;
+        const rate  = total > 0 ? state.hits / total : 0.62;
+        tokens.push(new Token(Math.random() < rate ? 'hit' : 'miss'));
+      }
+    }, 900);
+
     // Ambient simulation: emit hit/miss events proportional to current rate
     setInterval(() => {
       const total  = state.hits + state.misses;
