@@ -3,6 +3,46 @@
 All notable changes to KonjoOS are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [v1.6.0] — Sprint 26: Adaptive Threshold + OTel Cache Spans + Per-Tenant Cost Attribution
+
+### Added
+
+**Adaptive similarity threshold engine** (`konjoai/cache/threshold.py`)
+- `QueryType` enum: `FACTUAL`, `FAQ`, `CREATIVE`, `CODE`.
+- `classify_query(question)` — lightweight keyword heuristic (no model load): SQL keywords + code fences → CODE; dates/numbers/year/units → FACTUAL; "how to/what is" → FAQ; default → CREATIVE.
+- `ThresholdConfig` — per-type cosine thresholds (`factual=0.94`, `faq=0.85`, `creative=0.75`, `code=0.92`), all configurable.
+- `ThresholdStats` — thread-safe per-type hit/miss counters with `snapshot()` / `reset()`.
+- `AdaptiveThresholdEngine` — stateless engine: `resolve(question) → (QueryType, float)`.
+- `get_threshold_stats()` — process-wide singleton.
+- `GET /cache/threshold_stats` — returns per-type hit/miss rates. HTTP 404 when `cache_enabled=False` (K3).
+- Config: `cache_adaptive_threshold_enabled`, `cache_threshold_{factual,faq,creative,code}`.
+
+**OpenTelemetry cache span emission** (`konjoai/cache/tracing.py`)
+- `emit_cache_lookup(...)` — emits `cache.lookup` + `cache.hit`/`cache.miss` OTel spans with attributes: `kyro.tenant_id`, `kyro.similarity_score`, `kyro.threshold_used`, `kyro.latency_ms`, `kyro.query_type`, `kyro.tokens_saved`.
+- `emit_cache_store(...)` — emits `cache.store` OTel span.
+- `cache_span(operation)` — context manager for arbitrary cache operations.
+- K3: every function is a pure no-op when `opentelemetry-sdk` is absent or `otel_enabled=False`. Exceptions inside span emission are swallowed with `logger.warning`.
+- `pyproject.toml`: new `[otel]` extras group (`opentelemetry-sdk`, `opentelemetry-exporter-otlp-proto-grpc`, `opentelemetry-exporter-otlp-proto-http`). `pip install kyro[otel]`.
+
+**Per-tenant cost attribution** (`konjoai/services/cost_attribution.py`)
+- `TenantCostTracker` — thread-safe per-tenant accumulator: `record(tenant_id, hit=bool)`, `report(tenant_id) → TenantCostReport | None`, `all_tenants()`, `reset()`.
+- `TenantCostReport` — frozen dataclass: `total_queries`, `cache_hits`, `cache_misses`, `hit_rate`, `tokens_saved`, `estimated_cost_saved_usd`, `cost_per_1k_tokens`, `avg_response_tokens`.
+- `get_cost_tracker()` — process-wide singleton, reads `cost_per_1k_tokens` / `avg_response_tokens` from Settings.
+- `GET /tenants/{tenant_id}/cost_report` — returns cost attribution JSON. HTTP 404 when cache disabled or tenant unknown.
+- `GET /tenants` — lists all tracked tenants with their cost reports.
+- Config: `cost_per_1k_tokens = 0.002`, `avg_response_tokens = 256`.
+
+**Cache and tenants routers registered** in `konjoai/api/app.py`.
+
+**Re-exports** in `konjoai/cache/__init__.py`: all threshold + tracing symbols.
+
+### Tests
+- `tests/unit/test_threshold.py` — 35 tests: classifier (all 4 types, edge cases, priority ordering), ThresholdConfig, ThresholdStats (thread-safety, singleton lifecycle), AdaptiveThresholdEngine, `/cache/threshold_stats` route.
+- `tests/unit/test_cache_tracing.py` — 9 tests: no-op when disabled, span emission, attribute presence, exception swallowing for both lookup and store.
+- `tests/unit/test_cost_attribution.py` — 26 tests: TenantCostTracker (isolation, thread-safety, cost math, reset), singleton, `/tenants` and `/tenants/{id}/cost_report` routes (disabled → 404, unknown → 404, known → 200).
+
+Full suite: **980 passed, 27 skipped** (was 910 — +70 new tests).
+
 ## [unreleased] — K3: Observatory live
 
 ### Added

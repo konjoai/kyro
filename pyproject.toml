@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "konjoai"
-version = "1.5.0"
+version = "1.6.0"
 description = "Production RAG pipeline: hybrid retrieval, reranking, and RAGAS evaluation"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -53,6 +53,11 @@ observability = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-exporter-otlp-proto-grpc>=1.20",
 ]
+otel = [
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
+]
 dev = [
     "pytest>=7.4.0",
     "pytest-timeout>=2.2.0",
@@ -60,7 +65,7 @@ dev = [
     "ruff>=0.1.0",
 ]
 all = [
-    "konjoai[jwt,mcp,eval,observability]",
+    "konjoai[jwt,mcp,eval,observability,otel]",
 ]
 
 [project.urls]

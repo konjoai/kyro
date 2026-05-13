@@ -28,6 +28,12 @@ from konjoai.api.routes import (
 from konjoai.api.routes import (
     vectro as vectro_route,
 )
+from konjoai.api.routes import (
+    cache as cache_route,
+)
+from konjoai.api.routes import (
+    tenants as tenants_route,
+)
 from konjoai.api.schemas import HealthResponse
 
 logger = logging.getLogger(__name__)
@@ -62,6 +68,8 @@ app.include_router(agent_route.router)
 app.include_router(health_route.router)
 app.include_router(audit_route.router)
 app.include_router(feedback_route.router)
+app.include_router(cache_route.router)
+app.include_router(tenants_route.router)
 
 
 def create_app() -> FastAPI:

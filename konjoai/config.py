@@ -84,6 +84,18 @@ class Settings(BaseSettings):
     cache_redis_namespace: str = "kyro:cache"
     cache_redis_ttl_seconds: int = 0         # 0 disables TTL; >0 sets per-entry expiry
 
+    # Sprint 26 — adaptive threshold engine (P1).
+    # When True, per-type thresholds override cache_similarity_threshold for each query.
+    cache_adaptive_threshold_enabled: bool = False
+    cache_threshold_factual:  float = 0.94
+    cache_threshold_faq:      float = 0.85
+    cache_threshold_creative: float = 0.75
+    cache_threshold_code:     float = 0.92
+
+    # Sprint 26 — per-tenant cost attribution (P1).
+    cost_per_1k_tokens:    float = 0.002  # USD per 1 000 LLM output tokens
+    avg_response_tokens:   int   = 256    # estimated tokens per LLM response
+
     # ── RAGAS Eval ───────────────────────────────────────────────────────────────────────────
     ragas_llm: str = "gpt-4o-mini"
 

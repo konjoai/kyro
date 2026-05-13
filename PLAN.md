@@ -9,6 +9,35 @@
 
 ---
 
+## Researched Feature Roadmap
+
+### 🔴 P1 — Critical (implement now)
+
+| Feature | Description | Status |
+|---|---|---|
+| **Adaptive similarity threshold engine** | Per-query-type thresholds instead of a global 0.8. Config: `thresholds: {factual: 0.94, faq: 0.85, creative: 0.75, code: 0.92}`. Query classifier (keyword heuristic: numbers/dates → factual, "how to" → faq, code fence → code, else → faq). `GET /cache/threshold_stats` shows per-type hit/miss rates. | ✅ Sprint 26 |
+| **OpenTelemetry trace integration** | Every cache lookup/miss emits an OTel span: `cache.lookup`, `cache.hit`, `cache.miss`, `cache.store`. Span attributes: `tenant_id`, `similarity_score`, `threshold_used`, `latency_ms`, `tokens_saved`. `OTEL_EXPORTER_OTLP_ENDPOINT` env var. `pip install kyro[otel]` extras. | ✅ Sprint 26 |
+| **Per-tenant cost attribution dashboard** | Track per-tenant: total queries, cache hits, tokens saved (hit × avg_response_tokens), estimated cost saved ($0.002/1K tokens, configurable). `GET /tenants/{id}/cost_report` returns JSON. Observatory shows per-tenant cost savings panel. | ✅ Sprint 26 |
+
+### 🟠 P2 — High Impact / Medium Complexity
+
+| Feature | Description | Status |
+|---|---|---|
+| **Semantic cache poisoning guard** | Before storing, validate embedding similarity between question and answer exceeds `min_qa_coherence: 0.3`. Rate limit writes per tenant (max 100 stores/min). Anomaly detection: flag responses that are statistical outliers in length or embedding distance. `POST /cache/report_poisoning` endpoint. | ⬜ |
+| **Multi-turn conversation cache** | Cache keyed on `(tenant_id, conversation_id, turn_hash)` where `turn_hash` = rolling hash of last N turns. Separate similarity threshold for multi-turn (0.88 default). `conversation_id` param on lookup/store endpoints. | ⬜ |
+| **Streaming response cache with SSE replay** | Store complete streamed responses as chunked text. On cache hit for a streaming request, replay chunks at the original inter-chunk timing (`replay_delay_ms`). `Content-Type: text/event-stream` on hit. | ⬜ |
+| **Cache warming API** | `POST /cache/warm` accepts `[{question, answer}]` to pre-populate. Batch embedding. Returns `{warmed: n, skipped_duplicates: m}`. Useful for FAQ pre-loading. | ⬜ |
+
+### 🟡 P3 — Strategic
+
+| Feature | Description | Status |
+|---|---|---|
+| **Distributed cache replication** | Redis/Valkey backend for shared cache across multiple kyro instances behind a load balancer. | ⬜ |
+| **Cache invalidation webhooks** | `POST /cache/invalidate` by topic/tag. `POST /webhooks/invalidation` for push-based invalidation from upstream knowledge base updates. | ⬜ |
+| **Negative cache** | Cache "this question has no good answer" signals to avoid repeated expensive LLM calls for known unanswerable queries. | ⬜ |
+
+---
+
 ## Current State: Sprint 25 Complete — v1.5.0 SHIPPED
 
 - **Tests:** 876 passing (+ 25 skipped), pre-existing failures due to missing optional packages
