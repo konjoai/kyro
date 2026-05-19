@@ -26,7 +26,6 @@ never branches on OTel availability.
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Generator
 from contextlib import contextmanager
 
@@ -41,8 +40,8 @@ __all__ = ["cache_span", "emit_cache_lookup"]
 # ── Optional OTel import ────────────────────────────────────────────────────
 
 try:
-    from opentelemetry import trace as _otel_trace  # type: ignore[import-untyped]
-    from opentelemetry.trace import NonRecordingSpan  # type: ignore[import-untyped]
+    from opentelemetry import trace as _otel_trace  # type: ignore[import-untyped]  # noqa: F401
+    from opentelemetry.trace import NonRecordingSpan  # type: ignore[import-untyped]  # noqa: F401
     _HAS_OTEL = True
 except ImportError:
     _HAS_OTEL = False
@@ -139,7 +138,7 @@ def emit_cache_lookup(
         if raw_tracer is None:
             return
 
-        with raw_tracer.start_as_current_span(f"cache.lookup") as lookup_span:
+        with raw_tracer.start_as_current_span("cache.lookup") as lookup_span:
             lookup_span.set_attribute("kyro.tenant_id", tenant_id)
             lookup_span.set_attribute("kyro.similarity_score", round(float(similarity_score), 4))
             lookup_span.set_attribute("kyro.threshold_used", round(float(threshold_used), 4))

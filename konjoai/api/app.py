@@ -13,6 +13,9 @@ from konjoai.api.routes import (
     audit as audit_route,
 )
 from konjoai.api.routes import (
+    cache as cache_route,
+)
+from konjoai.api.routes import (
     eval as eval_route,
 )
 from konjoai.api.routes import (
@@ -26,13 +29,10 @@ from konjoai.api.routes import (
     query,
 )
 from konjoai.api.routes import (
-    vectro as vectro_route,
-)
-from konjoai.api.routes import (
-    cache as cache_route,
-)
-from konjoai.api.routes import (
     tenants as tenants_route,
+)
+from konjoai.api.routes import (
+    vectro as vectro_route,
 )
 from konjoai.api.schemas import HealthResponse
 

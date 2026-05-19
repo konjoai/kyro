@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from konjoai.api.routes.cache import _kmeans_cluster
 from konjoai.api.routes.cache import router as cache_router
 from konjoai.cache.semantic_cache import SemanticCache, SemanticCacheEntry
-
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -350,9 +350,6 @@ class TestCacheWarmRoute:
 
 
 # ── Query clustering ──────────────────────────────────────────────────────────
-
-
-from konjoai.api.routes.cache import _kmeans_cluster
 
 
 class TestKmeansCluster:

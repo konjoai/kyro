@@ -1,24 +1,28 @@
-"""Cache management API routes (Sprint 26–27).
+"""Cache management API routes (Sprint 26–28).
 
 Endpoints
 ---------
-GET  /cache/threshold_stats  — per-type hit/miss rates (Sprint 26)
-POST /cache/warm             — seed the cache from a list of Q/A pairs (Sprint 27)
-GET  /cache/expired_count    — how many entries have exceeded their TTL (Sprint 27)
-DELETE /cache/expired        — evict all expired entries (Sprint 27)
-GET  /cache/clusters         — k-means topic clustering of cached queries (Sprint 27)
+GET    /cache/threshold_stats      — per-type hit/miss rates (Sprint 26)
+POST   /cache/warm                 — seed the cache from a list of Q/A pairs (Sprint 27)
+GET    /cache/expired_count        — how many entries have exceeded their TTL (Sprint 27)
+DELETE /cache/expired              — evict all expired entries (Sprint 27)
+GET    /cache/clusters             — k-means topic clustering of cached queries (Sprint 27)
+POST   /cache/report_poisoning     — manually report a suspected poisoning event (Sprint 28)
+GET    /cache/poisoning_reports    — list poisoning reports (Sprint 28)
 
 All routes return HTTP 404 when ``cache_enabled`` is False (K3).
 """
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from konjoai.cache.poisoning import get_poisoning_report_store
 from konjoai.cache.semantic_cache import SemanticCache, get_semantic_cache
 from konjoai.cache.threshold import get_threshold_stats
 from konjoai.config import get_settings
@@ -304,3 +308,95 @@ def _kmeans_cluster(
 
     result.sort(key=lambda c: c["size"], reverse=True)
     return result
+
+
+# ── Sprint 28: poisoning guard endpoints ──────────────────────────────────────
+
+
+def _require_poisoning_guard_enabled() -> None:
+    """Raise HTTP 404 when the poisoning guard is not enabled (K3)."""
+    settings = get_settings()
+    if not settings.cache_enabled or not settings.cache_poisoning_guard_enabled:
+        raise HTTPException(
+            status_code=404,
+            detail="cache poisoning guard is not enabled (set CACHE_POISONING_GUARD_ENABLED=true)",
+        )
+
+
+class ReportPoisoningRequest(BaseModel):
+    """Body for a manual cache-poisoning report."""
+
+    question_hash: str = Field(
+        ...,
+        min_length=8,
+        max_length=64,
+        description="16-hex SHA-256 prefix of the question (OWASP — no raw text).",
+    )
+    reason: str = Field(
+        ...,
+        min_length=1,
+        max_length=256,
+        description="Human-readable reason for the report.",
+    )
+    tenant_id: str | None = Field(
+        None,
+        description="Tenant that submitted the report.  Defaults to 'anonymous'.",
+    )
+
+
+class ReportPoisoningResponse(BaseModel):
+    """Confirmation of a poisoning report submission."""
+
+    recorded: bool
+    report_hash: str
+
+
+@router.post("/report_poisoning", status_code=201, response_model=ReportPoisoningResponse)
+async def report_poisoning(body: ReportPoisoningRequest) -> ReportPoisoningResponse:
+    """Manually report a suspected semantic cache poisoning event.
+
+    Appends a :class:`PoisoningReport` to the in-process report ring buffer.
+    The ``question_hash`` field must be the 16-hex SHA-256 prefix emitted by
+    the query audit log — raw question text is rejected (OWASP).
+
+    Requires ``cache_enabled=True`` **and** ``cache_poisoning_guard_enabled=True``.
+    Returns HTTP 404 when either flag is off (K3).
+    """
+    _require_poisoning_guard_enabled()
+    tenant = body.tenant_id or "anonymous"
+    store = get_poisoning_report_store()
+    await asyncio.to_thread(store.record, tenant, body.question_hash, body.reason)
+    report_hash = hashlib.sha256(
+        f"{tenant}:{body.question_hash}:{body.reason}".encode()
+    ).hexdigest()[:16]
+    return ReportPoisoningResponse(recorded=True, report_hash=report_hash)
+
+
+@router.get("/poisoning_reports")
+async def poisoning_reports(
+    tenant_id: str | None = Query(default=None, description="Filter by tenant ID."),
+    limit: int = Query(default=50, ge=1, le=500, description="Maximum records to return."),
+) -> dict[str, object]:
+    """Return recent cache poisoning reports.
+
+    Reports are ordered oldest-to-newest.  Use ``tenant_id`` to scope to a single
+    tenant.  ``limit`` caps the response size.
+
+    Requires ``cache_enabled=True`` **and** ``cache_poisoning_guard_enabled=True``.
+    Returns HTTP 404 when either flag is off (K3).
+    """
+    _require_poisoning_guard_enabled()
+    store = get_poisoning_report_store()
+    reports = await asyncio.to_thread(store.query, tenant_id=tenant_id, limit=limit)
+    return {
+        "count": len(reports),
+        "reports": [
+            {
+                "tenant_id": r.tenant_id,
+                "question_hash": r.question_hash,
+                "reason": r.reason,
+                "timestamp": r.timestamp,
+            }
+            for r in reports
+        ],
+    }

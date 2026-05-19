@@ -21,11 +21,9 @@ import pytest
 
 from konjoai.services.cost_attribution import (
     TenantCostTracker,
-    TenantCostReport,
     _reset_cost_tracker,
     get_cost_tracker,
 )
-
 
 # ── TenantCostTracker ─────────────────────────────────────────────────────────
 
@@ -148,8 +146,10 @@ class TestTenantCostTracker:
                 errors.append(exc)
 
         threads = [threading.Thread(target=worker, args=(f"t{i}",)) for i in range(8)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         assert not errors
 
     def test_report_returns_tenant_id(self) -> None:
@@ -199,6 +199,7 @@ class _SettingsDisabled:
 def _make_app(enabled: bool):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
     from konjoai.api.routes.tenants import router
 
     app = FastAPI()

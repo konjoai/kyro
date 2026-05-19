@@ -19,8 +19,12 @@ from __future__ import annotations
 
 import re
 import threading
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
 
 __all__ = [
     "QueryType",
@@ -31,7 +35,7 @@ __all__ = [
 ]
 
 
-class QueryType(str, Enum):
+class QueryType(StrEnum):
     """Semantic category of a user query."""
 
     FACTUAL = "factual"
@@ -204,7 +208,7 @@ class AdaptiveThresholdEngine:
     def lookup_with_stats(
         self,
         question: str,
-        q_vec: "np.ndarray",
+        q_vec: np.ndarray,
         cache: object,
         stats: ThresholdStats | None = None,
     ) -> tuple[object | None, QueryType, float]:
@@ -216,7 +220,6 @@ class AdaptiveThresholdEngine:
         We avoid importing ``SemanticCache`` here to keep the module dependency-free.
         """
         qt, threshold = self.resolve(question)
-        import numpy as np  # noqa: PLC0415 — lazy import, numpy is always available
 
         # Borrow SemanticCache._l2_norm to do the cosine scan ourselves so
         # we can apply the per-type threshold without mutating the cache object.
@@ -229,14 +232,13 @@ class AdaptiveThresholdEngine:
         return result, qt, threshold
 
 
-def _lookup_with_threshold(cache: object, question: str, q_vec: "np.ndarray", threshold: float) -> object | None:
+def _lookup_with_threshold(cache: object, question: str, q_vec: np.ndarray, threshold: float) -> object | None:
     """Call cache.lookup() with a temporary threshold override.
 
     Uses the cache's own ``_threshold`` attribute to swap in the per-type
     value for the duration of the lookup, then restores it.  The cache's
     internal lock serialises this — there is no TOCTOU gap.
     """
-    import threading as _threading  # noqa: PLC0415
 
     original = cache._threshold  # type: ignore[attr-defined]
     lock = cache._lock           # type: ignore[attr-defined]
@@ -249,7 +251,7 @@ def _lookup_with_threshold(cache: object, question: str, q_vec: "np.ndarray", th
             cache._threshold = original  # type: ignore[attr-defined]
 
 
-def _inner_lookup(cache: object, question: str, q_vec: "np.ndarray") -> object | None:
+def _inner_lookup(cache: object, question: str, q_vec: np.ndarray) -> object | None:
     """Re-implement SemanticCache's lookup body (already under lock)."""
     import numpy as np  # noqa: PLC0415
 
