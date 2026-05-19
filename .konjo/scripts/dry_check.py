@@ -29,15 +29,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
 from collections import defaultdict
+from collections.abc import Iterator
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Iterator
-
 
 # ── Comment stripping ─────────────────────────────────────────────────────────
 

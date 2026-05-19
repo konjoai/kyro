@@ -12,7 +12,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
 from konjoai.cache.tracing import emit_cache_lookup, emit_cache_store
 

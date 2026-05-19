@@ -13,7 +13,6 @@ import threading
 from dataclasses import dataclass
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 
 from konjoai.cache.threshold import (
@@ -25,7 +24,6 @@ from konjoai.cache.threshold import (
     classify_query,
     get_threshold_stats,
 )
-
 
 # ── classify_query ────────────────────────────────────────────────────────────
 
@@ -177,8 +175,10 @@ class TestThresholdStats:
                 errors.append(exc)
 
         threads = [threading.Thread(target=worker) for _ in range(8)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         assert not errors
         snap = stats.snapshot()
         assert snap["faq"]["hits"] == 400      # 8 × 50
@@ -239,6 +239,7 @@ class TestThresholdStatsRoute:
     def _client(self, enabled: bool):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
+
         from konjoai.api.routes.cache import router
 
         app = FastAPI()
