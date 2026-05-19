@@ -75,6 +75,7 @@ class QueryRequest(BaseModel):
     use_graph_rag: bool = Field(False, description="Enable Sprint 15 GraphRAG community-based retrieval for this request only.")
     stream: bool = Field(False, description="Hint only; use POST /query/stream to actually stream tokens.")
     auto_route: bool = Field(False, description="Enable Sprint 25 AutoRouter to map CRAG classification to retrieval strategy for this request only.")
+    conversation_id: str | None = Field(None, description="Optional conversation ID for multi-turn semantic cache context (Sprint 28).")
 
 
 class SourceDoc(BaseModel):

@@ -23,8 +23,8 @@
 
 | Feature | Description | Status |
 |---|---|---|
-| **Semantic cache poisoning guard** | Before storing, validate embedding similarity between question and answer exceeds `min_qa_coherence: 0.3`. Rate limit writes per tenant (max 100 stores/min). Anomaly detection: flag responses that are statistical outliers in length or embedding distance. `POST /cache/report_poisoning` endpoint. | ⬜ |
-| **Multi-turn conversation cache** | Cache keyed on `(tenant_id, conversation_id, turn_hash)` where `turn_hash` = rolling hash of last N turns. Separate similarity threshold for multi-turn (0.88 default). `conversation_id` param on lookup/store endpoints. | ⬜ |
+| **Semantic cache poisoning guard** | Before storing, validate embedding similarity between question and answer exceeds `min_qa_coherence: 0.3`. Rate limit writes per tenant (max 100 stores/min). Anomaly detection: flag responses that are statistical outliers in length or embedding distance. `POST /cache/report_poisoning` endpoint. | ✅ Sprint 28 |
+| **Multi-turn conversation cache** | Cache keyed on `(tenant_id, conversation_id, turn_hash)` where `turn_hash` = rolling hash of last N turns. Separate similarity threshold for multi-turn (0.88 default). `conversation_id` param on lookup/store endpoints. | ✅ Sprint 28 |
 | **Streaming response cache with SSE replay** | Store complete streamed responses as chunked text. On cache hit for a streaming request, replay chunks at the original inter-chunk timing (`replay_delay_ms`). `Content-Type: text/event-stream` on hit. | ⬜ |
 | **Cache warming API** | `POST /cache/warm` accepts `[{question, answer}]` to pre-populate. Batch embedding. Returns `{warmed: n, skipped_duplicates: m}`. Useful for FAQ pre-loading. | ✅ Sprint 27 |
 | **TTL-based cache expiry** | `cache_ttl_seconds` config, `SemanticCacheEntry.is_expired()`, lazy eviction on lookup, `GET /cache/expired_count`, `DELETE /cache/expired`. | ✅ Sprint 27 |
@@ -37,6 +37,50 @@
 | **Distributed cache replication** | Redis/Valkey backend for shared cache across multiple kyro instances behind a load balancer. | ⬜ |
 | **Cache invalidation webhooks** | `POST /cache/invalidate` by topic/tag. `POST /webhooks/invalidation` for push-based invalidation from upstream knowledge base updates. | ⬜ |
 | **Negative cache** | Cache "this question has no good answer" signals to avoid repeated expensive LLM calls for known unanswerable queries. | ⬜ |
+
+---
+
+## Current State: Sprint 28 Complete — v1.8.0 SHIPPED
+
+- **Tests:** 1120 passing (+ 7 skipped)
+- **Branch:** `claude/konjo-kyro-3nNJy`
+- **New modules:** `konjoai/cache/poisoning.py` · `konjoai/cache/multiturn.py`
+- **New endpoints:** `POST /cache/report_poisoning` · `GET /cache/poisoning_reports`
+- **New config:** `cache_poisoning_guard_enabled` + 5 tuning fields · `cache_multiturn_enabled` + 3 fields
+- **Schema:** `QueryRequest.conversation_id` optional field
+
+---
+
+## Completed Sprint: Sprint 28 — Poisoning Guard + Multi-Turn Cache (v1.8.0)
+
+**Goal 1:** Semantic cache poisoning guard — three-layer pre-store defence: per-tenant write rate limit (sliding window, K5), optional Q-A coherence check (embed answer, cosine ≥ min_qa_coherence), and response-length anomaly detection (Welford running stats, informational only). Manual report endpoint `POST /cache/report_poisoning`. Bounded ring buffer for reports, queryable via `GET /cache/poisoning_reports`.
+
+**Goal 2:** Multi-turn conversation cache — conversation-aware semantic cache keyed on `(tenant_id, conversation_id, turn_hash)`. Turn hash is a rolling SHA-256 of the last N question hashes (OWASP — no raw text). Separate `SemanticCache` instance with configurable multi-turn threshold (default 0.88). `conversation_id` on `QueryRequest`; multi-turn lookup fires before regular cache and yields first.
+
+### Implementation Checklist — Sprint 28
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `konjoai/cache/poisoning.py` | `WriteRateLimiter`, `AnomalyDetector`, `PoisoningReportStore`, `PoisoningGuard`, singletons | ✅ |
+| 2 | `konjoai/cache/multiturn.py` | `TurnHistory`, `ConversationStore`, `MultiTurnCache`, singletons | ✅ |
+| 3 | `konjoai/cache/__init__.py` | Re-export all new public symbols | ✅ |
+| 4 | `konjoai/config.py` | 10 new config fields with sensible defaults (K6) | ✅ |
+| 5 | `konjoai/api/schemas.py` | `QueryRequest.conversation_id: str | None` | ✅ |
+| 6 | `konjoai/api/routes/cache.py` | `POST /cache/report_poisoning` + `GET /cache/poisoning_reports` | ✅ |
+| 7 | `konjoai/api/routes/query.py` | Multi-turn lookup (step 2b) + poisoning guard + multi-turn store (cache store path) | ✅ |
+| 8 | `tests/unit/test_poisoning_guard.py` | 49 tests: rate limiter, anomaly, report store, guard, singletons, API | ✅ |
+| 9 | `tests/unit/test_multiturn_cache.py` | 39 tests: hash helpers, TurnHistory, ConversationStore, MultiTurnCache, singletons | ✅ |
+| 10 | `pyproject.toml` + `konjoai/__init__.py` + `helm/kyro/Chart.yaml` + `docs/index.md` + `tests/unit/test_packaging.py` | Version bump 1.7.0 → 1.8.0 | ✅ |
+
+### Sprint 28 Gate Results
+
+1. **K1**: `PoisoningGuard.validate()` catches embed failures — store always proceeds on error. `ConversationStore.add_turn()` catches all exceptions. `PoisoningReportStore.record()` never raises. ✅
+2. **K3**: `cache_poisoning_guard_enabled=False` (default) → guard never instantiated, store path unchanged. `cache_multiturn_enabled=False` (default) → multi-turn lookup/store blocks skipped. API endpoints return 404 when disabled. ✅
+3. **K5**: `poisoning.py` — stdlib only: `hashlib`, `threading`, `collections.deque`, `time`. `multiturn.py` — stdlib only: `hashlib`, `threading`, `collections.OrderedDict`. ✅
+4. **K6**: All 10 new config fields have sensible defaults; no existing route, config consumer, or test stub affected. ✅
+5. **K7**: `WriteRateLimiter` keyed by `tenant_id`. `PoisoningReport.tenant_id` populated from request state. `ConversationStore` keyed by `(tenant_id, conversation_id)`. ✅
+6. **OWASP**: `PoisoningReportStore` stores question hash (16-hex SHA-256 prefix) only. `ConversationStore` stores only question hashes — never raw text. ✅
+7. **Tests**: 1120 passing (was 1011 — +88 new, +21 from test_packaging bump). 7 skipped. ✅
 
 ---
 

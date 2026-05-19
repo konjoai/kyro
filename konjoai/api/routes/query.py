@@ -153,13 +153,35 @@ async def query(  # noqa: C901
                     q_vec = await asyncio.to_thread(
                         get_encoder().encode_query, effective_question
                     )
-                _cached = _cache_chk.lookup(effective_question, q_vec)
-                if _cached is not None:
-                    logger.debug("semantic cache hit — skipping Qdrant")
-                    return _cached.model_copy(update={
-                        "cache_hit": True,
-                        "telemetry": tel.as_dict() if settings.enable_telemetry else None,
-                    })
+                # Multi-turn lookup takes precedence when conversation_id is supplied
+                _multiturn_hit = False
+                if req.conversation_id and settings.cache_multiturn_enabled:
+                    from konjoai.cache.multiturn import get_multiturn_cache
+                    _mt_tenant = getattr(request.state, "tenant_id", None) or "default"
+                    _mt_cache = get_multiturn_cache()
+                    _mt_cached = await asyncio.to_thread(
+                        _mt_cache.lookup,
+                        effective_question, q_vec, _mt_tenant, req.conversation_id,
+                    )
+                    if _mt_cached is not None:
+                        logger.debug("multi-turn cache hit — skipping Qdrant")
+                        await asyncio.to_thread(
+                            _mt_cache.advance_turn,
+                            _mt_tenant, req.conversation_id, effective_question,
+                        )
+                        _multiturn_hit = True
+                        return _mt_cached.model_copy(update={  # type: ignore[attr-defined]
+                            "cache_hit": True,
+                            "telemetry": tel.as_dict() if settings.enable_telemetry else None,
+                        })
+                if not _multiturn_hit:
+                    _cached = _cache_chk.lookup(effective_question, q_vec)
+                    if _cached is not None:
+                        logger.debug("semantic cache hit — skipping Qdrant")
+                        return _cached.model_copy(update={
+                            "cache_hit": True,
+                            "telemetry": tel.as_dict() if settings.enable_telemetry else None,
+                        })
         # ── Step 3: Hybrid retrieval ──────────────────────────────────────────────
         decomposition_batches: list[tuple[str, list[HybridResult]]] = []
         if intent == QueryIntent.AGGREGATION and decomposition_enabled:
@@ -415,9 +437,27 @@ async def query(  # noqa: C901
             from konjoai.cache import get_semantic_cache
             _cache_store = get_semantic_cache()
             if _cache_store is not None:
-                await asyncio.to_thread(
-                    _cache_store.store, effective_question, q_vec, response
-                )
+                _do_store = True
+                if settings.cache_poisoning_guard_enabled:
+                    from konjoai.cache.poisoning import get_poisoning_guard
+                    _pg_tenant = getattr(request.state, "tenant_id", None) or "default"
+                    _do_store = await asyncio.to_thread(
+                        get_poisoning_guard().validate,
+                        effective_question, q_vec, response.answer, _pg_tenant,
+                    )
+                if _do_store:
+                    # Multi-turn store when conversation_id is present
+                    if req.conversation_id and settings.cache_multiturn_enabled:
+                        from konjoai.cache.multiturn import get_multiturn_cache
+                        _mt_tenant = getattr(request.state, "tenant_id", None) or "default"
+                        await asyncio.to_thread(
+                            get_multiturn_cache().store,
+                            effective_question, q_vec, response,
+                            _mt_tenant, req.conversation_id,
+                        )
+                    await asyncio.to_thread(
+                        _cache_store.store, effective_question, q_vec, response
+                    )
 
         # ── Audit log (Sprint 24; K3: no-op when audit_enabled=False) ────────
         if settings.audit_enabled:
