@@ -30,7 +30,6 @@ from fastapi.testclient import TestClient
 from konjoai.cache.poisoning import (
     AnomalyDetector,
     PoisoningGuard,
-    PoisoningReport,
     PoisoningReportStore,
     WriteRateLimiter,
     _cosine_similarity,

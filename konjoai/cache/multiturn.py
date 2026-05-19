@@ -32,8 +32,7 @@ import hashlib
 import logging
 import threading
 from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -206,7 +205,7 @@ class MultiTurnCache:
     def __init__(
         self,
         inner_cache: object,
-        conversation_store: Optional[ConversationStore] = None,
+        conversation_store: ConversationStore | None = None,
     ) -> None:
         self._cache = inner_cache
         self._conversations = conversation_store or get_conversation_store()
@@ -286,10 +285,10 @@ class MultiTurnCache:
 # ── Singletons ─────────────────────────────────────────────────────────────────
 
 
-_conversation_store: Optional[ConversationStore] = None
+_conversation_store: ConversationStore | None = None
 _conversation_store_lock = threading.Lock()
 
-_multiturn_cache: Optional[MultiTurnCache] = None
+_multiturn_cache: MultiTurnCache | None = None
 _multiturn_cache_lock = threading.Lock()
 
 
@@ -319,8 +318,8 @@ def get_multiturn_cache() -> MultiTurnCache:
         return _multiturn_cache
     with _multiturn_cache_lock:
         if _multiturn_cache is None:
-            from konjoai.config import get_settings  # noqa: PLC0415
             from konjoai.cache.semantic_cache import SemanticCache  # noqa: PLC0415
+            from konjoai.config import get_settings  # noqa: PLC0415
 
             settings = get_settings()
             inner = SemanticCache(

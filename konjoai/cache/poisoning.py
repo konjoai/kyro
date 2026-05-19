@@ -21,8 +21,8 @@ import logging
 import threading
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 import numpy as np
 
@@ -190,7 +190,7 @@ class PoisoningReportStore:
     def query(
         self,
         *,
-        tenant_id: Optional[str] = None,
+        tenant_id: str | None = None,
         limit: int = 100,
     ) -> list[PoisoningReport]:
         """Return the most recent reports, optionally filtered by tenant."""
@@ -200,7 +200,7 @@ class PoisoningReportStore:
             reports = [r for r in reports if r.tenant_id == tenant_id]
         return reports[-limit:]
 
-    def count(self, *, tenant_id: Optional[str] = None) -> int:
+    def count(self, *, tenant_id: str | None = None) -> int:
         """Return the total number of reports, optionally scoped to a tenant."""
         with self._lock:
             reports = list(self._reports)
@@ -236,8 +236,8 @@ class PoisoningGuard:
         max_writes_per_minute: int = 100,
         length_sigma: float = 3.0,
         min_anomaly_observations: int = 10,
-        embed_fn: Optional[Callable[[str], np.ndarray]] = None,
-        report_store: Optional[PoisoningReportStore] = None,
+        embed_fn: Callable[[str], np.ndarray] | None = None,
+        report_store: PoisoningReportStore | None = None,
     ) -> None:
         self._min_coherence = min_qa_coherence
         self._rate_limiter = WriteRateLimiter(max_writes=max_writes_per_minute)
@@ -314,10 +314,10 @@ class PoisoningGuard:
 # ── Singletons ─────────────────────────────────────────────────────────────────
 
 
-_report_store: Optional[PoisoningReportStore] = None
+_report_store: PoisoningReportStore | None = None
 _report_store_lock = threading.Lock()
 
-_guard: Optional[PoisoningGuard] = None
+_guard: PoisoningGuard | None = None
 _guard_lock = threading.Lock()
 
 
@@ -339,7 +339,7 @@ def get_poisoning_report_store() -> PoisoningReportStore:
 
 def _make_embed_fn(
     settings: object,
-) -> Optional[Callable[[str], np.ndarray]]:
+) -> Callable[[str], np.ndarray] | None:
     """Build the coherence embed_fn when cache_poisoning_check_coherence is True."""
     if not getattr(settings, "cache_poisoning_check_coherence", False):
         return None
