@@ -1,5 +1,12 @@
 from konjoai.cache.async_cache import AsyncSemanticCache
 from konjoai.cache.async_cache import wrap as async_wrap
+from konjoai.cache.streaming import (
+    StreamChunk,
+    StreamingCacheEntry,
+    StreamingResponseCache,
+    _reset_singleton as _reset_streaming_singleton,
+    get_streaming_cache,
+)
 from konjoai.cache.multiturn import (
     ConversationStore,
     MultiTurnCache,
@@ -63,4 +70,10 @@ __all__ = [
     "get_conversation_store",
     "get_multiturn_cache",
     "question_hash",
+    # Sprint 29 — streaming response cache
+    "StreamChunk",
+    "StreamingCacheEntry",
+    "StreamingResponseCache",
+    "get_streaming_cache",
+    "_reset_streaming_singleton",
 ]

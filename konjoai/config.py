@@ -206,6 +206,14 @@ class Settings(BaseSettings):
     cache_multiturn_window: int = 5                  # number of prior turns included in turn hash
     cache_multiturn_max_conversations: int = 1000    # max concurrent conversation histories tracked
 
+    # ── Streaming Response Cache (Sprint 29) ──────────────────────────────────
+    # K3: off by default — /query/stream cache check is skipped when False.
+    # K5: stdlib only (asyncio, json, threading, time, dataclasses).
+    # K6: additive — existing /query/stream SSE contract is unchanged on miss.
+    cache_stream_enabled: bool = False        # master switch; off → no lookup/store on /stream
+    cache_stream_replay_delay_ms: float = 0.0  # fixed inter-chunk sleep on replay (0 = no sleep)
+    cache_stream_max_chunks: int = 10_000     # safety cap — oversized responses are not stored
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

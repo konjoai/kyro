@@ -3,15 +3,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections.abc import Generator as IterGenerator
 from datetime import UTC
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from konjoai.api.schemas import QueryRequest, QueryResponse, SourceDoc
 from konjoai.audit.models import QUERY, AuditEvent, hash_text
 from konjoai.auth.deps import get_tenant_id
+from konjoai.cache.streaming import StreamChunk, get_streaming_cache
 from konjoai.config import get_settings
 from konjoai.telemetry import PipelineTelemetry, record_pipeline_metrics, timed
 
@@ -82,9 +85,7 @@ async def query(  # noqa: C901
         graph_rag_communities: list[str] | None = None
 
         header_use_crag = _parse_bool_header(
-            request.headers.get("use_crag")
-            or request.headers.get("use-crag")
-            or request.headers.get("x-use-crag")
+            request.headers.get("use_crag") or request.headers.get("use-crag") or request.headers.get("x-use-crag")
         )
         header_use_self_rag = _parse_bool_header(
             request.headers.get("use_self_rag")
@@ -102,19 +103,11 @@ async def query(  # noqa: C901
             or request.headers.get("x-use-graph-rag")
         )
         crag_enabled = bool(settings.enable_crag or req.use_crag or header_use_crag)
-        self_rag_enabled = bool(
-            settings.enable_self_rag or req.use_self_rag or header_use_self_rag
-        )
+        self_rag_enabled = bool(settings.enable_self_rag or req.use_self_rag or header_use_self_rag)
         decomposition_enabled = bool(
-            settings.enable_query_decomposition
-            or req.use_decomposition
-            or header_use_decomposition
+            settings.enable_query_decomposition or req.use_decomposition or header_use_decomposition
         )
-        graph_rag_enabled = bool(
-            settings.enable_graph_rag
-            or req.use_graph_rag
-            or header_use_graph_rag
-        )
+        graph_rag_enabled = bool(settings.enable_graph_rag or req.use_graph_rag or header_use_graph_rag)
 
         # ── Step 1: Intent routing ────────────────────────────────────────────────
         intent = QueryIntent.RETRIEVAL
@@ -125,7 +118,7 @@ async def query(  # noqa: C901
         if intent == QueryIntent.CHAT:
             return QueryResponse(
                 answer="I'm KonjoOS, a retrieval-augmented generation assistant. "
-                       "Ask me a question about your documents!",
+                "Ask me a question about your documents!",
                 sources=[],
                 model="router",
                 usage={},
@@ -146,42 +139,52 @@ async def query(  # noqa: C901
         q_vec = None
         if intent != QueryIntent.AGGREGATION:
             from konjoai.cache import get_semantic_cache
+
             _cache_chk = get_semantic_cache()
             if _cache_chk is not None:
                 from konjoai.embed.encoder import get_encoder
+
                 with timed(tel, "embed"):
-                    q_vec = await asyncio.to_thread(
-                        get_encoder().encode_query, effective_question
-                    )
+                    q_vec = await asyncio.to_thread(get_encoder().encode_query, effective_question)
                 # Multi-turn lookup takes precedence when conversation_id is supplied
                 _multiturn_hit = False
                 if req.conversation_id and settings.cache_multiturn_enabled:
                     from konjoai.cache.multiturn import get_multiturn_cache
+
                     _mt_tenant = getattr(request.state, "tenant_id", None) or "default"
                     _mt_cache = get_multiturn_cache()
                     _mt_cached = await asyncio.to_thread(
                         _mt_cache.lookup,
-                        effective_question, q_vec, _mt_tenant, req.conversation_id,
+                        effective_question,
+                        q_vec,
+                        _mt_tenant,
+                        req.conversation_id,
                     )
                     if _mt_cached is not None:
                         logger.debug("multi-turn cache hit — skipping Qdrant")
                         await asyncio.to_thread(
                             _mt_cache.advance_turn,
-                            _mt_tenant, req.conversation_id, effective_question,
+                            _mt_tenant,
+                            req.conversation_id,
+                            effective_question,
                         )
                         _multiturn_hit = True
-                        return _mt_cached.model_copy(update={  # type: ignore[attr-defined]
-                            "cache_hit": True,
-                            "telemetry": tel.as_dict() if settings.enable_telemetry else None,
-                        })
+                        return _mt_cached.model_copy(
+                            update={  # type: ignore[attr-defined]
+                                "cache_hit": True,
+                                "telemetry": tel.as_dict() if settings.enable_telemetry else None,
+                            }
+                        )
                 if not _multiturn_hit:
                     _cached = _cache_chk.lookup(effective_question, q_vec)
                     if _cached is not None:
                         logger.debug("semantic cache hit — skipping Qdrant")
-                        return _cached.model_copy(update={
-                            "cache_hit": True,
-                            "telemetry": tel.as_dict() if settings.enable_telemetry else None,
-                        })
+                        return _cached.model_copy(
+                            update={
+                                "cache_hit": True,
+                                "telemetry": tel.as_dict() if settings.enable_telemetry else None,
+                            }
+                        )
         # ── Step 3: Hybrid retrieval ──────────────────────────────────────────────
         decomposition_batches: list[tuple[str, list[HybridResult]]] = []
         if intent == QueryIntent.AGGREGATION and decomposition_enabled:
@@ -241,9 +244,7 @@ async def query(  # noqa: C901
                         top_k=settings.top_k_dense,
                     )
                 else:
-                    hybrid_results = await asyncio.to_thread(
-                        hybrid_search, effective_question, q_vec=q_vec
-                    )
+                    hybrid_results = await asyncio.to_thread(hybrid_search, effective_question, q_vec=q_vec)
         # ── Step 3c: GraphRAG — community-based chunk deduplication ───────────────
         if graph_rag_enabled and hybrid_results:
             from konjoai.retrieve.graph_rag import get_graph_rag_retriever
@@ -253,9 +254,7 @@ async def query(  # noqa: C901
                     max_communities=settings.graph_rag_max_communities,
                     similarity_threshold=settings.graph_rag_similarity_threshold,
                 )
-                _graph_rag_result = await asyncio.to_thread(
-                    _graph_rag.retrieve, hybrid_results
-                )
+                _graph_rag_result = await asyncio.to_thread(_graph_rag.retrieve, hybrid_results)
             graph_rag_communities = _graph_rag_result.community_labels
             if not _graph_rag_result.used_fallback and _graph_rag_result.representative_chunks:
                 hybrid_results = _graph_rag_result.representative_chunks
@@ -271,9 +270,7 @@ async def query(  # noqa: C901
             from konjoai.retrieve.crag import get_crag_pipeline
 
             with timed(tel, "crag", n_docs=len(hybrid_results)):
-                crag_result = await asyncio.to_thread(
-                    get_crag_pipeline().run, req.question, hybrid_results
-                )
+                crag_result = await asyncio.to_thread(get_crag_pipeline().run, req.question, hybrid_results)
             crag_confidence = crag_result.overall_confidence
             crag_fallback = crag_result.needs_fallback
             crag_scores = crag_result.crag_scores
@@ -293,14 +290,13 @@ async def query(  # noqa: C901
 
         # ── Step 4: Cross-encoder reranking ──────────────────────────────────────
         with timed(tel, "rerank", top_k=req.top_k):
-            reranked = await asyncio.to_thread(
-                rerank, req.question, hybrid_results, top_k=req.top_k
-            )
+            reranked = await asyncio.to_thread(rerank, req.question, hybrid_results, top_k=req.top_k)
 
         # ── Step 4.5: MaxSim late-interaction re-scoring (ColBERT-style) ─────────
         if settings.use_colbert:
             with timed(tel, "colbert_maxsim", top_k=req.top_k):
                 from konjoai.embed.encoder import get_encoder
+
                 _enc = get_encoder()
                 query_emb = await asyncio.to_thread(_enc.encode, req.question)
                 reranked = await asyncio.to_thread(rerank_with_maxsim, query_emb, reranked)
@@ -311,9 +307,7 @@ async def query(  # noqa: C901
         generator = get_generator()
 
         with timed(tel, "generate", model=settings.openai_model):
-            result = await asyncio.to_thread(
-                generator.generate, question=req.question, context=context
-            )
+            result = await asyncio.to_thread(generator.generate, question=req.question, context=context)
 
         answer = result.answer
 
@@ -352,6 +346,7 @@ async def query(  # noqa: C901
             from konjoai.retrieve.self_rag import get_self_rag_pipeline
 
             with timed(tel, "self_rag"):
+
                 def _gen(active_docs=None) -> str:
                     docs = active_docs if active_docs else reranked
                     active_context = "\n\n---\n\n".join(d.content for d in docs)
@@ -435,51 +430,59 @@ async def query(  # noqa: C901
         # Cache store (after full pipeline; K3: no-op when cache_enabled=False)
         if q_vec is not None:
             from konjoai.cache import get_semantic_cache
+
             _cache_store = get_semantic_cache()
             if _cache_store is not None:
                 _do_store = True
                 if settings.cache_poisoning_guard_enabled:
                     from konjoai.cache.poisoning import get_poisoning_guard
+
                     _pg_tenant = getattr(request.state, "tenant_id", None) or "default"
                     _do_store = await asyncio.to_thread(
                         get_poisoning_guard().validate,
-                        effective_question, q_vec, response.answer, _pg_tenant,
+                        effective_question,
+                        q_vec,
+                        response.answer,
+                        _pg_tenant,
                     )
                 if _do_store:
                     # Multi-turn store when conversation_id is present
                     if req.conversation_id and settings.cache_multiturn_enabled:
                         from konjoai.cache.multiturn import get_multiturn_cache
+
                         _mt_tenant = getattr(request.state, "tenant_id", None) or "default"
                         await asyncio.to_thread(
                             get_multiturn_cache().store,
-                            effective_question, q_vec, response,
-                            _mt_tenant, req.conversation_id,
+                            effective_question,
+                            q_vec,
+                            response,
+                            _mt_tenant,
+                            req.conversation_id,
                         )
-                    await asyncio.to_thread(
-                        _cache_store.store, effective_question, q_vec, response
-                    )
+                    await asyncio.to_thread(_cache_store.store, effective_question, q_vec, response)
 
         # ── Audit log (Sprint 24; K3: no-op when audit_enabled=False) ────────
         if settings.audit_enabled:
             from datetime import datetime
 
             from konjoai.audit import get_audit_logger
-            _latency = sum(
-                t.elapsed_ms for t in tel.steps
-            ) if tel.steps else 0.0
-            get_audit_logger().log(AuditEvent(
-                event_type=QUERY,
-                timestamp=datetime.now(UTC).isoformat(),
-                endpoint="/query",
-                status_code=200,
-                latency_ms=_latency,
-                tenant_id=getattr(request.state, "tenant_id", None),
-                client_ip=request.client.host if request.client else None,
-                question_hash=hash_text(req.question),
-                intent=intent.value,
-                cache_hit=bool(response.cache_hit),
-                result_count=len(sources),
-            ))
+
+            _latency = sum(t.elapsed_ms for t in tel.steps) if tel.steps else 0.0
+            get_audit_logger().log(
+                AuditEvent(
+                    event_type=QUERY,
+                    timestamp=datetime.now(UTC).isoformat(),
+                    endpoint="/query",
+                    status_code=200,
+                    latency_ms=_latency,
+                    tenant_id=getattr(request.state, "tenant_id", None),
+                    client_ip=request.client.host if request.client else None,
+                    question_hash=hash_text(req.question),
+                    intent=intent.value,
+                    cache_hit=bool(response.cache_hit),
+                    result_count=len(sources),
+                )
+            )
 
         return response
 
@@ -533,8 +536,7 @@ async def query_stream(  # noqa: C901
 
             def _chat_stream() -> IterGenerator[str, None, None]:
                 chat_answer = (
-                    "I'm KonjoOS, a retrieval-augmented generation assistant. "
-                    "Ask me a question about your documents!"
+                    "I'm KonjoOS, a retrieval-augmented generation assistant. Ask me a question about your documents!"
                 )
                 for token in chat_answer.split():
                     yield f"data: {json.dumps({'token': token + ' ', 'done': False})}\n\n"
@@ -548,12 +550,24 @@ async def query_stream(  # noqa: C901
             _, hypothesis = await asyncio.to_thread(hyde_encode, req.question)
             effective_question = hypothesis or req.question
 
+        # ── Streaming cache lookup ────────────────────────────────────────────
+        stream_cache = get_streaming_cache()
+        stream_q_vec: np.ndarray | None = None
+        if stream_cache is not None:
+            from konjoai.embed.encoder import get_encoder
+
+            _raw_vec = await asyncio.to_thread(get_encoder().encode, req.question)
+            stream_q_vec = _raw_vec.astype(np.float32)
+            stream_hit = stream_cache.lookup(req.question, stream_q_vec)
+            if stream_hit is not None:
+                logger.debug("streaming cache hit — replaying stored response")
+                return StreamingResponse(stream_cache.replay(stream_hit), media_type="text/event-stream")
+
         # ── Hybrid retrieval + rerank ─────────────────────────────────────────
         if settings.use_vectro_retriever:
             from konjoai.retrieve.vectro_retriever import get_vectro_retriever
-            hybrid_results = get_vectro_retriever().search(
-                effective_question, top_k=settings.top_k_dense
-            )
+
+            hybrid_results = get_vectro_retriever().search(effective_question, top_k=settings.top_k_dense)
         else:
             hybrid_results = await asyncio.to_thread(hybrid_search, effective_question)
         reranked = await asyncio.to_thread(rerank, req.question, hybrid_results, top_k=req.top_k)
@@ -562,6 +576,7 @@ async def query_stream(  # noqa: C901
         if settings.use_colbert:
             from konjoai.embed.encoder import get_encoder
             from konjoai.retrieve.late_interaction import rerank_with_maxsim
+
             _query_emb = await asyncio.to_thread(get_encoder().encode, req.question)
             reranked = (await asyncio.to_thread(rerank_with_maxsim, _query_emb, reranked))[: req.top_k]
 
@@ -579,10 +594,18 @@ async def query_stream(  # noqa: C901
         generator = get_generator()
 
         def _stream_tokens() -> IterGenerator[str, None, None]:
+            _chunks: list[StreamChunk] = []
+            _record = stream_cache is not None and stream_q_vec is not None
+            _last_t: float | None = None
             model_name = "unknown"
             if hasattr(generator, "generate_stream"):
                 for token in generator.generate_stream(question=req.question, context=context):
                     if token:
+                        if _record:
+                            _now = time.perf_counter()
+                            _delay_ms = (_now - _last_t) * 1000.0 if _last_t is not None else 0.0
+                            _last_t = _now
+                            _chunks.append(StreamChunk(token=token, delay_ms=_delay_ms))
                         yield f"data: {json.dumps({'token': token, 'done': False})}\n\n"
                 # Try to get model name for final frame
                 model_name = getattr(generator, "_model", "unknown")
@@ -590,8 +613,18 @@ async def query_stream(  # noqa: C901
                 # Fallback: call generate() synchronously and emit all at once
                 result = generator.generate(question=req.question, context=context)
                 if result.answer:
+                    if _record:
+                        _chunks.append(StreamChunk(token=result.answer, delay_ms=0.0))
                     yield f"data: {json.dumps({'token': result.answer, 'done': False})}\n\n"
                 model_name = result.model
+
+            if _record and _chunks:
+                stream_cache.store(  # type: ignore[union-attr]
+                    req.question,
+                    stream_q_vec,  # type: ignore[arg-type]
+                    _chunks,
+                    {"model": model_name, "sources": sources, "intent": intent.value},
+                )
 
             yield f"data: {json.dumps({'token': '', 'done': True, 'model': model_name, 'sources': sources, 'intent': intent.value})}\n\n"
 
