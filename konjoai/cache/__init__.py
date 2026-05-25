@@ -20,6 +20,15 @@ from konjoai.cache.poisoning import (
 )
 from konjoai.cache.redis_cache import RedisSemanticCache, build_redis_cache
 from konjoai.cache.semantic_cache import SemanticCache, get_semantic_cache
+from konjoai.cache.streaming import (
+    StreamChunk,
+    StreamingCacheEntry,
+    StreamingResponseCache,
+    get_streaming_cache,
+)
+from konjoai.cache.streaming import (
+    _reset_singleton as _reset_streaming_singleton,
+)
 from konjoai.cache.threshold import (
     AdaptiveThresholdEngine,
     QueryType,
@@ -63,4 +72,10 @@ __all__ = [
     "get_conversation_store",
     "get_multiturn_cache",
     "question_hash",
+    # Sprint 29 — streaming response cache
+    "StreamChunk",
+    "StreamingCacheEntry",
+    "StreamingResponseCache",
+    "get_streaming_cache",
+    "_reset_streaming_singleton",
 ]

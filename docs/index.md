@@ -25,10 +25,11 @@ No vendor lock-in — plug in OpenAI, Anthropic, or a local [Squish](https://git
 | AutoRouter | Sprint 25 CRAG-classification → retrieval strategy mapping |
 | Cache poisoning guard | Pre-store coherence check, per-tenant write rate limit, anomaly detection, `POST /cache/report_poisoning` |
 | Multi-turn cache | Conversation-scoped semantic cache keyed on rolling turn hash |
+| Streaming response cache | SSE replay on cache hit with configurable inter-chunk pacing |
 
 ## Version
 
-Current version: **1.8.0** — tests passing.
+Current version: **1.9.0** — tests passing.
 
 ## License
 
