@@ -186,6 +186,34 @@ class Settings(BaseSettings):
     feedback_enabled: bool = False          # master switch; off → endpoints return 404
     feedback_max_events: int = 1000         # ring-buffer capacity (LRU eviction)
 
+    # ── Cache Poisoning Guard (Sprint 28) ─────────────────────────────────────
+    # K3: off by default — guard is never instantiated when False.
+    # K5: stdlib only — collections.deque + threading.Lock.
+    # OWASP: question text is never stored — only 16-hex SHA-256 prefix.
+    cache_poisoning_guard_enabled: bool = False      # master switch
+    cache_poisoning_min_coherence: float = 0.3       # min Q-A cosine similarity (layer 2)
+    cache_poisoning_max_writes_per_minute: int = 100 # per-tenant write rate ceiling (layer 1)
+    cache_poisoning_length_sigma: float = 3.0        # std-dev threshold for length anomaly (layer 3)
+    cache_poisoning_max_reports: int = 500           # report ring-buffer capacity
+    cache_poisoning_check_coherence: bool = False    # embed answer to check Q-A coherence (layer 2)
+
+    # ── Multi-Turn Conversation Cache (Sprint 28) ─────────────────────────────
+    # K3: off by default — multi-turn lookup is skipped when False.
+    # K5: stdlib only — hashlib + threading + collections.OrderedDict.
+    # OWASP: raw question text is never stored in ConversationStore — only 16-hex hashes.
+    cache_multiturn_enabled: bool = False            # master switch
+    cache_multiturn_threshold: float = 0.88          # cosine similarity threshold for multi-turn hits
+    cache_multiturn_window: int = 5                  # number of prior turns included in turn hash
+    cache_multiturn_max_conversations: int = 1000    # max concurrent conversation histories tracked
+
+    # ── Streaming Response Cache (Sprint 29) ──────────────────────────────────
+    # K3: off by default — /query/stream cache check is skipped when False.
+    # K5: stdlib only (asyncio, json, threading, time, dataclasses).
+    # K6: additive — existing /query/stream SSE contract is unchanged on miss.
+    cache_stream_enabled: bool = False        # master switch; off → no lookup/store on /stream
+    cache_stream_replay_delay_ms: float = 0.0  # fixed inter-chunk sleep on replay (0 = no sleep)
+    cache_stream_max_chunks: int = 10_000     # safety cap — oversized responses are not stored
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

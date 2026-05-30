@@ -23,6 +23,9 @@ No vendor lock-in — plug in OpenAI, Anthropic, or a local [Squish](https://git
 | Python SDK | Typed `KonjoClient` for programmatic access |
 | MCP server | Expose Kyro tools to any MCP-compatible AI agent |
 | AutoRouter | Sprint 25 CRAG-classification → retrieval strategy mapping |
+| Cache poisoning guard | Pre-store coherence check, per-tenant write rate limit, anomaly detection, `POST /cache/report_poisoning` |
+| Multi-turn cache | Conversation-scoped semantic cache keyed on rolling turn hash |
+| Streaming response cache | SSE replay on cache hit with configurable inter-chunk pacing |
 
 ## Version
 

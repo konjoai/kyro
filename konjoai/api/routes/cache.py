@@ -17,6 +17,7 @@ All routes return HTTP 404 when ``cache_enabled`` is False (K3).
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 
 import numpy as np

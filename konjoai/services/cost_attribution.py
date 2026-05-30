@@ -20,7 +20,7 @@ in Settings.  When disabled, ``record()`` is a pure no-op.
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 __all__ = [
     "TenantCostTracker",
