@@ -26,7 +26,7 @@ No vendor lock-in — plug in OpenAI, Anthropic, or a local [Squish](https://git
 
 ## Version
 
-Current version: **1.7.0** — 1011 tests passing.
+Current version: **1.8.0** — 1046 tests passing.
 
 ## License
 

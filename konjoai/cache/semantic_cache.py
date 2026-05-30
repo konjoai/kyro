@@ -29,11 +29,21 @@ class SemanticCacheEntry:
     response: object              # QueryResponse — typed as object to avoid circular import
     created_at: float = field(default_factory=time.monotonic)
     hit_count: int = 0
-    ttl_seconds: int = 0   # 0 = no expiry for this entry
+    ttl_seconds: int = 0       # 0 = no expiry for this entry
+    last_accessed: float = field(default_factory=time.monotonic)
 
     def is_expired(self) -> bool:
         """Return True if this entry's TTL has elapsed."""
         return bool(self.ttl_seconds > 0 and time.monotonic() - self.created_at > self.ttl_seconds)
+
+    def access_rate_per_day(self) -> float:
+        """Estimated access frequency in hits / day based on age and hit_count."""
+        age_days = max((time.monotonic() - self.created_at) / 86400.0, 1 / 1440.0)
+        return self.hit_count / age_days
+
+    def days_since_last_access(self) -> float:
+        """Days elapsed since this entry was last accessed (created or hit)."""
+        return (time.monotonic() - self.last_accessed) / 86400.0
 
 
 class SemanticCache:
@@ -44,7 +54,12 @@ class SemanticCache:
         threshold: Cosine similarity threshold for a semantic cache hit (0.0–1.0).
     """
 
-    def __init__(self, max_size: int = 500, threshold: float = 0.95, ttl_seconds: int = 0) -> None:
+    def __init__(
+        self,
+        max_size: int = 500,
+        threshold: float = 0.95,
+        ttl_seconds: int = 0,
+    ) -> None:
         if not 0.0 < threshold <= 1.0:
             raise ValueError(f"threshold must be in (0, 1], got {threshold}")
         if max_size < 1:
@@ -63,6 +78,7 @@ class SemanticCache:
 
         self._total_hits: int = 0
         self._total_misses: int = 0
+        self._analytics_buf: object | None = None  # LatencyBuffer, set via set_analytics_buffer()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -85,6 +101,7 @@ class SemanticCache:
                 else:
                     self._lru.move_to_end(key)
                     entry.hit_count += 1
+                    entry.last_accessed = time.monotonic()
                     self._total_hits += 1
                     logger.debug("cache hit (exact) key=%s hits=%d", key[:40], self._total_hits)
                     return entry.response
@@ -105,6 +122,7 @@ class SemanticCache:
                 entry = self._lru[best_key]
                 self._lru.move_to_end(best_key)
                 entry.hit_count += 1
+                entry.last_accessed = time.monotonic()
                 self._total_hits += 1
                 logger.debug(
                     "cache hit (semantic) sim=%.4f key=%s hits=%d",
@@ -197,6 +215,126 @@ class SemanticCache:
             "total_misses": self._total_misses,
             "hit_rate": round(hit_rate, 4),
             "expired_count": expired,
+        }
+
+    # ── Analytics buffer (Sprint 28) ─────────────────────────────────────────
+
+    def set_analytics_buffer(self, buf: object) -> None:
+        """Attach a :class:`~konjoai.cache.analytics.LatencyBuffer` to this cache.
+
+        Once attached, call :meth:`record_access` from the request path to
+        populate the buffer; retrieve analytics via :meth:`analytics_snapshot`.
+        """
+        self._analytics_buf = buf
+
+    def record_access(self, latency_ms: float, is_hit: bool, similarity: float = 0.0) -> None:
+        """Append one access event to the attached analytics buffer.
+
+        No-op when no buffer has been attached via :meth:`set_analytics_buffer`.
+        """
+        if self._analytics_buf is not None:
+            self._analytics_buf.record(latency_ms, is_hit, similarity)  # type: ignore[union-attr]
+
+    def analytics_snapshot(self) -> list:
+        """Return the current buffer contents, or an empty list when no buffer is attached."""
+        if self._analytics_buf is None:
+            return []
+        return self._analytics_buf.snapshot()  # type: ignore[union-attr]
+
+    # ── Batch similarity search (Sprint 28) ──────────────────────────────────
+
+    def top_k_similar(self, q_vec: np.ndarray, k: int = 5) -> list[tuple[str, float, int]]:
+        """Return up to *k* entries ranked by cosine similarity (no threshold gate).
+
+        Returns a list of ``(normalised_key, similarity, hit_count)`` tuples
+        sorted by similarity descending.  Expired entries are excluded.
+        This is intentionally *below* the threshold — useful for search/exploration.
+        """
+        q_norm = self._l2_norm(q_vec)
+        with self._lock:
+            scored = [
+                (k2, float(np.dot(q_norm, self._l2_norm(e.question_vec))), e.hit_count)
+                for k2, e in self._lru.items()
+                if not e.is_expired()
+            ]
+        scored.sort(key=lambda t: t[1], reverse=True)
+        return scored[:k]
+
+    # ── Adaptive TTL (Sprint 28) ─────────────────────────────────────────────
+
+    def adjust_ttls(
+        self,
+        hot_threshold_per_day: float = 5.0,
+        cold_days: float = 3.0,
+        extend_factor: float = 2.0,
+        reduce_factor: float = 0.5,
+        min_ttl: int = 60,
+        max_ttl: int = 86400 * 7,
+    ) -> dict[str, int]:
+        """Adjust per-entry TTLs based on access frequency.
+
+        Hot entries (access_rate_per_day > hot_threshold_per_day) have their
+        TTL multiplied by *extend_factor*.  Cold entries (days_since_last_access
+        > cold_days) have their TTL multiplied by *reduce_factor*.
+        Entries with ``ttl_seconds == 0`` are skipped (no-TTL entries are not managed).
+
+        Returns ``{"extended": n, "reduced": m}`` counts.
+        """
+        extended = reduced = 0
+        with self._lock:
+            for entry in self._lru.values():
+                if entry.ttl_seconds == 0:
+                    continue
+                if entry.access_rate_per_day() > hot_threshold_per_day:
+                    entry.ttl_seconds = min(max_ttl, max(min_ttl, int(entry.ttl_seconds * extend_factor)))
+                    extended += 1
+                elif entry.days_since_last_access() > cold_days:
+                    entry.ttl_seconds = min(max_ttl, max(min_ttl, int(entry.ttl_seconds * reduce_factor)))
+                    reduced += 1
+        logger.info("adaptive ttl adjustment — extended=%d reduced=%d", extended, reduced)
+        return {"extended": extended, "reduced": reduced}
+
+    def ttl_report(self) -> dict:
+        """Return a snapshot of current TTL distribution + adjustment candidates.
+
+        Returns:
+            * ``no_ttl``          — entries without a TTL (ttl_seconds == 0)
+            * ``buckets``         — list of {label, min_s, max_s, count} TTL histogram
+            * ``pending_extend``  — entries that would gain a longer TTL next adjust cycle
+            * ``pending_reduce``  — entries that would lose TTL next adjust cycle
+            * ``total``           — total non-expired entries
+        """
+        with self._lock:
+            entries = [(e.ttl_seconds, e.access_rate_per_day(), e.days_since_last_access(), e.question)
+                       for e in self._lru.values() if not e.is_expired()]
+
+        no_ttl = sum(1 for t, *_ in entries if t == 0)
+        ttl_entries = [(t, r, d, q) for t, r, d, q in entries if t > 0]
+
+        # 5 log-scale buckets: <1 min, 1–60 min, 1–24 h, 1–7 d, >7 d
+        buckets = [
+            {"label": "<1 min",  "min_s": 0,       "max_s": 60,     "count": 0},
+            {"label": "1–60 min","min_s": 60,      "max_s": 3600,   "count": 0},
+            {"label": "1–24 h",  "min_s": 3600,    "max_s": 86400,  "count": 0},
+            {"label": "1–7 d",   "min_s": 86400,   "max_s": 604800, "count": 0},
+            {"label": ">7 d",    "min_s": 604800,  "max_s": None,   "count": 0},
+        ]
+        for t, *_ in ttl_entries:
+            for b in buckets:
+                if b["max_s"] is None or t < b["max_s"]:
+                    b["count"] += 1
+                    break
+
+        pending_extend = [q for t, r, _d, q in ttl_entries if r > 5.0][:20]
+        pending_reduce = [q for t, _r, d, q in ttl_entries if d > 3.0][:20]
+
+        return {
+            "total":          len(entries),
+            "no_ttl":         no_ttl,
+            "with_ttl":       len(ttl_entries),
+            "buckets":        buckets,
+            "pending_extend": pending_extend,
+            "pending_reduce": pending_reduce,
         }
 
     # ── Internals ─────────────────────────────────────────────────────────────

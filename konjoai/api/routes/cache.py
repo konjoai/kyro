@@ -1,12 +1,16 @@
-"""Cache management API routes (Sprint 26–27).
+"""Cache management API routes (Sprint 26–28).
 
 Endpoints
 ---------
-GET  /cache/threshold_stats  — per-type hit/miss rates (Sprint 26)
-POST /cache/warm             — seed the cache from a list of Q/A pairs (Sprint 27)
-GET  /cache/expired_count    — how many entries have exceeded their TTL (Sprint 27)
-DELETE /cache/expired        — evict all expired entries (Sprint 27)
-GET  /cache/clusters         — k-means topic clustering of cached queries (Sprint 27)
+GET    /cache/threshold_stats  — per-type hit/miss rates (Sprint 26)
+POST   /cache/warm             — seed the cache from a list of Q/A pairs (Sprint 27)
+GET    /cache/expired_count    — how many entries have exceeded their TTL (Sprint 27)
+DELETE /cache/expired          — evict all expired entries (Sprint 27)
+GET    /cache/clusters         — k-means topic clustering of cached queries (Sprint 27)
+POST   /cache/search           — batch top-k similarity search (Sprint 28)
+GET    /cache/analytics        — latency percentiles, hit-rate trends, similarity dist (Sprint 28)
+GET    /cache/ttl_report       — TTL distribution + adaptive-TTL candidates (Sprint 28)
+POST   /cache/ttl/adjust       — trigger one adaptive-TTL adjustment cycle (Sprint 28)
 
 All routes return HTTP 404 when ``cache_enabled`` is False (K3).
 """
@@ -19,6 +23,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from konjoai.cache.analytics import LatencyBuffer, compute_analytics
 from konjoai.cache.semantic_cache import SemanticCache, get_semantic_cache
 from konjoai.cache.threshold import get_threshold_stats
 from konjoai.config import get_settings
@@ -303,4 +308,152 @@ def _kmeans_cluster(
         })
 
     result.sort(key=lambda c: c["size"], reverse=True)
+    return result
+
+
+# ── Sprint 28: batch similarity search ────────────────────────────────────────
+
+
+class SearchQuery(BaseModel):
+    """Batch similarity search request."""
+
+    queries: list[str] = Field(..., min_length=1, max_length=100)
+    top_k: int = Field(default=3, ge=1, le=20)
+
+
+@router.post("/search")
+async def batch_search(body: SearchQuery) -> dict[str, object]:
+    """Return top-k cached matches for each query in a single round-trip.
+
+    Unlike ``lookup()``, this endpoint does *not* apply the similarity threshold —
+    it returns the closest entries regardless of whether they would constitute a
+    cache hit.  This makes it useful for exploration, analytics, and debugging
+    ("what does the cache know about X?").
+
+    Each element of the ``results`` list corresponds to the query at the same
+    index and contains up to ``top_k`` matches sorted by similarity descending.
+    """
+    cache = _require_memory_cache()
+    encoder = _get_encoder()
+
+    questions = body.queries
+    try:
+        vecs: np.ndarray = await asyncio.to_thread(encoder.encode, questions)  # type: ignore[arg-type]
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=503, detail=f"encoder error: {exc}") from exc
+
+    results = []
+    with cache._lock:  # type: ignore[attr-defined]
+        lru_snapshot = {
+            k: (e.question, e.response, e.hit_count)
+            for k, e in cache._lru.items()  # type: ignore[attr-defined]
+            if not e.is_expired()
+        }
+
+    for i, q in enumerate(questions):
+        q_norm = SemanticCache._l2_norm(vecs[i : i + 1].astype(np.float32))
+        scored = []
+        for k2, (orig_q, resp, hits) in lru_snapshot.items():
+            entry_vec = cache._lru.get(k2)  # type: ignore[attr-defined]
+            if entry_vec is None:
+                continue
+            sim = float(np.dot(q_norm, SemanticCache._l2_norm(entry_vec.question_vec)))
+            answer = resp.answer if hasattr(resp, "answer") else str(resp)
+            scored.append({
+                "question": orig_q,
+                "answer":   answer[:256],
+                "similarity": round(sim, 4),
+                "hit_count":  hits,
+            })
+        scored.sort(key=lambda m: m["similarity"], reverse=True)
+        results.append({"query_index": i, "query": q, "matches": scored[: body.top_k]})
+
+    return {"results": results, "threshold": cache._threshold}  # type: ignore[attr-defined]
+
+
+# ── Sprint 28: cache analytics ────────────────────────────────────────────────
+
+
+def _get_or_create_buffer(cache: SemanticCache) -> LatencyBuffer:
+    """Return the existing LatencyBuffer attached to *cache*, creating one if absent."""
+    buf = cache._analytics_buf  # type: ignore[attr-defined]
+    if buf is None:
+        buf = LatencyBuffer()
+        cache.set_analytics_buffer(buf)
+    return buf  # type: ignore[return-value]
+
+
+@router.get("/analytics")
+async def cache_analytics(
+    hours: float = Query(default=24.0, ge=0.1, le=720.0, description="Window in hours"),
+) -> dict[str, object]:
+    """Rich analytics for the last ``hours`` hours of cache activity.
+
+    Returns latency percentiles (p50/p90/p99) for hits and misses separately,
+    a similarity distribution histogram for hits, and an hourly hit-rate
+    breakdown so you can spot time-of-day patterns.
+
+    The analytics buffer is auto-created on first access.  Populate it by
+    calling ``cache.record_access(latency_ms, is_hit, similarity)`` from the
+    query route after each cache lookup.
+    """
+    cache = _require_memory_cache()
+    buf = _get_or_create_buffer(cache)
+    records = await asyncio.to_thread(buf.snapshot)
+    result = await asyncio.to_thread(compute_analytics, records, hours)
+    result["buffer_size"] = buf.size
+    return result
+
+
+# ── Sprint 28: adaptive TTL ───────────────────────────────────────────────────
+
+
+@router.get("/ttl_report")
+async def ttl_report() -> dict[str, object]:
+    """Return a snapshot of current TTL distribution and adaptive-TTL candidates.
+
+    Identifies entries that would be extended (hot entries, access rate > 5/day)
+    or reduced (cold entries, not accessed in > 3 days) in the next adjustment
+    cycle.  This is a read-only view — call ``POST /cache/ttl/adjust`` to act.
+
+    Returns ``0`` counts and empty lists when ``ttl_seconds=0`` (no TTL configured).
+    """
+    cache = _require_memory_cache()
+    report = await asyncio.to_thread(cache.ttl_report)
+    return report
+
+
+class TtlAdjustRequest(BaseModel):
+    """Optional overrides for an adaptive-TTL adjustment cycle."""
+
+    hot_threshold_per_day: float = Field(default=5.0, ge=0.1)
+    cold_days: float = Field(default=3.0, ge=0.1)
+    extend_factor: float = Field(default=2.0, ge=1.0, le=10.0)
+    reduce_factor: float = Field(default=0.5, ge=0.01, le=1.0)
+    min_ttl: int = Field(default=60, ge=1)
+    max_ttl: int = Field(default=86400 * 7, ge=60)
+
+
+@router.post("/ttl/adjust")
+async def ttl_adjust(body: TtlAdjustRequest | None = None) -> dict[str, object]:
+    """Trigger one adaptive-TTL adjustment cycle.
+
+    Hot entries (access_rate_per_day > hot_threshold_per_day) have their TTL
+    multiplied by extend_factor.  Cold entries (days_since_last_access > cold_days)
+    have their TTL multiplied by reduce_factor.  Both are clamped to
+    [min_ttl, max_ttl].  Entries with ``ttl_seconds == 0`` are not managed.
+
+    Returns ``{"extended": n, "reduced": m}`` — the number of entries modified.
+    """
+    cache = _require_memory_cache()
+    params = body or TtlAdjustRequest()
+    result = await asyncio.to_thread(
+        cache.adjust_ttls,
+        params.hot_threshold_per_day,
+        params.cold_days,
+        params.extend_factor,
+        params.reduce_factor,
+        params.min_ttl,
+        params.max_ttl,
+    )
     return result
