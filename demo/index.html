@@ -1,455 +1,1409 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>kyro · search</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Kyro · RAG + Semantic Cache</title>
 <style>
-  :root {
-    --bg: #06060f;
-    --ink: #e6f1ff;
-    --ink-dim: #8597b8;
-    --ink-faint: #4a5878;
-    --hit: #5cffb1;
-    --miss: #6cb6ff;
-    --legal: #b594ff;
-    --medical: #ff9bd2;
-    --technical: #5cffb1;
-  }
-  *, *::before, *::after { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
-  body {
-    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
-    font-size: 13px;
-    line-height: 1.5;
-  }
+:root{
+  --bg:#060612;--panel:#0d0d20;--panel2:#12122a;
+  --border:rgba(124,58,237,.2);--border2:rgba(124,58,237,.35);
+  --acc:#7c3aed;--acc2:#8b5cf6;--acc3:#a78bfa;
+  --hit:#10b981;--miss:#8b5cf6;--err:#ef4444;--warn:#f59e0b;
+  --txt:#e2e8f0;--dim:#94a3b8;--faint:#475569;
+  --mono:ui-monospace,'SF Mono','JetBrains Mono',Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
+  --r:10px;--r2:6px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:14px;line-height:1.5}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(124,58,237,.4);border-radius:3px}
+a{color:var(--acc3);text-decoration:none}
 
-  #stream {
-    position: fixed; inset: 0;
-    display: block;
-  }
+/* ── Layout ── */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
 
-  /* Floating search bar */
-  .frame {
-    position: fixed; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    pointer-events: none;
-  }
-  .brand {
-    pointer-events: auto;
-    text-align: center;
-    margin-bottom: 22px;
-  }
-  .brand .glyph {
-    width: 38px; height: 38px; border-radius: 50%; margin: 0 auto 14px;
-    background: radial-gradient(circle at 30% 30%, var(--hit), #1d4d3a 80%);
-    box-shadow: 0 0 22px rgba(92,255,177,0.55);
-    animation: bob 6s ease-in-out infinite;
-  }
-  @keyframes bob {
-    0%, 100% { transform: translateY(0); }
-    50%      { transform: translateY(-4px); }
-  }
-  .brand h1 {
-    font-size: 12px; font-weight: 600; margin: 0; letter-spacing: 0.32em; text-transform: uppercase;
-    color: var(--ink);
-  }
-  .brand p {
-    margin: 6px 0 0; font-size: 11px; color: var(--ink-dim); letter-spacing: 0.18em; text-transform: uppercase;
-  }
+/* ── Header ── */
+#header{
+  display:flex;align-items:center;gap:16px;padding:0 20px;
+  height:52px;flex-shrink:0;
+  background:rgba(13,13,32,.9);border-bottom:1px solid var(--border);
+  backdrop-filter:blur(12px);z-index:100;
+}
+.brand{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.brand-mark{
+  width:26px;height:26px;border-radius:7px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--acc),var(--acc2));
+  display:grid;place-items:center;color:#fff;font-size:14px;font-weight:700
+}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:.02em}
+.brand-ver{font-size:10px;color:var(--faint);font-family:var(--mono)}
+.tab-bar{display:flex;gap:4px;flex:1;overflow-x:auto;padding:0 8px}
+.tab-bar::-webkit-scrollbar{height:0}
+.tab-btn{
+  padding:6px 14px;border:none;border-radius:6px;cursor:pointer;
+  font-size:13px;font-weight:500;white-space:nowrap;transition:all .18s ease;
+  background:transparent;color:var(--dim);
+}
+.tab-btn:hover{background:rgba(124,58,237,.15);color:var(--txt)}
+.tab-btn.active{background:rgba(124,58,237,.25);color:var(--acc3);box-shadow:0 0 0 1px rgba(124,58,237,.4)}
+#health-pill{
+  display:flex;align-items:center;gap:6px;padding:4px 10px;
+  border-radius:999px;border:1px solid var(--border);background:var(--panel);
+  font-size:11px;font-family:var(--mono);white-space:nowrap;flex-shrink:0;
+}
+.hdot{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:background .4s}
+.hdot.ok{background:var(--hit);box-shadow:0 0 8px var(--hit)}
+.hdot.err{background:var(--err);box-shadow:0 0 8px var(--err)}
 
-  .searchwrap {
-    pointer-events: auto;
-    width: min(720px, calc(100vw - 64px));
-    position: relative;
-  }
-  #q {
-    width: 100%;
-    padding: 18px 80px 18px 24px;
-    font: inherit;
-    font-size: 16px;
-    color: var(--ink);
-    background: rgba(8,12,28,0.78);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(92,255,177,0.25);
-    border-radius: 14px;
-    outline: none;
-    box-shadow:
-      0 0 0 6px rgba(92,255,177,0.04),
-      0 18px 60px rgba(0,0,0,0.55);
-    letter-spacing: 0.01em;
-  }
-  #q:focus {
-    border-color: rgba(92,255,177,0.65);
-    box-shadow:
-      0 0 0 6px rgba(92,255,177,0.10),
-      0 18px 80px rgba(0,0,0,0.6);
-  }
-  #q::placeholder { color: var(--ink-faint); }
-  .hint {
-    position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
-    color: var(--ink-faint); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
-    user-select: none; pointer-events: none;
-  }
-  .hint kbd {
-    padding: 2px 6px; border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 4px; background: rgba(255,255,255,0.04); color: var(--ink);
-    font: inherit; font-size: 10px;
-  }
+/* ── Main panels ── */
+#main{flex:1;overflow:hidden;position:relative}
+.tab-panel{
+  position:absolute;inset:0;overflow-y:auto;padding:20px;
+  opacity:0;pointer-events:none;transform:translateY(8px);
+  transition:opacity .2s ease,transform .2s ease;
+  background:var(--bg);z-index:0;
+}
+.tab-panel.active{opacity:1;pointer-events:auto;transform:none;z-index:1}
 
-  /* Suggestion chips under the search bar */
-  .chips {
-    margin-top: 14px;
-    display: flex; flex-wrap: wrap; gap: 8px;
-    pointer-events: auto;
-  }
-  .chip {
-    padding: 6px 10px; border-radius: 999px;
-    font: inherit; font-size: 11px; cursor: pointer;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    color: var(--ink-dim);
-    transition: all 200ms;
-  }
-  .chip:hover { color: var(--ink); border-color: rgba(92,255,177,0.4); transform: translateY(-1px); }
+/* ── Shared components ── */
+.card{
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--r);
+  padding:16px;margin-bottom:16px;
+}
+.card-title{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:720px){.two-col{grid-template-columns:1fr}}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px}
+input[type=text],input[type=number],textarea,select{
+  width:100%;padding:8px 10px;background:var(--panel2);color:var(--txt);
+  border:1px solid var(--border);border-radius:var(--r2);font:inherit;outline:none;
+  transition:border-color .15s;resize:vertical;
+}
+input[type=text]:focus,input[type=number]:focus,textarea:focus,select:focus{border-color:var(--acc)}
+input[type=number]{width:auto}
+.query-input-row{display:flex;gap:8px;align-items:flex-start}
+.query-input-row textarea{flex:1;min-height:60px;max-height:160px}
+.query-options{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:12px}
+.toggle-label{display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--dim)}
+.toggle-label input{accent-color:var(--acc)}
+.topk{display:flex;align-items:center;gap:4px;color:var(--dim)}
+.topk input{width:52px;padding:4px 6px}
+.btn-primary,.btn-secondary,.btn-accent,.btn-danger{
+  padding:8px 16px;border:none;border-radius:var(--r2);cursor:pointer;
+  font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap;flex-shrink:0;
+}
+.btn-primary{background:var(--acc);color:#fff}
+.btn-primary:hover{background:var(--acc2);transform:translateY(-1px)}
+.btn-primary:active{transform:scale(.97)}
+.btn-secondary{background:var(--panel2);color:var(--txt);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--acc)}
+.btn-accent{background:rgba(124,58,237,.2);color:var(--acc3);border:1px solid var(--border2)}
+.btn-accent:hover{background:rgba(124,58,237,.3)}
+.btn-danger{background:rgba(239,68,68,.15);color:var(--err);border:1px solid rgba(239,68,68,.3)}
+.btn-danger:hover{background:rgba(239,68,68,.25)}
+.btn-icon{background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;border-radius:4px;transition:background .15s}
+.btn-icon:hover{background:rgba(255,255,255,.08)}
 
-  /* Result drawer (slides up after a query) */
-  .drawer {
-    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(140%);
-    width: min(820px, calc(100vw - 32px));
-    background: rgba(8,12,28,0.86);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 16px;
-    padding: 18px 22px;
-    transition: transform 480ms cubic-bezier(.22,.9,.3,1);
-    pointer-events: auto;
-    z-index: 5;
-  }
-  .drawer.open { transform: translateX(-50%) translateY(0); }
-  .drawer h2 {
-    margin: 0 0 12px; font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase;
-    color: var(--ink-faint);
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .drawer h2 .latency { color: var(--ink-dim); font-weight: 500; letter-spacing: 0.16em; }
-  .drawer .result {
-    display: grid; grid-template-columns: 80px 1fr 70px; gap: 14px;
-    padding: 10px 0; border-top: 1px dashed rgba(255,255,255,0.06);
-    align-items: start;
-  }
-  .drawer .result:first-of-type { border-top: none; }
-  .drawer .domain {
-    font-size: 9.5px; letter-spacing: 0.22em; text-transform: uppercase;
-    padding-top: 3px;
-  }
-  .drawer .domain.legal { color: var(--legal); }
-  .drawer .domain.medical { color: var(--medical); }
-  .drawer .domain.technical { color: var(--technical); }
-  .drawer .body { color: var(--ink); }
-  .drawer .body .title { font-weight: 600; margin-bottom: 4px; }
-  .drawer .body .preview { color: var(--ink-dim); font-size: 12px; }
-  .drawer .score {
-    text-align: right; font-variant-numeric: tabular-nums;
-    color: var(--hit); font-weight: 600;
-  }
-  .drawer .close {
-    position: absolute; top: 14px; right: 18px;
-    background: transparent; border: 0; color: var(--ink-faint); cursor: pointer;
-    font-size: 16px;
-  }
-  .drawer .close:hover { color: var(--hit); }
+/* ── Answer area ── */
+.answer-area{
+  min-height:120px;padding:16px;background:var(--panel);border:1px solid var(--border);
+  border-radius:var(--r);font-family:var(--sans);line-height:1.7;margin:12px 0;
+  white-space:pre-wrap;word-break:break-word;
+}
+.answer-placeholder{color:var(--faint);font-style:italic}
+.cursor{
+  display:inline-block;width:2px;height:1em;background:var(--acc3);
+  vertical-align:middle;margin-left:1px;animation:blink .8s step-end infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.meta-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.badge{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 9px;
+  border-radius:999px;font-size:11px;font-weight:600;
+}
+.badge.hit{background:rgba(16,185,129,.15);color:var(--hit);border:1px solid rgba(16,185,129,.3)}
+.badge.miss{background:rgba(139,92,246,.15);color:var(--miss);border:1px solid rgba(139,92,246,.3)}
+.badge.latency{background:rgba(255,255,255,.05);color:var(--dim);border:1px solid var(--border)}
+.badge.model{background:rgba(255,255,255,.05);color:var(--dim);border:1px solid var(--border)}
 
-  /* Footer link */
-  .pagefoot {
-    position: fixed; bottom: 12px; left: 0; right: 0; text-align: center;
-    color: var(--ink-faint); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
-    pointer-events: auto;
-  }
-  .pagefoot a { color: var(--ink-dim); text-decoration: none; }
-  .pagefoot a:hover { color: var(--hit); }
+/* ── Sources ── */
+details{border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px}
+details summary{padding:10px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:'▶ ';font-size:9px;transition:transform .15s}
+details[open] summary::before{content:'▼ '}
+details[open] summary{border-bottom:1px solid var(--border)}
+.sources-list{padding:12px}
+.source-card{
+  padding:10px 12px;background:var(--panel2);border-radius:var(--r2);margin-bottom:8px;
+  border-left:3px solid var(--acc);
+}
+.source-card:last-child{margin-bottom:0}
+.source-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:4px}
+.source-body{font-size:12px;line-height:1.5;color:var(--txt);opacity:.85}
+
+/* ── History ── */
+.section-label{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+.history-list{display:flex;flex-direction:column;gap:4px}
+.history-item{
+  display:flex;align-items:center;gap:8px;padding:7px 10px;
+  background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);
+  cursor:pointer;transition:border-color .15s;font-size:12px;
+}
+.history-item:hover{border-color:var(--acc)}
+.history-q{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-badge{font-size:10px;padding:2px 6px;border-radius:999px;flex-shrink:0}
+.h-hit{background:rgba(16,185,129,.15);color:var(--hit)}
+.h-miss{background:rgba(139,92,246,.15);color:var(--miss)}
+.h-lat{color:var(--faint);font-family:var(--mono)}
+
+/* ── Agent timeline ── */
+.agent-timeline{margin:12px 0;display:flex;flex-direction:column;gap:0}
+.agent-step{
+  display:flex;gap:12px;opacity:0;transform:translateX(-16px);
+  animation:slideIn .35s ease forwards;
+}
+@keyframes slideIn{to{opacity:1;transform:none}}
+.step-line{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:24px}
+.step-dot{
+  width:20px;height:20px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+  font-size:10px;font-weight:700;border:2px solid;
+}
+.dot-thought{border-color:var(--dim);background:rgba(255,255,255,.05);color:var(--dim)}
+.dot-tool{border-color:var(--acc);background:rgba(124,58,237,.2);color:var(--acc3)}
+.dot-obs{border-color:#06b6d4;background:rgba(6,182,212,.15);color:#67e8f9}
+.dot-final{border-color:var(--warn);background:rgba(245,158,11,.2);color:#fcd34d}
+.step-connector{width:2px;flex:1;min-height:16px;background:rgba(255,255,255,.06);margin:2px 0}
+.step-body{flex:1;padding-bottom:16px;min-width:0}
+.step-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.lbl-thought{color:var(--dim)}
+.lbl-tool{color:var(--acc3)}
+.lbl-obs{color:#67e8f9}
+.lbl-final{color:#fcd34d}
+.step-content{
+  padding:10px 12px;border-radius:var(--r2);font-size:13px;line-height:1.6;
+  border:1px solid var(--border);
+}
+.content-thought{background:var(--panel)}
+.content-tool{background:rgba(124,58,237,.08);border-color:rgba(124,58,237,.3);font-family:var(--mono);font-size:12px}
+.content-obs{background:rgba(6,182,212,.06);border-color:rgba(6,182,212,.25)}
+.content-final{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.25)}
+.tool-name{color:var(--acc3);font-weight:700}
+.agent-step-meta{display:flex;align-items:center;gap:12px;margin:4px 0;flex-wrap:wrap}
+.step-count{font-size:11px;font-family:var(--mono);color:var(--faint)}
+
+/* ── Progress bar ── */
+.progress-wrap{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin:10px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc3));border-radius:3px;transition:width .4s ease;width:0%}
+
+/* ── Shimmer ── */
+.shimmer{background:linear-gradient(90deg,var(--panel) 25%,var(--panel2) 50%,var(--panel) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:4px;height:16px;margin:4px 0}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── Eval gauges ── */
+.gauge-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.gauge-card{
+  padding:16px 12px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+}
+.gauge-svg{width:90px;height:90px}
+.gauge-bg{fill:none;stroke:rgba(255,255,255,.06);stroke-width:8}
+.gauge-arc{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dasharray .8s cubic-bezier(.22,1,.36,1)}
+.gauge-label{font-size:22px;font-weight:700;fill:var(--txt);text-anchor:middle;dominant-baseline:central}
+.gauge-name{font-size:11px;color:var(--dim);text-align:center;font-weight:600;letter-spacing:.05em}
+.eval-overall{
+  padding:20px;background:var(--panel);border:1px solid var(--border2);border-radius:var(--r);
+  text-align:center;
+}
+.overall-num{font-size:48px;font-weight:700;color:var(--acc3);line-height:1}
+.overall-lbl{font-size:12px;color:var(--dim);margin-top:4px}
+
+/* ── Cache stats ── */
+.cache-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.stat-cards{display:flex;gap:10px;flex-wrap:wrap;flex:1}
+.stat-card{
+  padding:12px 16px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r);
+  min-width:90px;
+}
+.stat-val{font-size:22px;font-weight:700;font-family:var(--mono);line-height:1}
+.stat-lbl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+.subtab-bar{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.subtab{
+  padding:5px 12px;border:1px solid var(--border);border-radius:999px;
+  background:transparent;color:var(--dim);font-size:12px;cursor:pointer;transition:all .15s;
+}
+.subtab:hover{border-color:var(--acc);color:var(--txt)}
+.subtab.active{background:rgba(124,58,237,.2);border-color:var(--acc);color:var(--acc3)}
+.subtab-panel{display:none}
+.subtab-panel.active{display:block}
+
+/* ── Latency bars ── */
+.lat-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px}
+.lat-label{width:40px;color:var(--dim);text-align:right;flex-shrink:0;font-family:var(--mono)}
+.lat-track{flex:1;height:8px;background:var(--panel2);border-radius:4px;overflow:hidden}
+.lat-fill{height:100%;border-radius:4px;transition:width .7s cubic-bezier(.22,1,.36,1)}
+.lat-val{width:60px;color:var(--dim);font-family:var(--mono);flex-shrink:0}
+
+/* ── Cluster cards ── */
+.cluster-card{
+  padding:14px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--r2);
+  margin-bottom:10px;
+}
+.cluster-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cluster-size{font-size:11px;padding:2px 8px;border-radius:999px;background:rgba(124,58,237,.2);color:var(--acc3)}
+.cluster-questions{list-style:none;padding:0}
+.cluster-questions li{font-size:12px;color:var(--dim);padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.05)}
+.cluster-questions li:last-child{border:none}
+.cluster-questions li::before{content:'→ ';color:var(--acc)}
+
+/* ── Histogram ── */
+.hist-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
+.hist-range{width:60px;color:var(--dim);font-family:var(--mono);flex-shrink:0}
+.hist-bar{flex:1;height:20px;background:var(--panel2);border-radius:3px;overflow:hidden;position:relative}
+.hist-fill{height:100%;background:linear-gradient(90deg,var(--acc),var(--acc3));border-radius:3px;transition:width .7s ease}
+.hist-count{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;color:rgba(255,255,255,.6)}
+
+/* ── Feedback ── */
+.radio-group{display:flex;gap:16px}
+.radio-group label{display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px}
+.radio-group input{accent-color:var(--acc)}
+.fb-list{display:flex;flex-direction:column;gap:6px}
+.fb-item{
+  display:flex;align-items:center;gap:10px;padding:8px 12px;
+  background:var(--panel2);border-radius:var(--r2);font-size:12px;
+}
+.fb-signal{font-size:16px;flex-shrink:0}
+.fb-hash{font-family:var(--mono);color:var(--faint);flex-shrink:0;font-size:11px}
+.fb-comment{flex:1;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb-time{color:var(--faint);font-size:11px;flex-shrink:0}
+
+/* ── Toasts ── */
+#toasts{
+  position:fixed;bottom:20px;right:20px;z-index:9999;
+  display:flex;flex-direction:column;gap:8px;pointer-events:none;
+}
+.toast{
+  padding:10px 16px;border-radius:var(--r2);font-size:13px;font-weight:500;
+  max-width:340px;pointer-events:auto;
+  animation:toastIn .3s cubic-bezier(.34,1.56,.64,1);
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+}
+@keyframes toastIn{from{opacity:0;transform:translateY(16px) scale(.95)}}
+.toast.info{background:#1e1b4b;border:1px solid var(--acc);color:var(--acc3)}
+.toast.success{background:#052e16;border:1px solid var(--hit);color:#6ee7b7}
+.toast.error{background:#450a0a;border:1px solid var(--err);color:#fca5a5}
+
+/* ── Result boxes ── */
+.result-box{
+  padding:10px 12px;border-radius:var(--r2);font-size:12px;margin-top:8px;
+  border:1px solid var(--border);
+}
+.result-box.success{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.3);color:#6ee7b7}
+.result-box.error{background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.3);color:#fca5a5}
+.result-box.info{background:rgba(124,58,237,.08);border-color:var(--border2);color:var(--acc3)}
+.kv{display:flex;gap:8px;margin-bottom:3px;font-family:var(--mono)}
+.kv-k{color:var(--dim);flex-shrink:0}
+.kv-v{color:var(--txt)}
+
+/* ── Misc ── */
+.empty-state{padding:32px;text-align:center;color:var(--faint);font-size:13px}
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+code{font-family:var(--mono);font-size:12px;background:rgba(255,255,255,.06);padding:2px 5px;border-radius:3px;color:var(--acc3)}
+.sparkline-wrap{position:relative;height:60px}
+canvas{width:100%;display:block}
+
+/* ── Ingest drop zone ── */
+.drop-zone{
+  border:2px dashed var(--border2);border-radius:var(--r);padding:32px;
+  text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;
+  background:var(--panel2);
+}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--acc);background:rgba(124,58,237,.06)}
+.drop-icon{font-size:32px;margin-bottom:8px}
+.drop-text{font-size:13px;color:var(--dim)}
 </style>
 </head>
 <body>
-  <canvas id="stream"></canvas>
+<div id="app">
 
-  <div class="frame">
-    <div class="brand">
-      <div class="glyph"></div>
-      <h1>kyro</h1>
-      <p>retrieval · cached · live</p>
+<!-- ── Header ── -->
+<header id="header">
+  <div class="brand">
+    <div class="brand-mark">K</div>
+    <span class="brand-name">kyro</span>
+    <span class="brand-ver">v1.8.0</span>
+  </div>
+  <nav class="tab-bar" id="tab-bar">
+    <button class="tab-btn active" data-tab="rag" onclick="switchTab('rag')">⚡ RAG</button>
+    <button class="tab-btn" data-tab="agent" onclick="switchTab('agent')">🤖 Agent</button>
+    <button class="tab-btn" data-tab="ingest" onclick="switchTab('ingest')">📥 Ingest</button>
+    <button class="tab-btn" data-tab="eval" onclick="switchTab('eval')">📊 Eval</button>
+    <button class="tab-btn" data-tab="cache" onclick="switchTab('cache')">🧠 Cache</button>
+    <button class="tab-btn" data-tab="feedback" onclick="switchTab('feedback')">👍 Feedback</button>
+  </nav>
+  <div id="health-pill">
+    <div class="hdot" id="hdot"></div>
+    <span id="hlabel">connecting…</span>
+  </div>
+</header>
+
+<!-- ── Main ── -->
+<main id="main">
+
+<!-- Tab 1: RAG Playground -->
+<section id="tab-rag" class="tab-panel active">
+  <div class="card">
+    <div class="query-input-row">
+      <textarea id="rag-input" placeholder="Ask anything about your documents…" rows="2"
+        onkeydown="if((e=event).ctrlKey&&e.key==='Enter')runRAGQuery()"></textarea>
+      <button class="btn-primary" id="rag-btn" onclick="runRAGQuery()">Ask</button>
+    </div>
+    <div class="query-options">
+      <label class="toggle-label"><input type="checkbox" id="rag-stream" checked/> Stream</label>
+      <label class="toggle-label"><input type="checkbox" id="rag-hyde"/> HyDE</label>
+      <label class="toggle-label"><input type="checkbox" id="rag-crag"/> CRAG</label>
+      <label class="toggle-label"><input type="checkbox" id="rag-auto"/> AutoRoute</label>
+      <div class="topk"><span>top_k</span><input type="number" id="rag-topk" value="5" min="1" max="50"/></div>
+    </div>
+  </div>
+
+  <div class="answer-area" id="rag-answer"><span class="answer-placeholder">Enter a question and press Ask (or Ctrl+Enter).</span></div>
+
+  <div class="meta-row" id="rag-meta" style="display:none">
+    <span class="badge" id="rag-cache-badge"></span>
+    <span class="badge latency" id="rag-lat-badge"></span>
+    <span class="badge model" id="rag-model-badge"></span>
+    <div style="flex:1"></div>
+    <button class="btn-icon" title="Helpful" onclick="feedbackFor('thumbs_up')">👍</button>
+    <button class="btn-icon" title="Not helpful" onclick="feedbackFor('thumbs_down')">👎</button>
+  </div>
+
+  <details id="rag-sources-wrap" style="display:none">
+    <summary>Sources</summary>
+    <div class="sources-list" id="rag-sources"></div>
+  </details>
+
+  <hr class="divider"/>
+  <div class="section-label">Query History</div>
+  <div id="rag-history" class="history-list"></div>
+</section>
+
+<!-- Tab 2: ReAct Agent -->
+<section id="tab-agent" class="tab-panel">
+  <div class="card">
+    <div class="query-input-row">
+      <textarea id="agent-input" placeholder="What would you like the agent to research?" rows="2"
+        onkeydown="if((e=event).ctrlKey&&e.key==='Enter')runAgent()"></textarea>
+      <button class="btn-primary" id="agent-btn" onclick="runAgent()">Run</button>
+    </div>
+    <div class="query-options">
+      <label class="toggle-label"><input type="checkbox" id="agent-stream" checked/> Stream</label>
+      <div class="topk"><span>top_k</span><input type="number" id="agent-topk" value="5" min="1" max="50"/></div>
+      <div class="topk"><span>max_steps</span><input type="number" id="agent-steps" value="5" min="1" max="20"/></div>
+    </div>
+  </div>
+  <div id="agent-timeline" class="agent-timeline">
+    <div class="empty-state">Enter a question to start the ReAct loop.</div>
+  </div>
+</section>
+
+<!-- Tab 3: Ingest -->
+<section id="tab-ingest" class="tab-panel">
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Ingest Documents</div>
+      <div class="field">
+        <label>File or directory path (server-accessible)</label>
+        <input type="text" id="ingest-path" placeholder="/data/docs  or  ./demo/corpus"/>
+      </div>
+      <div class="field">
+        <label>Chunking strategy</label>
+        <select id="ingest-strategy">
+          <option value="recursive">Recursive</option>
+          <option value="sentence_window">Sentence Window</option>
+          <option value="semantic">Semantic</option>
+          <option value="late">Late Chunking</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="doIngest()">Ingest</button>
+      <div class="progress-wrap" id="ingest-prog-wrap" style="display:none">
+        <div class="progress-fill" id="ingest-fill"></div>
+      </div>
+      <div id="ingest-result"></div>
     </div>
 
-    <div class="searchwrap">
-      <input id="q" type="text" autocomplete="off" spellcheck="false"
-             placeholder="ask the river — privacy rights, drug interactions, rate limits…" />
-      <div class="hint"><kbd>↵</kbd></div>
-      <div class="chips" id="chips"></div>
+    <div class="card">
+      <div class="card-title">Warm Cache</div>
+      <p style="font-size:12px;color:var(--dim);margin-bottom:8px">Pre-populate cache with Q&amp;A pairs. Format: <code>Q: question</code> / <code>A: answer</code> blocks separated by blank lines.</p>
+      <textarea id="warm-input" rows="8" placeholder="Q: What is Kyro?
+A: Kyro is a production RAG pipeline with semantic caching.
+
+Q: How does semantic caching work?
+A: It stores embeddings of queries and returns cached answers for similar questions."></textarea>
+      <button class="btn-primary" style="margin-top:8px" onclick="doWarmCache()">Warm Cache</button>
+      <div id="warm-result"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Tab 4: Eval -->
+<section id="tab-eval" class="tab-panel">
+  <div class="card">
+    <div class="card-title">RAGAS Evaluation</div>
+    <div class="field"><label>Question</label><input type="text" id="eval-q" placeholder="What is semantic caching?"/></div>
+    <div class="field"><label>Generated Answer</label><textarea id="eval-a" rows="3" placeholder="Semantic caching stores embeddings…"></textarea></div>
+    <div class="field"><label>Context (one chunk per line)</label><textarea id="eval-ctx" rows="4" placeholder="Context passage 1
+Context passage 2"></textarea></div>
+    <div class="field"><label>Reference Answer <span style="color:var(--faint)">(optional)</span></label><input type="text" id="eval-ref" placeholder="Ground truth answer"/></div>
+    <button class="btn-primary" id="eval-btn" onclick="runEval()">Evaluate</button>
+  </div>
+  <div id="eval-results" style="display:none">
+    <div class="gauge-grid" id="eval-gauges"></div>
+    <div class="eval-overall" id="eval-overall"></div>
+  </div>
+</section>
+
+<!-- Tab 5: Cache -->
+<section id="tab-cache" class="tab-panel">
+  <div class="cache-header">
+    <div class="stat-cards" id="cache-stat-cards">
+      <div class="stat-card"><div class="stat-val" id="cs-hitrate">—</div><div class="stat-lbl">Hit Rate</div></div>
+      <div class="stat-card"><div class="stat-val" id="cs-size">—</div><div class="stat-lbl">Entries</div></div>
+      <div class="stat-card"><div class="stat-val" id="cs-p50">—</div><div class="stat-lbl">p50 ms</div></div>
+      <div class="stat-card"><div class="stat-val" id="cs-p99">—</div><div class="stat-lbl">p99 ms</div></div>
+      <div class="stat-card"><div class="stat-val" id="cs-saved">—</div><div class="stat-lbl">Saved $</div></div>
+      <div class="stat-card"><div class="stat-val" id="cs-expired">—</div><div class="stat-lbl">Expired</div></div>
+    </div>
+    <button class="btn-secondary" onclick="loadCacheData()">↻ Refresh</button>
+  </div>
+
+  <div class="subtab-bar">
+    <button class="subtab active" onclick="switchSubtab('c-analytics',this)">Analytics</button>
+    <button class="subtab" onclick="switchSubtab('c-clusters',this)">Clusters</button>
+    <button class="subtab" onclick="switchSubtab('c-ttl',this)">TTL</button>
+    <button class="subtab" onclick="switchSubtab('c-search',this)">Batch Search</button>
+    <button class="subtab" onclick="switchSubtab('c-warm',this)">Warm</button>
+    <button class="subtab" onclick="switchSubtab('c-manage',this)">Manage</button>
+  </div>
+
+  <div id="c-analytics" class="subtab-panel active">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Latency Percentiles</div>
+        <div id="lat-bars"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Hourly Hit Rate</div>
+        <div class="sparkline-wrap"><canvas id="hourly-canvas" height="60"></canvas></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Similarity Distribution (hits)</div>
+      <div id="sim-hist"></div>
     </div>
   </div>
 
-  <div class="drawer" id="drawer" role="dialog" aria-label="Results">
-    <button class="close" id="drawerClose" aria-label="Close">×</button>
-    <h2><span id="drawerHead">results</span><span class="latency" id="drawerLat"></span></h2>
-    <div id="drawerBody"></div>
+  <div id="c-clusters" class="subtab-panel">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <label style="font-size:12px;color:var(--dim)">k =</label>
+      <input type="number" id="cluster-k" value="5" min="2" max="20" style="width:60px"/>
+      <button class="btn-secondary" onclick="loadClusters()">Run Clustering</button>
+    </div>
+    <div id="cluster-results"><div class="empty-state">Click "Run Clustering" to identify query topics.</div></div>
   </div>
 
-  <div class="pagefoot">
-    <a href="/observatory">↗ observatory · live cache metrics</a>
+  <div id="c-ttl" class="subtab-panel">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn-secondary" onclick="loadTTLReport()">Load Report</button>
+      <button class="btn-accent" onclick="runTTLAdjust()">Run Adaptive Adjust</button>
+    </div>
+    <div id="ttl-report"><div class="empty-state">Click "Load Report" to see TTL distribution.</div></div>
   </div>
+
+  <div id="c-search" class="subtab-panel">
+    <div class="card">
+      <div class="card-title">Batch Similarity Search</div>
+      <div class="field"><label>Queries (one per line)</label>
+        <textarea id="search-queries" rows="5" placeholder="What is semantic caching?
+How does RAG work?
+What are the rate limits?"></textarea>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--dim)">top_k</span>
+        <input type="number" id="search-topk" value="3" min="1" max="20" style="width:60px"/>
+        <button class="btn-primary" onclick="doCacheSearch()">Search</button>
+      </div>
+    </div>
+    <div id="search-results"></div>
+  </div>
+
+  <div id="c-warm" class="subtab-panel">
+    <div class="card">
+      <div class="card-title">Warm Cache with Q&amp;A Pairs</div>
+      <textarea id="cache-warm-input" rows="8" placeholder="Q: What is Kyro?
+A: Kyro is a production RAG pipeline.
+
+Q: What caching strategies does Kyro support?
+A: Kyro supports in-memory LRU and Redis-backed semantic caching."></textarea>
+      <button class="btn-primary" style="margin-top:8px" onclick="doCacheWarm()">Warm Cache</button>
+      <div id="cache-warm-result"></div>
+    </div>
+  </div>
+
+  <div id="c-manage" class="subtab-panel">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Expired Entries</div>
+        <div style="margin-bottom:12px">
+          <div class="stat-val" id="expired-count" style="font-size:32px">—</div>
+          <div class="stat-lbl">expired entries</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-secondary" onclick="checkExpired()">Check</button>
+          <button class="btn-danger" onclick="evictExpired()">Evict All</button>
+        </div>
+        <div id="manage-result"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Threshold Stats</div>
+        <button class="btn-secondary" onclick="loadThresholdStats()">Load</button>
+        <div id="thresh-stats" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Tab 6: Feedback -->
+<section id="tab-feedback" class="tab-panel">
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Submit Feedback</div>
+      <div class="field"><label>Question (to compute hash)</label><input type="text" id="fb-q" placeholder="The question you asked…"/></div>
+      <div class="field">
+        <label>Signal</label>
+        <div class="radio-group">
+          <label><input type="radio" name="fb-sig" value="thumbs_up" checked/> 👍 Helpful</label>
+          <label><input type="radio" name="fb-sig" value="thumbs_down"/> 👎 Not helpful</label>
+        </div>
+      </div>
+      <div class="field"><label>Comment (optional)</label>
+        <textarea id="fb-comment" rows="3" placeholder="What was good or bad?"></textarea>
+      </div>
+      <button class="btn-primary" onclick="submitFeedback()">Submit</button>
+      <div id="fb-result"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Feedback Summary</div>
+      <button class="btn-secondary" onclick="loadFeedbackSummary()">Load Summary</button>
+      <div id="fb-summary" style="margin-top:12px"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+<div id="toasts"></div>
 
 <script>
-(() => {
-  "use strict";
-  const API = location.origin.startsWith("http") ? location.origin : "http://127.0.0.1:8766";
-  const PRESETS = [
-    "How do I authenticate API requests?",
-    "What is your rate limit policy?",
-    "Warfarin and aspirin interactions",
-    "Pediatric acetaminophen dosing",
-    "GDPR right to deletion",
-    "Deploy kyro on Kubernetes",
-  ];
+'use strict';
 
-  const DOMAIN_HUE = { legal: 270, medical: 320, technical: 150 };
-
-  // ── Particle stream ─────────────────────────────────────────────────
-  const canvas = document.getElementById("stream");
-  const ctx = canvas.getContext("2d");
-  let W = 0, H = 0;
-  function resize() {
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = innerWidth * dpr;
-    canvas.height = innerHeight * dpr;
-    canvas.style.width = innerWidth + "px";
-    canvas.style.height = innerHeight + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    W = innerWidth; H = innerHeight;
-    placeChunks();
-  }
-  window.addEventListener("resize", resize);
-
-  // ── Corpus chunks as floating constellations ───────────────────────
-  let chunks = []; // { x, y, vx, vy, r, hue, glow, doc }
-  let chunksByDomain = { legal: [], medical: [], technical: [] };
-
-  function placeChunks() {
-    if (!chunks.length) return;
-    const domains = Object.keys(chunksByDomain);
-    domains.forEach((dom, di) => {
-      const list = chunksByDomain[dom];
-      const cy = H * (0.32 + di * 0.18);
-      list.forEach((c, i) => {
-        const cx = (W * 0.18) + (i / Math.max(1, list.length - 1)) * (W * 0.64);
-        c.homeX = cx + (Math.random() - 0.5) * 60;
-        c.homeY = cy + (Math.random() - 0.5) * 80;
-        if (c.x === undefined) { c.x = c.homeX; c.y = c.homeY; }
-      });
-    });
-  }
-
-  async function loadCorpus() {
-    try {
-      const r = await fetch(API + "/api/corpus/load");
-      const m = await r.json();
-      if (!m.loaded) return;
-      chunks = (m.documents || []).map(d => ({
-        doc: d,
-        x: undefined, y: undefined,
-        homeX: 0, homeY: 0,
-        vx: 0, vy: 0,
-        r: 4 + Math.random() * 1.5,
-        hue: DOMAIN_HUE[d.domain] || 200,
-        glow: 0,
-        targetGlow: 0,
-      }));
-      chunksByDomain = { legal: [], medical: [], technical: [] };
-      for (const c of chunks) (chunksByDomain[c.doc.domain] ||= []).push(c);
-      placeChunks();
-    } catch (e) {
-      console.warn("corpus load failed", e);
-    }
-  }
-
-  class Ambient {
-    constructor() { this.reset(true); }
-    reset(initial=false) {
-      this.x = initial ? Math.random() * W : -8;
-      this.y = Math.random() * H;
-      this.vx = 0.25 + Math.random() * 0.85;
-      this.r = Math.random() < 0.04 ? 1.6 : 0.7;
-      this.alpha = 0.10 + Math.random() * 0.30;
-      this.hue = 200 + Math.random() * 50;
-    }
-    step() {
-      this.x += this.vx;
-      if (this.x > W + 8) this.reset(false);
-    }
-    draw() {
-      ctx.beginPath();
-      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-      ctx.fillStyle = `hsla(${this.hue}, 70%, 70%, ${this.alpha})`;
-      ctx.fill();
-    }
-  }
-
-  resize();
-  const ambients = Array.from({ length: 220 }, () => new Ambient());
-
-  function frame() {
-    ctx.clearRect(0, 0, W, H);
-
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "rgba(108,182,255,0.04)");
-    g.addColorStop(1, "rgba(108,182,255,0.02)");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-
-    for (const a of ambients) { a.step(); a.draw(); }
-
-    // Highest-glow chunk drifts toward the centre.
-    const cx = W / 2, cy = H / 2;
-    let lead = null;
-    for (const c of chunks) {
-      if (!lead || c.targetGlow > lead.targetGlow) lead = c;
-    }
-
-    for (const c of chunks) {
-      const tx = (c === lead && c.targetGlow > 0.05) ? cx : c.homeX;
-      const ty = (c === lead && c.targetGlow > 0.05) ? cy : c.homeY;
-      c.vx += (tx - c.x) * 0.0035;
-      c.vy += (ty - c.y) * 0.0035;
-      c.vx *= 0.93; c.vy *= 0.93;
-      c.x += c.vx; c.y += c.vy;
-      c.glow += (c.targetGlow - c.glow) * 0.08;
-
-      const r = c.r + c.glow * 4;
-      const alpha = 0.55 + c.glow * 0.45;
-      ctx.save();
-      ctx.shadowBlur = 8 + c.glow * 22;
-      ctx.shadowColor = `hsla(${c.hue}, 90%, 70%, ${0.7 + c.glow * 0.3})`;
-      ctx.fillStyle = `hsla(${c.hue}, 90%, 75%, ${alpha})`;
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (c.glow > 0.1) {
-        const grad = ctx.createRadialGradient(c.x, c.y, r, c.x, c.y, r * 5);
-        grad.addColorStop(0, `hsla(${c.hue}, 90%, 70%, ${0.35 * c.glow})`);
-        grad.addColorStop(1, "transparent");
-        ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, r * 5, 0, Math.PI * 2);
-        ctx.fill();
-        if (c === lead && c.glow > 0.4) {
-          ctx.shadowBlur = 0;
-          ctx.fillStyle = `rgba(230,241,255,${0.85 * c.glow})`;
-          ctx.font = "11px ui-monospace, Menlo, monospace";
-          ctx.textAlign = "center";
-          ctx.fillText(c.doc.title.toUpperCase(), c.x, c.y - r - 12);
-        }
-      }
-      ctx.restore();
-    }
-
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-
-  // ── Live preview while typing: simple lexical match against doc text ─
-  function previewMatch(query) {
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      for (const c of chunks) c.targetGlow = 0;
-      return;
-    }
-    const tokens = q.split(/\s+/).filter(t => t.length > 1);
-    for (const c of chunks) {
-      const hay = (c.doc.title + " " + c.doc.preview).toLowerCase();
-      let hits = 0;
-      for (const t of tokens) if (hay.includes(t)) hits++;
-      const score = tokens.length ? hits / tokens.length : 0;
-      c.targetGlow = score;
-    }
-  }
-
-  // ── Real query against the corpus ───────────────────────────────────
-  async function runQuery(question) {
-    const drawer = document.getElementById("drawer");
-    const body = document.getElementById("drawerBody");
-    const head = document.getElementById("drawerHead");
-    const lat = document.getElementById("drawerLat");
-    body.innerHTML = `<div style="color:var(--ink-dim);padding:14px 0;">retrieving…</div>`;
-    drawer.classList.add("open");
-
-    try {
-      const url = API + "/api/corpus/demo?query=" + encodeURIComponent(question) + "&top_k=3";
-      const r = await fetch(url);
-      const j = await r.json();
-      head.textContent = `top ${(j.results||[]).length} for · ${j.query}`;
-      lat.textContent = (j.latency_ms ?? 0).toFixed(2) + " ms";
-      body.innerHTML = "";
-      for (const hit of (j.results || [])) {
-        const row = document.createElement("div");
-        row.className = "result";
-        row.innerHTML = `
-          <div class="domain ${hit.domain}">${hit.domain}</div>
-          <div class="body">
-            <div class="title">${escapeHtml(hit.title)}</div>
-            <div class="preview">${escapeHtml(hit.preview)}…</div>
-          </div>
-          <div class="score">${hit.score_pct}%</div>
-        `;
-        body.appendChild(row);
-        const c = chunks.find(x => x.doc.id === hit.doc_id);
-        if (c) c.targetGlow = Math.max(c.targetGlow, 0.85);
-      }
-    } catch (e) {
-      body.innerHTML = `<div style="color:var(--miss);">retrieval failed: ${escapeHtml(e.message)}</div>`;
-    }
-  }
-
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  }
-
-  // ── Bindings ─────────────────────────────────────────────────────────
-  const input = document.getElementById("q");
-  let typingTimer = null;
-  input.addEventListener("input", () => {
-    clearTimeout(typingTimer);
-    typingTimer = setTimeout(() => previewMatch(input.value), 60);
-  });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      const v = input.value.trim();
-      if (v) runQuery(v);
-    } else if (e.key === "Escape") {
-      document.getElementById("drawer").classList.remove("open");
-      input.value = "";
-      previewMatch("");
-    }
-  });
-  document.getElementById("drawerClose").addEventListener("click", () => {
-    document.getElementById("drawer").classList.remove("open");
-  });
-
-  // Render preset chips.
-  const chipBox = document.getElementById("chips");
-  for (const p of PRESETS) {
-    const c = document.createElement("button");
-    c.className = "chip"; c.type = "button";
-    c.textContent = p;
-    c.addEventListener("click", () => {
-      input.value = p; previewMatch(p); runQuery(p);
-      input.focus();
-    });
-    chipBox.appendChild(c);
-  }
-
-  loadCorpus().then(() => input.focus());
+// ── Config ──────────────────────────────────────────────────────────────────
+const API = (() => {
+  const h = location.hostname;
+  if (h === 'localhost' || h === '127.0.0.1' || h === '') return 'http://localhost:8000';
+  return location.origin; // served by the API itself
 })();
+
+// ── State ────────────────────────────────────────────────────────────────────
+let queryHistory = [];
+let lastQuestion = '';
+let lastQueryHash = null;
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const $$ = sel => document.querySelectorAll(sel);
+
+function toast(msg, type = 'info', dur = 3000) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), dur);
+}
+
+async function hashText(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text.toLowerCase().trim()));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+
+function countUp(el, target, duration = 700, suffix = '') {
+  const start = parseFloat(el.textContent) || 0;
+  const t0 = performance.now();
+  const step = ts => {
+    const p = Math.min(1, (ts - t0) / duration);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = (start + (target - start) * ease).toFixed(target % 1 === 0 ? 0 : 1) + suffix;
+    if (p < 1) requestAnimationFrame(step);
+    else el.textContent = target + suffix;
+  };
+  requestAnimationFrame(step);
+}
+
+function setHTML(id, html) { const el = $(id); if (el) el.innerHTML = html; }
+function show(id) { const el = $(id); if (el) el.style.display = ''; }
+function hide(id) { const el = $(id); if (el) el.style.display = 'none'; }
+
+function resultBox(msg, type = 'info') {
+  return `<div class="result-box ${type}">${msg}</div>`;
+}
+
+// ── SSE fetch (POST-based) ───────────────────────────────────────────────────
+async function streamSSE(url, body, onChunk, onDone, onError) {
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    onError(e); return;
+  }
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    onError(new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`)); return;
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') { onDone(); return; }
+        try { onChunk(JSON.parse(data)); } catch {}
+      }
+    }
+  } catch (e) { onError(e); return; }
+  onDone();
+}
+
+// ── API fetch helpers ────────────────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  $$('.tab-panel').forEach(p => p.classList.remove('active'));
+  $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  const panel = $(`tab-${name}`);
+  if (panel) panel.classList.add('active');
+  if (name === 'cache') loadCacheData();
+  if (name === 'feedback') loadFeedbackSummary();
+}
+
+function switchSubtab(id, btn) {
+  const parent = btn ? btn.closest('section') || document : document;
+  parent.querySelectorAll('.subtab').forEach(b => b.classList.remove('active'));
+  parent.querySelectorAll('.subtab-panel').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const panel = $(id); if (panel) panel.classList.add('active');
+}
+
+// ── Health check ─────────────────────────────────────────────────────────────
+async function checkHealth() {
+  const dot = $('hdot'), lbl = $('hlabel');
+  try {
+    const d = await apiFetch('/health');
+    dot.className = 'hdot ok';
+    lbl.textContent = `${d.vector_count ?? 0} docs · ${d.bm25_built ? 'BM25 ✓' : 'BM25 —'}`;
+  } catch {
+    dot.className = 'hdot err';
+    lbl.textContent = 'offline';
+  }
+}
+
+// ── Tab 1: RAG Playground ────────────────────────────────────────────────────
+async function runRAGQuery() {
+  const q = $('rag-input').value.trim();
+  if (!q) { toast('Enter a question first', 'error'); return; }
+  lastQuestion = q;
+
+  const streaming = $('rag-stream').checked;
+  const opts = {
+    question: q,
+    top_k: parseInt($('rag-topk').value) || 5,
+    use_hyde: $('rag-hyde').checked,
+    use_crag: $('rag-crag').checked,
+    auto_route: $('rag-auto').checked,
+  };
+
+  const btn = $('rag-btn');
+  btn.disabled = true; btn.textContent = '…';
+
+  const area = $('rag-answer');
+  area.innerHTML = '';
+  hide('rag-meta');
+  hide('rag-sources-wrap');
+
+  if (streaming) {
+    await runRAGStream(q, opts, area, btn);
+  } else {
+    await runRAGBatch(opts, area, btn);
+  }
+}
+
+async function runRAGStream(q, opts, area, btn) {
+  let fullText = '';
+  let cursorEl = null;
+  let finalData = null;
+  const t0 = performance.now();
+
+  // Show blinking cursor immediately
+  cursorEl = document.createElement('span');
+  cursorEl.className = 'cursor';
+  area.appendChild(cursorEl);
+
+  await streamSSE(
+    `${API}/query/stream`,
+    opts,
+    chunk => {
+      if (chunk.done === false && chunk.token) {
+        fullText += chunk.token;
+        // Update text before cursor
+        const text = document.createTextNode(fullText);
+        area.replaceChildren(text, cursorEl);
+      } else if (chunk.done === true) {
+        finalData = chunk;
+      }
+    },
+    () => {
+      // Remove cursor, finalize
+      if (cursorEl && cursorEl.parentNode) cursorEl.remove();
+      area.textContent = fullText || '(no response)';
+      const latency = ((performance.now() - t0)).toFixed(0);
+      renderRAGMeta(finalData, parseInt(latency));
+      addToHistory(q, finalData?.cache_hit || false, parseInt(latency));
+      btn.disabled = false; btn.textContent = 'Ask';
+    },
+    err => {
+      area.textContent = `Error: ${err.message}`;
+      toast(err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Ask';
+    }
+  );
+}
+
+async function runRAGBatch(opts, area, btn) {
+  const t0 = performance.now();
+  // Show shimmer
+  area.innerHTML = '<div class="shimmer" style="width:90%"></div><div class="shimmer" style="width:75%"></div><div class="shimmer" style="width:60%"></div>';
+  try {
+    const d = await apiFetch('/query', { method: 'POST', body: JSON.stringify(opts) });
+    const latency = ((performance.now() - t0)).toFixed(0);
+    area.textContent = d.answer || '(no answer)';
+    renderRAGMeta(d, parseInt(latency));
+    addToHistory(opts.question, d.cache_hit || false, parseInt(latency));
+  } catch (e) {
+    area.textContent = `Error: ${e.message}`;
+    toast(e.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Ask';
+}
+
+function renderRAGMeta(data, latencyMs) {
+  if (!data) return;
+  const cacheBadge = $('rag-cache-badge');
+  const latBadge = $('rag-lat-badge');
+  const modelBadge = $('rag-model-badge');
+
+  if (data.cache_hit) {
+    cacheBadge.className = 'badge hit';
+    const sim = data.cache_similarity ? ` (${(data.cache_similarity * 100).toFixed(0)}% similar)` : '';
+    cacheBadge.textContent = `⚡ Cache hit${sim}`;
+  } else {
+    cacheBadge.className = 'badge miss';
+    cacheBadge.textContent = '🔍 Retrieved (computed)';
+  }
+  latBadge.textContent = `${latencyMs}ms`;
+  modelBadge.textContent = data.model || '';
+  show('rag-meta');
+
+  // Sources
+  const sources = data.sources || [];
+  if (sources.length) {
+    const srcsHtml = sources.map(s => `
+      <div class="source-card">
+        <div class="source-meta">
+          <span>${s.source || 'unknown'}</span>
+          <span>score: ${typeof s.score === 'number' ? s.score.toFixed(3) : '—'}</span>
+        </div>
+        <div class="source-body">${escapeHTML((s.content_preview || s.content || '').slice(0, 300))}</div>
+      </div>`).join('');
+    setHTML('rag-sources', srcsHtml);
+    show('rag-sources-wrap');
+  }
+
+  // Store hash for feedback
+  hashText(lastQuestion).then(h => { lastQueryHash = h; });
+}
+
+function addToHistory(q, cacheHit, latMs) {
+  queryHistory.unshift({ q, cacheHit, latMs, ts: Date.now() });
+  if (queryHistory.length > 10) queryHistory.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const el = $('rag-history');
+  if (!queryHistory.length) { el.innerHTML = '<div class="empty-state">No queries yet.</div>'; return; }
+  el.innerHTML = queryHistory.map((h, i) => `
+    <div class="history-item" onclick="rerunQuery(${i})">
+      <span class="history-badge ${h.cacheHit ? 'h-hit' : 'h-miss'}">${h.cacheHit ? '⚡' : '🔍'}</span>
+      <span class="history-q">${escapeHTML(h.q)}</span>
+      <span class="h-lat">${h.latMs}ms</span>
+    </div>`).join('');
+}
+
+function rerunQuery(i) {
+  const h = queryHistory[i];
+  if (!h) return;
+  $('rag-input').value = h.q;
+  switchTab('rag');
+  runRAGQuery();
+}
+
+function feedbackFor(signal) {
+  if (!lastQueryHash) { toast('Run a query first', 'error'); return; }
+  apiFetch('/feedback', {
+    method: 'POST',
+    body: JSON.stringify({ question_hash: lastQueryHash, signal }),
+  }).then(() => toast(`Feedback recorded: ${signal}`, 'success'))
+    .catch(e => toast(e.message, 'error'));
+}
+
+// ── Tab 2: ReAct Agent ────────────────────────────────────────────────────────
+async function runAgent() {
+  const q = $('agent-input').value.trim();
+  if (!q) { toast('Enter a question', 'error'); return; }
+
+  const btn = $('agent-btn');
+  btn.disabled = true; btn.textContent = '…';
+
+  const tl = $('agent-timeline');
+  tl.innerHTML = '';
+
+  const opts = {
+    question: q,
+    top_k: parseInt($('agent-topk').value) || 5,
+    max_steps: parseInt($('agent-steps').value) || 5,
+  };
+
+  const streaming = $('agent-stream').checked;
+  const t0 = performance.now();
+  let stepIdx = 0;
+
+  function addStep(type, content, index) {
+    const dot = { thought: 'dot-thought', retrieve: 'dot-tool', finish: 'dot-tool',
+                  obs: 'dot-obs', final: 'dot-final' }[type] || 'dot-thought';
+    const lbl = { thought: 'lbl-thought', retrieve: 'lbl-tool', finish: 'lbl-tool',
+                  obs: 'lbl-obs', final: 'lbl-final' }[type] || 'lbl-thought';
+    const contentClass = { thought: 'content-thought', retrieve: 'content-tool',
+                           finish: 'content-tool', obs: 'content-obs',
+                           final: 'content-final' }[type] || 'content-thought';
+    const icon = { thought: '💭', retrieve: '🔧', finish: '🔧', obs: '👁', final: '✨' }[type] || '•';
+    const label = { thought: 'Thought', retrieve: 'Tool: retrieve', finish: 'Tool: finish',
+                    obs: 'Observation', final: 'Final Answer' }[type] || type;
+
+    const div = document.createElement('div');
+    div.className = 'agent-step';
+    div.style.animationDelay = `${stepIdx * 80}ms`;
+    div.innerHTML = `
+      <div class="step-line">
+        <div class="step-dot ${dot}">${icon}</div>
+        ${stepIdx < 10 ? '<div class="step-connector"></div>' : ''}
+      </div>
+      <div class="step-body">
+        <div class="step-label ${lbl}">${label}</div>
+        <div class="step-content ${contentClass}">${escapeHTML(content)}</div>
+      </div>`;
+    tl.appendChild(div);
+    stepIdx++;
+    tl.scrollTop = tl.scrollHeight;
+  }
+
+  if (streaming) {
+    await streamSSE(
+      `${API}/agent/query/stream`,
+      opts,
+      chunk => {
+        if (chunk.type === 'step') {
+          addStep('thought', chunk.thought || '', chunk.index);
+          if (chunk.action && chunk.action !== 'finish') addStep(chunk.action, `${chunk.action}(${chunk.action_input || ''})`, chunk.index);
+          if (chunk.action === 'finish') addStep('finish', chunk.action_input || '', chunk.index);
+          if (chunk.observation && chunk.observation !== 'completed') addStep('obs', chunk.observation, chunk.index);
+        } else if (chunk.type === 'result') {
+          addStep('final', chunk.answer || '', 999);
+          const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+          const badge = document.createElement('div');
+          badge.className = 'agent-step-meta';
+          badge.innerHTML = `<span class="step-count">${stepIdx} steps · ${elapsed}s</span>`;
+          tl.appendChild(badge);
+        }
+      },
+      () => { btn.disabled = false; btn.textContent = 'Run'; },
+      e => { tl.innerHTML += `<div class="result-box error">Error: ${escapeHTML(e.message)}</div>`; btn.disabled = false; btn.textContent = 'Run'; }
+    );
+  } else {
+    try {
+      const d = await apiFetch('/agent/query', { method: 'POST', body: JSON.stringify(opts) });
+      (d.steps || []).forEach(s => {
+        addStep('thought', s.thought, stepIdx);
+        if (s.action !== 'finish') addStep(s.action, `${s.action}(${s.action_input})`, stepIdx);
+        if (s.observation !== 'completed') addStep('obs', s.observation, stepIdx);
+      });
+      addStep('final', d.answer || '', 999);
+    } catch (e) { tl.innerHTML += `<div class="result-box error">${escapeHTML(e.message)}</div>`; }
+    btn.disabled = false; btn.textContent = 'Run';
+  }
+}
+
+// ── Tab 3: Ingest ─────────────────────────────────────────────────────────────
+async function doIngest() {
+  const path = $('ingest-path').value.trim();
+  if (!path) { toast('Enter a file or directory path', 'error'); return; }
+  const strategy = $('ingest-strategy').value;
+
+  show('ingest-prog-wrap');
+  // Animate progress to 70% while waiting
+  let pct = 0;
+  const tick = setInterval(() => {
+    pct = Math.min(70, pct + 5);
+    $('ingest-fill').style.width = pct + '%';
+  }, 200);
+
+  try {
+    const d = await apiFetch('/ingest', { method: 'POST', body: JSON.stringify({ path, strategy }) });
+    clearInterval(tick);
+    $('ingest-fill').style.width = '100%';
+    setTimeout(() => hide('ingest-prog-wrap'), 800);
+    setHTML('ingest-result', resultBox(`
+      <div class="kv"><span class="kv-k">chunks_indexed</span><span class="kv-v">${d.chunks_indexed}</span></div>
+      <div class="kv"><span class="kv-k">sources_processed</span><span class="kv-v">${d.sources_processed}</span></div>
+    `, 'success'));
+    toast(`Ingested ${d.chunks_indexed} chunks from ${d.sources_processed} sources`, 'success');
+    checkHealth();
+  } catch (e) {
+    clearInterval(tick);
+    hide('ingest-prog-wrap');
+    setHTML('ingest-result', resultBox(escapeHTML(e.message), 'error'));
+    toast(e.message, 'error');
+  }
+}
+
+function parseWarmPairs(text) {
+  const pairs = [];
+  const blocks = text.split(/\n\s*\n/);
+  for (const block of blocks) {
+    const qm = block.match(/^Q:\s*(.+)/m);
+    const am = block.match(/^A:\s*([\s\S]+)/m);
+    if (qm && am) pairs.push({ question: qm[1].trim(), answer: am[1].trim() });
+  }
+  return pairs;
+}
+
+async function doWarmCache() {
+  const pairs = parseWarmPairs($('warm-input').value);
+  if (!pairs.length) { toast('No valid Q/A pairs found', 'error'); return; }
+  try {
+    const d = await apiFetch('/cache/warm', { method: 'POST', body: JSON.stringify({ pairs }) });
+    setHTML('warm-result', resultBox(`Warmed: ${d.warmed} · Skipped: ${d.skipped_duplicates} · Errors: ${d.skipped_errors}`, 'success'));
+    toast(`Cache warmed with ${d.warmed} pairs`, 'success');
+  } catch (e) { setHTML('warm-result', resultBox(escapeHTML(e.message), 'error')); toast(e.message, 'error'); }
+}
+
+// ── Tab 4: RAGAS Eval ─────────────────────────────────────────────────────────
+async function runEval() {
+  const q = $('eval-q').value.trim();
+  const a = $('eval-a').value.trim();
+  const ctx = $('eval-ctx').value.trim();
+  if (!q || !a || !ctx) { toast('Fill in question, answer, and context', 'error'); return; }
+
+  const btn = $('eval-btn');
+  btn.disabled = true; btn.textContent = '…';
+  setHTML('eval-gauges', '<div class="shimmer"></div><div class="shimmer"></div><div class="shimmer"></div><div class="shimmer"></div>');
+  show('eval-results');
+
+  const contexts = ctx.split('\n').map(s => s.trim()).filter(Boolean);
+  const ref = $('eval-ref').value.trim();
+
+  const body = {
+    questions: [q],
+    answers: [a],
+    contexts: [contexts],
+    ...(ref ? { ground_truths: [ref] } : {}),
+  };
+
+  try {
+    const d = await apiFetch('/eval', { method: 'POST', body: JSON.stringify(body) });
+    renderEvalScores(d.scores || {});
+    toast('Evaluation complete', 'success');
+  } catch (e) {
+    setHTML('eval-gauges', resultBox(escapeHTML(e.message), 'error'));
+    toast(e.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Evaluate';
+}
+
+function renderEvalScores(scores) {
+  const COLORS = {
+    faithfulness: '#10b981',
+    answer_relevancy: '#7c3aed',
+    context_precision: '#06b6d4',
+    context_recall: '#f59e0b',
+    answer_correctness: '#ef4444',
+  };
+  const LABELS = {
+    faithfulness: 'Faithfulness',
+    answer_relevancy: 'Relevancy',
+    context_precision: 'Precision',
+    context_recall: 'Recall',
+    answer_correctness: 'Correctness',
+  };
+  const gaugesEl = $('eval-gauges');
+  gaugesEl.innerHTML = '';
+  const vals = [];
+  for (const [k, v] of Object.entries(scores)) {
+    const color = COLORS[k] || '#7c3aed';
+    const label = LABELS[k] || k;
+    const pct = Math.round(v * 100);
+    vals.push(v);
+    // SVG donut — circumference ≈ 100
+    const dashArr = `${pct} ${100 - pct}`;
+    const card = document.createElement('div');
+    card.className = 'gauge-card';
+    card.innerHTML = `
+      <svg class="gauge-svg" viewBox="0 0 36 36">
+        <circle class="gauge-bg" cx="18" cy="18" r="15.9"/>
+        <circle class="gauge-arc" cx="18" cy="18" r="15.9"
+          stroke="${color}" stroke-dasharray="0 100" stroke-dashoffset="25"
+          transform="rotate(-90 18 18)"/>
+        <text class="gauge-label" x="18" y="18">${pct}%</text>
+      </svg>
+      <div class="gauge-name">${label}</div>`;
+    gaugesEl.appendChild(card);
+    // Animate
+    setTimeout(() => {
+      card.querySelector('.gauge-arc').setAttribute('stroke-dasharray', dashArr);
+    }, 50);
+  }
+  // Overall
+  const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  const overallEl = $('eval-overall');
+  overallEl.innerHTML = `<div class="overall-num">${Math.round(avg * 100)}%</div><div class="overall-lbl">Overall Score</div>`;
+  show('eval-results');
+}
+
+// ── Tab 5: Cache Observatory ──────────────────────────────────────────────────
+async function loadCacheData() {
+  try {
+    const [stats, analytics] = await Promise.allSettled([
+      apiFetch('/cache/analytics?hours=24'),
+      apiFetch('/health'),
+    ]);
+
+    if (stats.status === 'fulfilled') {
+      const s = stats.value;
+      const total = (s.hit_count || 0) + (s.miss_count || 0);
+      const hitRate = total > 0 ? ((s.hit_count / total) * 100).toFixed(1) : '—';
+      $('cs-hitrate').textContent = hitRate + (total > 0 ? '%' : '');
+      $('cs-p50').textContent = s.latency?.hits?.p50 != null ? s.latency.hits.p50.toFixed(1) : '—';
+      $('cs-p99').textContent = s.latency?.all?.p99 != null ? s.latency.all.p99.toFixed(1) : '—';
+      renderLatencyBars(s.latency);
+      renderSimHistogram(s.similarity_distribution || []);
+      renderHourlyChart(s.hourly_hit_rate || []);
+    }
+    // Cache size from stats endpoint
+    try {
+      const cs = await apiFetch('/cache/threshold_stats');
+      // fallback
+    } catch {}
+    try {
+      const cstats = await apiFetch('/cache/expired_count');
+      $('cs-expired').textContent = cstats.expired_count ?? '—';
+      $('expired-count').textContent = cstats.expired_count ?? '—';
+    } catch {}
+  } catch (e) { toast('Cache data unavailable: ' + e.message, 'error'); }
+
+  // Try to get basic stats from health or cache stats
+  try {
+    const h = await apiFetch('/health');
+    $('cs-size').textContent = h.vector_count ?? '—';
+  } catch {}
+}
+
+function renderLatencyBars(latency) {
+  if (!latency) return;
+  const bars = [
+    { label: 'p50', value: latency.all?.p50, color: '#10b981' },
+    { label: 'p90', value: latency.all?.p90, color: '#f59e0b' },
+    { label: 'p99', value: latency.all?.p99, color: '#ef4444' },
+    { label: 'hit p50', value: latency.hits?.p50, color: '#06b6d4' },
+    { label: 'miss p99', value: latency.misses?.p99, color: '#8b5cf6' },
+  ].filter(b => b.value != null);
+
+  if (!bars.length) { setHTML('lat-bars', '<div class="empty-state">No latency data yet.</div>'); return; }
+  const maxVal = Math.max(...bars.map(b => b.value), 1);
+  setHTML('lat-bars', bars.map(b => `
+    <div class="lat-row">
+      <span class="lat-label">${b.label}</span>
+      <div class="lat-track">
+        <div class="lat-fill" style="width:0%;background:${b.color};transition:width .7s ease"
+          data-target="${(b.value / maxVal * 100).toFixed(1)}"></div>
+      </div>
+      <span class="lat-val">${b.value.toFixed(1)}ms</span>
+    </div>`).join(''));
+  setTimeout(() => {
+    $$('.lat-fill').forEach(el => { el.style.width = el.dataset.target + '%'; });
+  }, 60);
+}
+
+function renderSimHistogram(dist) {
+  if (!dist.length) { setHTML('sim-hist', '<div class="empty-state">No similarity data.</div>'); return; }
+  const max = Math.max(...dist.map(b => b.count), 1);
+  setHTML('sim-hist', dist.map(b => `
+    <div class="hist-bar-row">
+      <span class="hist-range">${b.range}</span>
+      <div class="hist-bar">
+        <div class="hist-fill" style="width:0%" data-target="${(b.count / max * 100).toFixed(1)}"></div>
+        <span class="hist-count">${b.count}</span>
+      </div>
+    </div>`).join(''));
+  setTimeout(() => $$('.hist-fill').forEach(el => { el.style.width = el.dataset.target + '%'; }), 60);
+}
+
+function renderHourlyChart(hourly) {
+  const canvas = $('hourly-canvas');
+  if (!canvas || !hourly.length) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.offsetWidth || 240, H = 60;
+  canvas.width = W * (window.devicePixelRatio || 1);
+  canvas.height = H * (window.devicePixelRatio || 1);
+  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  ctx.clearRect(0, 0, W, H);
+  const vals = hourly.map(h => h.hit_rate);
+  const step = W / (vals.length - 1 || 1);
+  ctx.beginPath();
+  vals.forEach((v, i) => {
+    const x = i * step, y = H - v * (H - 4) - 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 2; ctx.stroke();
+  // Fill
+  ctx.lineTo((vals.length - 1) * step, H); ctx.lineTo(0, H); ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(124,58,237,.3)'); grad.addColorStop(1, 'rgba(124,58,237,0)');
+  ctx.fillStyle = grad; ctx.fill();
+}
+
+async function loadClusters() {
+  const k = parseInt($('cluster-k').value) || 5;
+  setHTML('cluster-results', '<div class="shimmer"></div><div class="shimmer"></div>');
+  try {
+    const d = await apiFetch(`/cache/clusters?k=${k}`);
+    if (!d.clusters?.length) { setHTML('cluster-results', '<div class="empty-state">Not enough cache entries for clustering.</div>'); return; }
+    setHTML('cluster-results', d.clusters.map(c => `
+      <div class="cluster-card">
+        <div class="cluster-header">
+          <strong>Cluster ${c.cluster_id}</strong>
+          <span class="cluster-size">${c.size} queries · avg sim ${(c.avg_centroid_similarity * 100).toFixed(0)}%</span>
+        </div>
+        <ul class="cluster-questions">
+          ${c.representative_questions.map(q => `<li>${escapeHTML(q)}</li>`).join('')}
+        </ul>
+      </div>`).join(''));
+    toast(`Found ${d.clusters.length} clusters in ${d.n_entries} entries`, 'success');
+  } catch (e) { setHTML('cluster-results', resultBox(escapeHTML(e.message), 'error')); }
+}
+
+async function loadTTLReport() {
+  setHTML('ttl-report', '<div class="shimmer"></div>');
+  try {
+    const d = await apiFetch('/cache/ttl_report');
+    const bucketsHtml = d.buckets?.map(b => `
+      <div class="hist-bar-row">
+        <span class="hist-range" style="width:80px">${b.label}</span>
+        <div class="hist-bar">
+          <div class="hist-fill" style="width:${Math.max(0, (b.count / Math.max(...(d.buckets||[{count:1}]).map(x=>x.count), 1)) * 100).toFixed(1)}%;background:#7c3aed"></div>
+          <span class="hist-count">${b.count}</span>
+        </div>
+      </div>`).join('') || '';
+    setHTML('ttl-report', `
+      <div class="card">
+        <div class="kv"><span class="kv-k">total</span><span class="kv-v">${d.total}</span></div>
+        <div class="kv"><span class="kv-k">no_ttl</span><span class="kv-v">${d.no_ttl}</span></div>
+        <div class="kv"><span class="kv-k">with_ttl</span><span class="kv-v">${d.with_ttl}</span></div>
+        <hr class="divider"/>
+        <div class="card-title">TTL Buckets</div>
+        ${bucketsHtml}
+        <hr class="divider"/>
+        <div class="card-title">Pending Extend (${d.pending_extend?.length || 0})</div>
+        ${(d.pending_extend||[]).map(q => `<div style="font-size:11px;color:var(--dim);padding:2px 0">→ ${escapeHTML(q)}</div>`).join('')}
+        <div class="card-title" style="margin-top:10px">Pending Reduce (${d.pending_reduce?.length || 0})</div>
+        ${(d.pending_reduce||[]).map(q => `<div style="font-size:11px;color:var(--dim);padding:2px 0">→ ${escapeHTML(q)}</div>`).join('')}
+      </div>`);
+  } catch (e) { setHTML('ttl-report', resultBox(escapeHTML(e.message), 'error')); }
+}
+
+async function runTTLAdjust() {
+  try {
+    const d = await apiFetch('/cache/ttl/adjust', { method: 'POST', body: '{}' });
+    toast(`TTL adjusted: ${d.extended} extended, ${d.reduced} reduced`, 'success');
+    loadTTLReport();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function doCacheSearch() {
+  const qs = $('search-queries').value.trim().split('\n').map(s => s.trim()).filter(Boolean);
+  const topK = parseInt($('search-topk').value) || 3;
+  if (!qs.length) { toast('Enter queries', 'error'); return; }
+  setHTML('search-results', '<div class="shimmer"></div>');
+  try {
+    const d = await apiFetch('/cache/search', { method: 'POST', body: JSON.stringify({ queries: qs, top_k: topK }) });
+    setHTML('search-results', (d.results || []).map(r => `
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">Query ${r.query_index + 1}: ${escapeHTML(r.query)}</div>
+        ${r.matches.length ? r.matches.map(m => `
+          <div style="padding:8px 0;border-bottom:1px dashed rgba(255,255,255,.06)">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:4px">
+              <span>${escapeHTML(m.question)}</span>
+              <span>sim: ${(m.similarity * 100).toFixed(1)}% · hits: ${m.hit_count}</span>
+            </div>
+            <div style="font-size:12px;color:var(--txt)">${escapeHTML(m.answer.slice(0, 200))}</div>
+          </div>`).join('') : '<div class="empty-state">No matches.</div>'}
+      </div>`).join(''));
+  } catch (e) { setHTML('search-results', resultBox(escapeHTML(e.message), 'error')); }
+}
+
+async function doCacheWarm() {
+  const pairs = parseWarmPairs($('cache-warm-input').value);
+  if (!pairs.length) { toast('No valid Q/A pairs', 'error'); return; }
+  try {
+    const d = await apiFetch('/cache/warm', { method: 'POST', body: JSON.stringify({ pairs }) });
+    setHTML('cache-warm-result', resultBox(`Warmed: ${d.warmed} · Dupes: ${d.skipped_duplicates}`, 'success'));
+    toast(`Cache warmed with ${d.warmed} pairs`, 'success');
+  } catch (e) { setHTML('cache-warm-result', resultBox(escapeHTML(e.message), 'error')); }
+}
+
+async function checkExpired() {
+  try {
+    const d = await apiFetch('/cache/expired_count');
+    $('expired-count').textContent = d.expired_count;
+    setHTML('manage-result', resultBox(`${d.expired_count} expired entries (TTL: ${d.ttl_seconds}s)`, 'info'));
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function evictExpired() {
+  try {
+    const d = await apiFetch('/cache/expired', { method: 'DELETE' });
+    $('expired-count').textContent = 0;
+    setHTML('manage-result', resultBox(`Evicted ${d.evicted} expired entries`, 'success'));
+    toast(`Evicted ${d.evicted} entries`, 'success');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadThresholdStats() {
+  try {
+    const d = await apiFetch('/cache/threshold_stats');
+    const stats = d.threshold_stats || {};
+    setHTML('thresh-stats', Object.entries(stats).map(([type, s]) => `
+      <div class="kv">
+        <span class="kv-k">${type}</span>
+        <span class="kv-v">${s.hits}H / ${s.misses}M (${(s.hit_rate * 100).toFixed(0)}%)</span>
+      </div>`).join(''));
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ── Tab 6: Feedback ───────────────────────────────────────────────────────────
+async function submitFeedback() {
+  const q = $('fb-q').value.trim();
+  if (!q) { toast('Enter the question', 'error'); return; }
+  const signal = document.querySelector('input[name="fb-sig"]:checked')?.value || 'thumbs_up';
+  const comment = $('fb-comment').value.trim();
+  const qHash = await hashText(q);
+  try {
+    await apiFetch('/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ question_hash: qHash, signal, ...(comment ? { comment } : {}) }),
+    });
+    setHTML('fb-result', resultBox(`Submitted: ${signal} for hash ${qHash}`, 'success'));
+    toast('Feedback submitted', 'success');
+    $('fb-q').value = ''; $('fb-comment').value = '';
+    loadFeedbackSummary();
+  } catch (e) { setHTML('fb-result', resultBox(escapeHTML(e.message), 'error')); toast(e.message, 'error'); }
+}
+
+async function loadFeedbackSummary() {
+  try {
+    const d = await apiFetch('/feedback/summary');
+    const rate = d.satisfaction_rate != null ? `${(d.satisfaction_rate * 100).toFixed(0)}%` : '—';
+    setHTML('fb-summary', `
+      <div style="font-size:36px;font-weight:700;color:var(--hit);margin:8px 0">${rate}</div>
+      <div style="font-size:11px;color:var(--dim);margin-bottom:12px">satisfaction rate</div>
+      <div class="kv"><span class="kv-k">total</span><span class="kv-v">${d.total_count ?? d.total ?? '—'}</span></div>
+      <div class="kv"><span class="kv-k">👍 thumbs_up</span><span class="kv-v">${d.thumbs_up_count ?? d.thumbs_up ?? '—'}</span></div>
+      <div class="kv"><span class="kv-k">👎 thumbs_down</span><span class="kv-v">${d.thumbs_down_count ?? d.thumbs_down ?? '—'}</span></div>`);
+  } catch (e) { setHTML('fb-summary', '<div class="empty-state">Feedback summary unavailable.</div>'); }
+}
+
+// ── Quick feedback from RAG tab ───────────────────────────────────────────────
+async function submitFeedbackFor(signal) {
+  if (!lastQueryHash) {
+    toast('Run a query first', 'error'); return;
+  }
+  try {
+    await apiFetch('/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ question_hash: lastQueryHash, signal }),
+    });
+    toast(`Feedback recorded: ${signal === 'thumbs_up' ? '👍' : '👎'}`, 'success');
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// ── Escape HTML ───────────────────────────────────────────────────────────────
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    // cancel any running stream
+  }
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+checkHealth();
+setInterval(checkHealth, 15000);
 </script>
 </body>
 </html>
