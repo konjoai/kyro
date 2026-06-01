@@ -25,8 +25,11 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from konjoai.cache.analytics import LatencyBuffer, compute_analytics
+from konjoai.cache.federation import FederatedLookup, PeerRegistry, get_federated_lookup, get_peer_registry
 from konjoai.cache.poisoning import get_poisoning_report_store
+from konjoai.cache.rewriter import QueryRewriter, get_rewriter
 from konjoai.cache.semantic_cache import SemanticCache, get_semantic_cache
+from konjoai.cache.suspicious import get_flag_store, scan_for_suspicious
 from konjoai.cache.threshold import get_threshold_stats
 from konjoai.config import get_settings
 
@@ -533,3 +536,212 @@ async def poisoning_reports(
             for r in reports
         ],
     }
+
+
+# ── Sprint 29: query rewriting ────────────────────────────────────────────────
+
+
+class RewriteRequest(BaseModel):
+    """Preview a rewrite without touching the cache."""
+
+    question: str = Field(..., min_length=1, max_length=2048)
+
+
+@router.post("/rewrite")
+async def preview_rewrite(body: RewriteRequest) -> dict[str, object]:
+    """Preview how query rewriting would normalise a question.
+
+    Returns the original question, the rewritten form, and a per-step trace
+    showing exactly what each transformation changed.  Does not modify the
+    cache.
+
+    Enabled regardless of ``cache_query_rewrite_enabled`` — always useful for
+    debugging.  The rewrite pipeline used is the one configured by
+    ``cache_query_rewrite_steps``.
+    """
+    rewriter: QueryRewriter = await asyncio.to_thread(get_rewriter)
+    result = await asyncio.to_thread(rewriter.explain, body.question)
+    return {
+        "original":  result.original,
+        "rewritten": result.rewritten,
+        "changed":   result.changed,
+        "steps": [
+            {"name": s.name, "before": s.before, "after": s.after, "changed": s.changed}
+            for s in result.steps
+        ],
+    }
+
+
+@router.get("/rewrite/config")
+async def rewrite_config() -> dict[str, object]:
+    """Return the active query-rewrite configuration."""
+    settings = get_settings()
+    return {
+        "enabled":    getattr(settings, "cache_query_rewrite_enabled", False),
+        "steps":      getattr(settings, "cache_query_rewrite_steps", []),
+        "step_names": (await asyncio.to_thread(get_rewriter)).step_names,
+    }
+
+
+# ── Sprint 29: suspicious entry detection ─────────────────────────────────────
+
+
+@router.get("/suspicious")
+async def list_suspicious(
+    k: int = Query(default=5, ge=2, le=20, description="Cluster count for outlier detection"),
+    z: float = Query(default=2.0, ge=1.0, le=5.0, description="Outlier threshold in standard deviations"),
+    auto_flag: bool = Query(default=True, description="Automatically save detected entries to the flag store"),
+) -> dict[str, object]:
+    """Scan the cache for suspicious entries using three detection signals.
+
+    **Embedding outlier** — entries whose vector is ≥ z σ from its cluster
+    centroid, suggesting injection of off-topic content.
+
+    **Hit-count anomaly** — entries hit far more than typical, which an
+    adversary could use to keep a poisoned answer "warm" in the LRU.
+
+    **Answer length anomaly** — entries with answers ≥ z σ away from the
+    mean length (extremely short or extremely long answers).
+
+    Requires at least 2×k non-expired cache entries.  Returns ``[]`` otherwise.
+    When ``auto_flag=True`` (default), found entries are recorded in the flag
+    store so they can be reviewed via ``POST /cache/suspicious/{hash}/approve``
+    or ``/reject``.
+    """
+    cache = _require_memory_cache()
+    findings = await asyncio.to_thread(scan_for_suspicious, cache, k, z)
+    if auto_flag and findings:
+        store = get_flag_store()
+        for f in findings:
+            await asyncio.to_thread(
+                store.flag,
+                f["entry_hash"], f["question"], f["reason"], f["score"], f["signal"],
+            )
+    return {"count": len(findings), "suspicious": findings}
+
+
+@router.get("/suspicious/flagged")
+async def list_flagged() -> dict[str, object]:
+    """Return all entries currently in the flag store (all statuses)."""
+    store = get_flag_store()
+    flags = await asyncio.to_thread(store.all_flags)
+    return {
+        "count": len(flags),
+        "flags": [
+            {
+                "entry_hash": f.entry_hash,
+                "question":   f.question,
+                "reason":     f.reason,
+                "score":      f.score,
+                "signal":     f.signal,
+                "status":     f.status,
+            }
+            for f in flags
+        ],
+    }
+
+
+@router.post("/suspicious/{entry_hash}/approve")
+async def approve_suspicious(entry_hash: str) -> dict[str, object]:
+    """Mark a flagged entry as safe (approved).
+
+    The entry remains in the cache.  Its flag status changes to ``"approved"``
+    so it will not be highlighted in future scans.
+    """
+    store = get_flag_store()
+    ok = await asyncio.to_thread(store.resolve, entry_hash, "approve")
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"no flag found for hash {entry_hash!r}")
+    return {"entry_hash": entry_hash, "status": "approved"}
+
+
+@router.post("/suspicious/{entry_hash}/reject")
+async def reject_suspicious(entry_hash: str) -> dict[str, object]:
+    """Reject (evict) a flagged suspicious entry from the cache.
+
+    The entry is removed from the live ``SemanticCache`` and the flag is
+    marked ``"rejected"``.  If the entry has already been evicted (e.g. by
+    LRU), the flag is still updated without error.
+    """
+    store = get_flag_store()
+    ok = await asyncio.to_thread(store.resolve, entry_hash, "reject")
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"no flag found for hash {entry_hash!r}")
+    # Best-effort eviction from live cache (entry may already be gone)
+    try:
+        cache = _require_memory_cache()
+        with cache._lock:  # type: ignore[attr-defined]
+            # The flag store uses normalised keys; scan exact dict for match
+            to_delete = [k for k in cache._exact  # type: ignore[attr-defined]
+                         if hashlib.sha256(k.encode()).hexdigest()[:16] == entry_hash]
+        for k in to_delete:
+            with cache._lock:  # type: ignore[attr-defined]
+                cache._lru.pop(k, None)  # type: ignore[attr-defined]
+                cache._exact.pop(k, None)  # type: ignore[attr-defined]
+    except HTTPException:
+        pass  # cache disabled — eviction is a no-op
+    return {"entry_hash": entry_hash, "status": "rejected"}
+
+
+# ── Sprint 29: cache federation ───────────────────────────────────────────────
+
+
+class RegisterPeerRequest(BaseModel):
+    """Body for registering a federation peer."""
+
+    url: str = Field(..., min_length=7, description="Base URL of the peer kyro instance (no trailing slash).")
+    name: str = Field(default="", max_length=64, description="Human-readable label for the peer.")
+    auth_token: str | None = Field(default=None, description="Bearer token sent to the peer on lookup.")
+
+
+@router.post("/federate", status_code=201)
+async def register_peer(body: RegisterPeerRequest) -> dict[str, object]:
+    """Register a peer kyro instance for federated cache sharing.
+
+    On a cache miss the local instance can query healthy peers (via
+    ``POST /cache/search``) before invoking the LLM.  Enable federation with
+    ``CACHE_FEDERATION_ENABLED=true``.
+
+    Returns the assigned ``peer_id`` which can be used to deregister or
+    inspect the peer later.
+    """
+    registry = get_peer_registry()
+    node = await asyncio.to_thread(registry.register, body.url, name=body.name, auth_token=body.auth_token)
+    return {
+        "peer_id":   node.peer_id,
+        "url":       node.url,
+        "name":      node.name,
+        "registered_at": node.registered_at,
+    }
+
+
+@router.get("/peers")
+async def list_peers() -> dict[str, object]:
+    """Return all registered federation peers with availability + hit-contribution stats."""
+    lookup = get_federated_lookup()
+    status = await asyncio.to_thread(lookup.peer_status)
+    return {"count": len(status), "peers": status}
+
+
+@router.delete("/peers/{peer_id}")
+async def remove_peer(peer_id: str) -> dict[str, object]:
+    """Deregister a federation peer."""
+    registry = get_peer_registry()
+    removed = await asyncio.to_thread(registry.remove, peer_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"peer {peer_id!r} not found")
+    return {"peer_id": peer_id, "removed": True}
+
+
+@router.post("/peers/health_check")
+async def check_peers_health(
+    timeout: float = Query(default=3.0, ge=0.1, le=30.0),
+) -> dict[str, object]:
+    """Trigger a synchronous health check against all registered peers.
+
+    Returns a dict mapping peer_id → healthy (bool).  Also updates each
+    peer's availability score used by the federated lookup logic.
+    """
+    registry = get_peer_registry()
+    results = await asyncio.to_thread(registry.check_all_health, timeout)
+    return {"results": results, "checked": len(results)}

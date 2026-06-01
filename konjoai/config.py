@@ -90,6 +90,24 @@ class Settings(BaseSettings):
     # Sprint 27 — cache warming API: maximum pairs accepted per POST /cache/warm request.
     cache_warm_max_batch: int = 500
 
+    # Sprint 29 — query rewriting (normalises surface form before cache lookup).
+    cache_query_rewrite_enabled: bool = False
+    # Ordered list of rewrite steps. Defaults applied when list is empty.
+    # Available steps: lowercase, normalize_whitespace, strip_punctuation,
+    # expand_contractions, strip_fillers, strip_trailing_question_mark
+    cache_query_rewrite_steps: list[str] = [
+        "lowercase",
+        "expand_contractions",
+        "strip_fillers",
+        "strip_punctuation",
+        "normalize_whitespace",
+        "strip_trailing_question_mark",
+    ]
+
+    # Sprint 29 — cache federation (query peers before computing locally).
+    cache_federation_enabled: bool = False
+    cache_federation_timeout_seconds: float = 2.0
+
     # Sprint 26 — adaptive threshold engine (P1).
     # When True, per-type thresholds override cache_similarity_threshold for each query.
     cache_adaptive_threshold_enabled: bool = False
