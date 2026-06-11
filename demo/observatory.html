@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>kyro · Observatory</title>
 <style>
+  @view-transition { navigation: auto; }
   :root {
     --bg: #06060f;
     --bg-haze: rgba(8, 10, 24, 0.78);
@@ -272,6 +273,11 @@
 
   /* ── Scroll-entrance (initial hidden state set via JS) ──────────────── */
   .stagger-target { will-change: transform; }
+  a.nav-link:focus-visible { outline: 2px solid var(--hit); outline-offset: 2px; border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    @view-transition { navigation: none; }
+  }
 </style>
 </head>
 <body>
@@ -288,6 +294,7 @@
       <span>collapses · <b id="metaCollapses">0</b></span>
       <a href="/pipeline" class="nav-link">⌥ pipeline</a>
       <a href="/agent" class="nav-link">⊹ agent</a>
+      <a href="/security" class="nav-link">🛡 security</a>
       <a href="/" class="nav-link">↩ search</a>
     </div>
   </header>

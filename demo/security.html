@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kyro · Security Theater</title>
+<style>
+  @view-transition { navigation: auto; }
+  :root {
+    --bg: #06060f; --bg-2: #0a0b18; --panel: rgba(13,15,32,0.72);
+    --line: rgba(124,58,237,0.16); --line-2: rgba(124,58,237,0.34);
+    --ink: #e6f1ff; --ink-dim: #8597b8; --ink-faint: #4a5878;
+    --acc: #7c3aed; --acc-2: #a78bfa;
+    --ok: #5cffb1; --warn: #ffd166; --bad: #ff7a7a; --rate: #6cb6ff;
+    --legal: #b594ff; --medical: #ff9bd2; --technical: #5cffb1; --other: #8597b8;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * , *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); min-height: 100%; }
+  body {
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+    background:
+      radial-gradient(1100px 560px at 82% -10%, rgba(255,122,122,0.10), transparent 60%),
+      radial-gradient(900px 500px at 8% 0%, rgba(124,58,237,0.12), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  a { color: var(--acc-2); text-decoration: none; }
+  :focus-visible { outline: 2px solid var(--acc-2); outline-offset: 2px; border-radius: 6px; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 4px; }
+
+  header {
+    position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px;
+    padding: 0 22px; height: 56px; background: linear-gradient(180deg, rgba(8,9,20,0.92), rgba(8,9,20,0.62));
+    border-bottom: 1px solid var(--line); backdrop-filter: blur(12px);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo { width: 28px; height: 28px; border-radius: 9px; background: conic-gradient(from 220deg, var(--acc), var(--rate), var(--ok), var(--bad), var(--acc)); box-shadow: 0 0 18px rgba(124,58,237,0.55); animation: spin 16s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .brand b { font-size: 15px; letter-spacing: 0.04em; }
+  .brand .ver { font: 10px var(--mono); color: var(--ink-faint); }
+  nav { display: flex; gap: 4px; margin-left: 6px; flex-wrap: wrap; }
+  nav a { padding: 6px 12px; border-radius: 8px; font-size: 13px; color: var(--ink-dim); transition: all .16s; }
+  nav a:hover { background: rgba(124,58,237,0.16); color: var(--ink); }
+  nav a.active { background: rgba(124,58,237,0.26); color: var(--acc-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .spacer { flex: 1; }
+  .status-pill { display: flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(13,15,32,0.7); font: 11px var(--mono); color: var(--ink-dim); white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); transition: background .4s; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 10px var(--ok); animation: pulse 1.8s ease-in-out infinite; }
+  .dot.busy { background: var(--rate); box-shadow: 0 0 10px var(--rate); animation: pulse 1s ease-in-out infinite; }
+  .dot.err { background: var(--bad); box-shadow: 0 0 10px var(--bad); }
+  @keyframes pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 26px 22px 90px; }
+  .hero { text-align: center; padding: 18px 0 6px; }
+  .hero .eyebrow { font: 11px var(--mono); letter-spacing: 0.32em; text-transform: uppercase; color: var(--acc-2); }
+  .hero h1 { font-size: 40px; font-weight: 650; letter-spacing: -0.02em; margin: 14px 0 10px; line-height: 1.06; }
+  .hero h1 .g { background: linear-gradient(100deg, var(--rate), var(--acc-2), var(--bad)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--ink-dim); max-width: 680px; margin: 0 auto; font-size: 15px; }
+
+  /* gate rail */
+  .gates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 24px; }
+  @media (max-width: 720px) { .gates { grid-template-columns: 1fr; } }
+  .gate { position: relative; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: var(--panel); backdrop-filter: blur(6px); overflow: hidden; transition: box-shadow .3s, border-color .3s; }
+  .gate.flash-bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad), 0 0 26px rgba(255,122,122,0.3); }
+  .gate.flash-warn { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn), 0 0 26px rgba(255,209,102,0.25); }
+  .gate.flash-ok { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok), 0 0 26px rgba(92,255,177,0.22); }
+  .gate .gname { font: 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); display: flex; align-items: center; gap: 8px; }
+  .gate .gname .n { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-weight: 600; color: var(--acc-2); background: rgba(124,58,237,0.16); border: 1px solid var(--line-2); }
+  .gate .gsub { font-size: 12px; color: var(--ink-faint); margin: 8px 0 12px; }
+  .gate .counts { display: flex; gap: 14px; }
+  .gate .counts .c { font: 600 22px var(--mono); }
+  .gate .counts .c small { font: 10px var(--mono); color: var(--ink-faint); display: block; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 400; }
+  .c.pass { color: var(--ok); } .c.block { color: var(--bad); } .c.flag { color: var(--warn); }
+
+  /* controls */
+  .controls { margin-top: 22px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .btn { padding: 10px 20px; border: none; border-radius: 10px; cursor: pointer; font: 600 14px var(--sans); color: #fff; background: linear-gradient(120deg, var(--acc), #6d28d9); box-shadow: 0 6px 22px rgba(124,58,237,0.36); transition: transform .12s, filter .2s; }
+  .btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+  .btn:active { transform: scale(.97); }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .btn.ghost { background: rgba(124,58,237,0.1); color: var(--acc-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .legend { margin-left: auto; display: flex; gap: 14px; font: 11px var(--mono); color: var(--ink-dim); flex-wrap: wrap; }
+  .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: middle; }
+  .legend .ok i { background: var(--ok); } .legend .bad i { background: var(--bad); } .legend .warn i { background: var(--warn); }
+
+  .section-h { font: 11px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); margin: 26px 0 12px; }
+
+  /* timeline rows */
+  .row {
+    display: grid; grid-template-columns: 1fr; gap: 12px; border: 1px solid var(--line); border-radius: 13px;
+    padding: 13px 15px; background: var(--panel); backdrop-filter: blur(6px); margin-bottom: 10px;
+    opacity: 0; transform: translateX(-14px); transition: opacity .45s cubic-bezier(.22,.9,.3,1), transform .45s cubic-bezier(.22,.9,.3,1), border-color .3s;
+  }
+  .row.show { opacity: 1; transform: none; }
+  .row.allowed { border-left: 3px solid var(--ok); }
+  .row.flagged { border-left: 3px solid var(--warn); }
+  .row.blocked { border-left: 3px solid var(--bad); }
+  .row-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tchip { font: 10px var(--mono); padding: 2px 8px; border-radius: 6px; background: rgba(108,182,255,0.1); border: 1px solid rgba(108,182,255,0.3); color: var(--rate); }
+  .rlabel { font-size: 13px; color: var(--ink-dim); }
+  .stamp { margin-left: auto; font: 700 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; padding: 4px 11px; border-radius: 8px; }
+  .stamp.allowed { color: var(--ok); background: rgba(92,255,177,0.12); border: 1px solid rgba(92,255,177,0.4); }
+  .stamp.flagged { color: var(--warn); background: rgba(255,209,102,0.12); border: 1px solid rgba(255,209,102,0.4); }
+  .stamp.blocked { color: var(--bad); background: rgba(255,122,122,0.12); border: 1px solid rgba(255,122,122,0.4); }
+  .qhash { font: 10px var(--mono); color: var(--ink-faint); }
+  .lanes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 680px) { .lanes { grid-template-columns: 1fr; } }
+  .lane { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; background: var(--bg-2); }
+  .lane .lh { display: flex; align-items: center; justify-content: space-between; font: 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 7px; }
+  .lane .verdict { font-weight: 600; }
+  .lane .verdict.ok { color: var(--ok); } .lane .verdict.bad { color: var(--bad); } .lane .verdict.warn { color: var(--warn); } .lane .verdict.idle { color: var(--ink-faint); }
+  .bar { position: relative; height: 7px; border-radius: 4px; background: rgba(255,255,255,0.06); overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; border-radius: 4px; transition: width .55s cubic-bezier(.22,.9,.3,1); }
+  .bar.rate > i { background: linear-gradient(90deg, rgba(108,182,255,0.5), var(--rate)); }
+  .bar.coh > i { background: linear-gradient(90deg, rgba(92,255,177,0.5), var(--ok)); }
+  .bar.coh.bad > i { background: linear-gradient(90deg, rgba(255,122,122,0.5), var(--bad)); }
+  .bar .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .6; }
+  .lnums { display: flex; justify-content: space-between; font: 10px var(--mono); color: var(--ink-dim); margin-top: 5px; }
+
+  /* interactive + ledger */
+  .grid2 { display: grid; grid-template-columns: 1fr 360px; gap: 16px; align-items: start; margin-top: 12px; }
+  @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--line); border-radius: 13px; padding: 16px; background: var(--panel); backdrop-filter: blur(6px); }
+  .card h3 { margin: 0 0 12px; font: 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
+  label.f { display: block; font: 11px var(--mono); color: var(--ink-faint); margin: 0 0 5px; text-transform: uppercase; letter-spacing: 0.08em; }
+  input[type=text], textarea {
+    width: 100%; padding: 10px 12px; background: var(--bg-2); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 9px; font: 14px var(--sans); outline: none; transition: border-color .15s, box-shadow .15s; resize: vertical;
+  }
+  input[type=text]:focus, textarea:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(124,58,237,0.16); }
+  .field { margin-bottom: 11px; }
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+  .ledger .item { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .ledger .item:last-child { border-bottom: none; }
+  .reason { font: 11px var(--mono); padding: 2px 8px; border-radius: 6px; }
+  .reason.rate { color: var(--bad); background: rgba(255,122,122,0.1); }
+  .reason.coh { color: var(--bad); background: rgba(255,122,122,0.1); }
+  .reason.anom { color: var(--warn); background: rgba(255,209,102,0.1); }
+  .ledger .h { font: 10px var(--mono); color: var(--ink-faint); margin-left: auto; }
+  .empty { color: var(--ink-faint); font-style: italic; font-size: 13px; }
+
+  .src-note { margin-top: 26px; text-align: center; font: 11px var(--mono); color: var(--ink-faint); }
+  .src-note code { color: var(--acc-2); }
+  .err-banner { margin-top: 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,122,122,0.4); background: rgba(255,122,122,0.08); color: var(--bad); font: 12px var(--mono); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    @view-transition { navigation: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo"></div><div><b>kyro</b> <span class="ver">security theater</span></div></div>
+  <nav aria-label="surfaces">
+    <a href="/">Playground</a>
+    <a href="/observatory">Observatory</a>
+    <a href="/pipeline">Pipeline</a>
+    <a href="/agent">Agent</a>
+    <a href="/security" class="active" aria-current="page">Security</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="status-pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="eyebrow">距離 · cache write firewall · real guard</div>
+    <h1>Defend the <span class="g">cache</span>.</h1>
+    <p>Every cache write passes kyro's real three-layer <code>PoisoningGuard</code>: a per-tenant rate limit, a question↔answer coherence check, and a response-length anomaly detector. Watch poisoned, padded, and flooding writes get caught — live, with the exact signal behind each verdict. Only the SHA-256 hash of the question ever crosses the wire.</p>
+  </section>
+
+  <section class="gates" id="gates">
+    <div class="gate" id="gate-rate">
+      <div class="gname"><span class="n">1</span> Rate limit</div>
+      <div class="gsub">WriteRateLimiter · per-tenant sliding window</div>
+      <div class="counts"><div class="c pass" id="rate-pass">0<small>passed</small></div><div class="c block" id="rate-block">0<small>blocked</small></div></div>
+    </div>
+    <div class="gate" id="gate-coh">
+      <div class="gname"><span class="n">2</span> Coherence</div>
+      <div class="gsub">cosine(question, answer) ≥ floor</div>
+      <div class="counts"><div class="c pass" id="coh-pass">0<small>passed</small></div><div class="c block" id="coh-block">0<small>blocked</small></div></div>
+    </div>
+    <div class="gate" id="gate-anom">
+      <div class="gname"><span class="n">3</span> Anomaly</div>
+      <div class="gsub">AnomalyDetector · Welford length stats · flags only</div>
+      <div class="counts"><div class="c pass" id="anom-pass">0<small>clean</small></div><div class="c flag" id="anom-flag">0<small>flagged</small></div></div>
+    </div>
+  </section>
+
+  <div class="controls">
+    <button class="btn" id="replay">▶ Replay attack scenario</button>
+    <div class="legend">
+      <span class="ok"><i></i>allowed</span>
+      <span class="warn"><i></i>flagged (anomaly)</span>
+      <span class="bad"><i></i>blocked</span>
+    </div>
+  </div>
+
+  <div class="section-h" id="timelineH">Write timeline</div>
+  <div id="timeline" aria-live="polite"></div>
+
+  <div class="section-h">Test your own cache write &nbsp;·&nbsp; Threat ledger</div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Interactive · POST /api/security/check</h3>
+      <div class="twocol">
+        <div class="field"><label class="f" for="iq">Question</label><input type="text" id="iq" value="What is your refund policy?" /></div>
+        <div class="field"><label class="f" for="it">Tenant</label><input type="text" id="it" value="playground" /></div>
+      </div>
+      <div class="field"><label class="f" for="ia">Answer (the cache write)</label><textarea id="ia" rows="3">Refunds are accepted within 30 days with a receipt.</textarea></div>
+      <button class="btn ghost" id="check">Test write →</button>
+      <div id="checkOut" style="margin-top:13px"></div>
+    </div>
+    <div class="card ledger">
+      <h3>Threat ledger · OWASP-safe (hashes only)</h3>
+      <div id="ledger"><span class="empty">replay the scenario to populate…</span></div>
+    </div>
+  </div>
+
+  <div class="src-note">
+    source · <code>konjoai.cache.poisoning.PoisoningGuard</code> — real rate limiter, cosine coherence & Welford anomaly detector ·
+    the embedder is the demo's deterministic encoder (the guard's <code>embed_fn</code> seam)
+  </div>
+</main>
+
+<script>
+'use strict';
+const API = location.origin.startsWith('http') ? location.origin : 'http://127.0.0.1:8766';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function setStatus(cls, txt) { $('dot').className = 'dot ' + cls; $('status').textContent = txt; }
+
+const counts = { ratePass:0, rateBlock:0, cohPass:0, cohBlock:0, anomPass:0, anomFlag:0 };
+function resetCounts() {
+  for (const k in counts) counts[k] = 0;
+  ['rate-pass','rate-block','coh-pass','coh-block','anom-pass','anom-flag'].forEach(id => {
+    const el = $(id); el.firstChild.textContent = '0';
+  });
+}
+function bump(id, key) {
+  counts[key]++;
+  const el = $(id); el.firstChild.textContent = String(counts[key]);
+}
+function flashGate(gid, cls) {
+  const g = $(gid); g.classList.add(cls);
+  setTimeout(() => g.classList.remove(cls), reduced ? 50 : 650);
+}
+
+function lane(name, verdict, vcls, barCls, pct, markPct, nums) {
+  const mark = markPct != null ? `<span class="mark" style="left:${markPct}%"></span>` : '';
+  return `<div class="lane">
+    <div class="lh"><span>${name}</span><span class="verdict ${vcls}">${verdict}</span></div>
+    <div class="bar ${barCls}">${mark}<i data-w="${pct}"></i></div>
+    <div class="lnums">${nums}</div>
+  </div>`;
+}
+
+function rowCard(r) {
+  const L = r.layers;
+  const cohPct = Math.min(100, L.coherence.score * 100);
+  const cohMark = L.coherence.threshold * 100;
+  const cohBad = !L.coherence.ok;
+  const ratePct = Math.min(100, L.rate.used_before / L.rate.limit * 100);
+  const anomActive = L.anomaly.active;
+  const upper = L.anomaly.mean + L.anomaly.sigma * L.anomaly.std;
+  const anomPct = upper > 0 ? Math.min(100, L.anomaly.length / Math.max(upper, L.anomaly.length) * 100) : 0;
+
+  const rateV = L.rate.ok ? 'ok' : 'bad', rateT = L.rate.ok ? `${L.rate.used_before}/${L.rate.limit}` : 'BLOCKED';
+  const cohV = L.coherence.ok ? 'ok' : 'bad', cohT = L.coherence.ok ? 'pass' : 'BLOCKED';
+  const anomV = !anomActive ? 'idle' : (L.anomaly.outlier ? 'warn' : 'ok');
+  const anomT = !anomActive ? `warming (${L.anomaly.observations}/4)` : (L.anomaly.outlier ? 'OUTLIER' : 'normal');
+
+  const el = document.createElement('div');
+  el.className = `row ${r.verdict}`;
+  el.innerHTML = `
+    <div class="row-head">
+      <span class="tchip">${esc(r.tenant)}</span>
+      <span class="rlabel">${esc(r.label || '')}</span>
+      <span class="qhash">sha256:${esc(r.question_hash)}</span>
+      <span class="stamp ${r.verdict}">${r.verdict}</span>
+    </div>
+    <div class="lanes">
+      ${lane('Rate', rateT, rateV, 'rate', ratePct, null, `<span>${L.rate.used_before} used</span><span>limit ${L.rate.limit}</span>`)}
+      ${lane('Coherence', cohT, cohV, 'coh' + (cohBad?' bad':''), cohPct, cohMark, `<span>cos ${L.coherence.score.toFixed(3)}</span><span>floor ${L.coherence.threshold}</span>`)}
+      ${lane('Anomaly', anomT, anomV, 'rate', anomPct, null, `<span>${L.anomaly.length} chars</span><span>μ ${L.anomaly.mean} ±${L.anomaly.sigma}σ</span>`)}
+    </div>`;
+  return el;
+}
+
+async function reveal(el) {
+  $('timeline').appendChild(el);
+  await sleep(reduced ? 0 : 30);
+  el.classList.add('show');
+  requestAnimationFrame(() => el.querySelectorAll('.bar > i').forEach(b => b.style.width = b.dataset.w + '%'));
+}
+
+function tally(r) {
+  if (!r.layers.rate.ok) { bump('rate-block','rateBlock'); flashGate('gate-rate','flash-bad'); return; }
+  bump('rate-pass','ratePass');
+  if (!r.layers.coherence.ok) { bump('coh-block','cohBlock'); flashGate('gate-coh','flash-bad'); return; }
+  bump('coh-pass','cohPass');
+  if (r.layers.anomaly.outlier) { bump('anom-flag','anomFlag'); flashGate('gate-anom','flash-warn'); }
+  else { bump('anom-pass','anomPass'); flashGate('gate-anom','flash-ok'); }
+}
+
+function renderLedger(reports) {
+  if (!reports.length) { $('ledger').innerHTML = '<span class="empty">no threats recorded</span>'; return; }
+  $('ledger').innerHTML = reports.map(r => {
+    const kind = r.reason.startsWith('rate') ? 'rate' : r.reason.startsWith('low_coh') ? 'coh' : 'anom';
+    const lbl = kind === 'rate' ? 'rate limit' : kind === 'coh' ? 'low coherence' : 'length anomaly';
+    return `<div class="item"><span class="tchip">${esc(r.tenant)}</span><span class="reason ${kind}">${lbl}</span><span class="h">${esc(r.question_hash)}</span></div>`;
+  }).join('');
+}
+
+let running = false;
+async function replay() {
+  if (running) return;
+  running = true; $('replay').disabled = true;
+  $('timeline').innerHTML = ''; resetCounts(); setStatus('busy','running scenario…');
+  let data;
+  try {
+    const res = await fetch(`${API}/api/security/scenario`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  } catch (e) {
+    $('timeline').innerHTML = `<div class="err-banner">security guard offline — start the demo server:&nbsp; <b>python3 demo/server.py</b></div>`;
+    setStatus('err','offline'); running = false; $('replay').disabled = false; return;
+  }
+  setStatus('ok','live · konjoai');
+  for (const r of data.timeline) {
+    tally(r);
+    await reveal(rowCard(r));
+    await sleep(reduced ? 0 : 360);
+  }
+  renderLedger(data.reports);
+  running = false; $('replay').disabled = false;
+}
+
+async function check() {
+  const body = { question: $('iq').value.trim(), answer: $('ia').value.trim(), tenant: $('it').value.trim() || 'playground' };
+  $('check').disabled = true;
+  try {
+    const res = await fetch(`${API}/api/security/check`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const r = await res.json();
+    if (r.error) { $('checkOut').innerHTML = `<div class="err-banner">${esc(r.error)}</div>`; return; }
+    $('checkOut').innerHTML = '';
+    await reveal2($('checkOut'), rowCard(r));
+  } catch (e) {
+    $('checkOut').innerHTML = `<div class="err-banner">offline</div>`;
+  } finally { $('check').disabled = false; }
+}
+async function reveal2(container, el) {
+  container.appendChild(el);
+  await sleep(reduced ? 0 : 20);
+  el.classList.add('show');
+  requestAnimationFrame(() => el.querySelectorAll('.bar > i').forEach(b => b.style.width = b.dataset.w + '%'));
+}
+
+$('replay').onclick = replay;
+$('check').onclick = check;
+['iq','ia','it'].forEach(id => $(id).addEventListener('keydown', e => { if (e.key === 'Enter' && (id !== 'ia' || e.metaKey || e.ctrlKey)) check(); }));
+(async () => {
+  try { const h = await fetch(API + '/api/health'); setStatus(h.ok ? 'ok':'err', h.ok ? 'live · konjoai':'offline'); }
+  catch { setStatus('err','offline'); }
+  replay();
+})();
+</script>
+</body>
+</html>

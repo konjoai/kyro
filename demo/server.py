@@ -49,6 +49,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from agent import AgentEngine  # noqa: E402  (sibling module, demo/ on sys.path)
 from pipeline import PipelineEngine  # noqa: E402  (sibling module, demo/ on sys.path)
+from security import SecurityEngine  # noqa: E402  (sibling module, demo/ on sys.path)
 
 from konjoai.cache.semantic_cache import SemanticCache, SemanticCacheEntry  # noqa: E402
 
@@ -681,10 +682,12 @@ _state = DemoState()
 _corpus = CorpusIndex(Path(__file__).parent / "corpus")
 _pipeline = PipelineEngine(Path(__file__).parent / "corpus", encode)
 _agent = AgentEngine(_pipeline)
+_security = SecurityEngine(encode)
 _HTML_PATH = Path(__file__).parent / "index.html"
 _OBSERVATORY_PATH = Path(__file__).parent / "observatory.html"
 _PIPELINE_PATH = Path(__file__).parent / "pipeline.html"
 _AGENT_PATH = Path(__file__).parent / "agent.html"
+_SECURITY_PATH = Path(__file__).parent / "security.html"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -767,6 +770,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_html(_PIPELINE_PATH)
         if path in ("/agent", "/agent.html"):
             return self._serve_html(_AGENT_PATH)
+        if path in ("/security", "/security.html"):
+            return self._serve_html(_SECURITY_PATH)
         if path == "/api/health":
             return self._send_json(
                 {
@@ -844,6 +849,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/agent/stream":
                 return self._send_sse(_agent.stream(question, max_steps=max_steps, top_k=top_k))
             return self._send_json(_agent.analyze(question, max_steps=max_steps, top_k=top_k))
+        if path == "/api/security/scenario":
+            return self._send_json(_security.scenario())
+        if path == "/api/security/stats":
+            return self._send_json(_security.stats())
         return self._send_json({"error": f"no route for GET {path}"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -864,6 +873,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(_state.seed())
         if path == "/api/cache/reset":
             return self._send_json(_state.reset())
+        if path == "/api/security/check":
+            body = self._read_json()
+            question = str(body.get("question", "")).strip()[:512]
+            answer = str(body.get("answer", "")).strip()[:4096]
+            tenant = (str(body.get("tenant", "playground")).strip() or "playground")[:64]
+            return self._send_json(_security.check(question, answer, tenant))
+        if path == "/api/security/reset":
+            return self._send_json(_security.reset())
         return self._send_json({"error": f"no route for POST {path}"}, status=404)
 
     # Static HTML ──────────────────────────────────────────────────────
@@ -908,6 +925,7 @@ def main() -> None:
     log.info("  GET  /observatory       → demo/observatory.html")
     log.info("  GET  /pipeline          → demo/pipeline.html (hybrid retrieval theater)")
     log.info("  GET  /agent             → demo/agent.html (ReAct agent theater)")
+    log.info("  GET  /security          → demo/security.html (cache-poisoning guard theater)")
     log.info("  GET  /api/health        → liveness")
     log.info("  GET  /api/cache/stats   → real SemanticCache.stats()")
     log.info("  POST /api/cache/ask     → real cosine + lookup, JSON {question}")

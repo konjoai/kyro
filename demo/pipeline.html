@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>kyro · Pipeline Theater</title>
 <style>
+  @view-transition { navigation: auto; }
   :root {
     --bg: #06060f;
     --bg-2: #0a0b18;
@@ -235,6 +236,11 @@
   .src-note code { color: var(--acc-2); }
   .placeholder { color: var(--ink-faint); font-style: italic; font-size: 13px; }
   .err-banner { margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,122,122,0.4); background: rgba(255,122,122,0.08); color: var(--hot); font: 12px var(--mono); }
+  :focus-visible { outline: 2px solid var(--acc-2); outline-offset: 2px; border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    @view-transition { navigation: none; }
+  }
 </style>
 </head>
 <body>
@@ -248,8 +254,9 @@
   <nav>
     <a href="/">Playground</a>
     <a href="/observatory">Observatory</a>
-    <a href="/pipeline" class="active">Pipeline</a>
+    <a href="/pipeline" class="active" aria-current="page">Pipeline</a>
     <a href="/agent">Agent</a>
+    <a href="/security">Security</a>
   </nav>
   <div class="spacer"></div>
   <div class="status-pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></div>
