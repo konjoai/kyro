@@ -1,7 +1,6 @@
 """Sprint 29 — query rewriting, suspicious entry detection, and cache federation tests."""
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
@@ -25,7 +24,6 @@ from konjoai.cache.suspicious import (
     get_flag_store,
     scan_for_suspicious,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 

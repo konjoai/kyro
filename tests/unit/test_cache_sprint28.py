@@ -14,7 +14,6 @@ from konjoai.api.routes.cache import router as cache_router
 from konjoai.cache.analytics import AccessRecord, LatencyBuffer, compute_analytics
 from konjoai.cache.semantic_cache import SemanticCache, SemanticCacheEntry
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 
@@ -251,7 +250,8 @@ class TestAdaptiveTTL:
         key = SemanticCache._normalise("hot q")
         entry = self._hot_entry("hot q", _vec(0))
         with cache._lock:
-            cache._lru[key] = entry; cache._exact[key] = entry
+            cache._lru[key] = entry
+            cache._exact[key] = entry
         result = cache.adjust_ttls(hot_threshold_per_day=5.0, extend_factor=2.0)
         assert result["extended"] >= 1
         assert entry.ttl_seconds == 7200
@@ -261,7 +261,8 @@ class TestAdaptiveTTL:
         key = SemanticCache._normalise("cold q")
         entry = self._cold_entry("cold q", _vec(1))
         with cache._lock:
-            cache._lru[key] = entry; cache._exact[key] = entry
+            cache._lru[key] = entry
+            cache._exact[key] = entry
         result = cache.adjust_ttls(cold_days=3.0, reduce_factor=0.5)
         assert result["reduced"] >= 1
         assert entry.ttl_seconds == 1800
@@ -280,7 +281,8 @@ class TestAdaptiveTTL:
             created_at=time.monotonic() - 3600, hit_count=100, ttl_seconds=30,
         )
         with cache._lock:
-            cache._lru[key] = entry; cache._exact[key] = entry
+            cache._lru[key] = entry
+            cache._exact[key] = entry
         cache.adjust_ttls(hot_threshold_per_day=1.0, extend_factor=100.0, max_ttl=120)
         assert entry.ttl_seconds == 120
 
@@ -313,7 +315,8 @@ class TestAdaptiveTTL:
 class TestBatchSearchRoute:
     def test_returns_results_for_each_query(self) -> None:
         cache = _filled_cache(20)
-        app = _make_app(); client = TestClient(app)
+        app = _make_app()
+        client = TestClient(app)
         with (
             patch("konjoai.api.routes.cache.get_settings", return_value=_Settings()),
             patch("konjoai.api.routes.cache.get_semantic_cache", return_value=cache),
@@ -330,7 +333,8 @@ class TestBatchSearchRoute:
 
     def test_matches_sorted_by_similarity(self) -> None:
         cache = _filled_cache(15)
-        app = _make_app(); client = TestClient(app)
+        app = _make_app()
+        client = TestClient(app)
         with (
             patch("konjoai.api.routes.cache.get_settings", return_value=_Settings()),
             patch("konjoai.api.routes.cache.get_semantic_cache", return_value=cache),
@@ -343,7 +347,8 @@ class TestBatchSearchRoute:
         assert sims == sorted(sims, reverse=True)
 
     def test_returns_404_when_disabled(self) -> None:
-        app = _make_app(); client = TestClient(app)
+        app = _make_app()
+        client = TestClient(app)
         with patch("konjoai.api.routes.cache.get_settings",
                    return_value=_Settings(cache_enabled=False)):
             resp = client.post("/cache/search", json={"queries": ["x"], "top_k": 3})
@@ -358,7 +363,8 @@ class TestAnalyticsRoute:
         for i in range(5):
             buf.record(10.0 + i, True, 0.9)
             buf.record(300.0, False)
-        app = _make_app(); client = TestClient(app)
+        app = _make_app()
+        client = TestClient(app)
         with (
             patch("konjoai.api.routes.cache.get_settings", return_value=_Settings()),
             patch("konjoai.api.routes.cache.get_semantic_cache", return_value=cache),
@@ -372,7 +378,8 @@ class TestAnalyticsRoute:
         assert "hourly_hit_rate" in body
 
     def test_returns_404_when_disabled(self) -> None:
-        app = _make_app(); client = TestClient(app)
+        app = _make_app()
+        client = TestClient(app)
         with patch("konjoai.api.routes.cache.get_settings",
                    return_value=_Settings(cache_enabled=False)):
             assert client.get("/cache/analytics").status_code == 404
@@ -381,7 +388,8 @@ class TestAnalyticsRoute:
 class TestTTLReportRoute:
     def test_report_shape(self) -> None:
         cache = _filled_cache(8, ttl=3600)
-        app = _make_app(); client = TestClient(app)
+        app = _make_app()
+        client = TestClient(app)
         with (
             patch("konjoai.api.routes.cache.get_settings", return_value=_Settings()),
             patch("konjoai.api.routes.cache.get_semantic_cache", return_value=cache),
@@ -394,7 +402,8 @@ class TestTTLReportRoute:
 
     def test_ttl_adjust_returns_counts(self) -> None:
         cache = _filled_cache(8, ttl=3600)
-        app = _make_app(); client = TestClient(app)
+        app = _make_app()
+        client = TestClient(app)
         with (
             patch("konjoai.api.routes.cache.get_settings", return_value=_Settings()),
             patch("konjoai.api.routes.cache.get_semantic_cache", return_value=cache),
