@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kyro · Pipeline Theater</title>
+<style>
+  :root {
+    --bg: #06060f;
+    --bg-2: #0a0b18;
+    --panel: rgba(13,15,32,0.72);
+    --line: rgba(124,58,237,0.16);
+    --line-2: rgba(124,58,237,0.34);
+    --ink: #e6f1ff;
+    --ink-dim: #8597b8;
+    --ink-faint: #4a5878;
+    --acc: #7c3aed;
+    --acc-2: #a78bfa;
+    --dense: #6cb6ff;
+    --sparse: #ffd166;
+    --hit: #5cffb1;
+    --hot: #ff7a7a;
+    --legal: #b594ff;
+    --medical: #ff9bd2;
+    --technical: #5cffb1;
+    --other: #8597b8;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * , *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); min-height: 100%; }
+  body {
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(124,58,237,0.14), transparent 60%),
+      radial-gradient(900px 500px at 10% 0%, rgba(108,182,255,0.08), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  a { color: var(--acc-2); text-decoration: none; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 4px; }
+
+  /* ── Header ─────────────────────────────────────────────────────────── */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 22px; height: 56px;
+    background: linear-gradient(180deg, rgba(8,9,20,0.92), rgba(8,9,20,0.62));
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(12px);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo {
+    width: 28px; height: 28px; border-radius: 9px;
+    background: conic-gradient(from 220deg, var(--acc), var(--dense), var(--hit), var(--acc));
+    box-shadow: 0 0 18px rgba(124,58,237,0.55);
+    animation: spin 14s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .brand b { font-size: 15px; letter-spacing: 0.04em; }
+  .brand .ver { font: 10px var(--mono); color: var(--ink-faint); }
+  nav { display: flex; gap: 4px; margin-left: 6px; }
+  nav a {
+    padding: 6px 13px; border-radius: 8px; font-size: 13px; color: var(--ink-dim);
+    transition: all .16s ease;
+  }
+  nav a:hover { background: rgba(124,58,237,0.16); color: var(--ink); }
+  nav a.active { background: rgba(124,58,237,0.26); color: var(--acc-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .spacer { flex: 1; }
+  .status-pill {
+    display: flex; align-items: center; gap: 7px; padding: 5px 12px;
+    border: 1px solid var(--line); border-radius: 999px; background: rgba(13,15,32,0.7);
+    font: 11px var(--mono); color: var(--ink-dim); white-space: nowrap;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); transition: background .4s; }
+  .dot.ok { background: var(--hit); box-shadow: 0 0 10px var(--hit); animation: pulse 1.8s ease-in-out infinite; }
+  .dot.err { background: var(--hot); box-shadow: 0 0 10px var(--hot); }
+  @keyframes pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+
+  /* ── Layout ─────────────────────────────────────────────────────────── */
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 22px 80px; }
+  .hero { text-align: center; padding: 18px 0 8px; }
+  .hero .eyebrow { font: 11px var(--mono); letter-spacing: 0.34em; text-transform: uppercase; color: var(--acc-2); }
+  .hero h1 { font-size: 40px; font-weight: 650; letter-spacing: -0.02em; margin: 14px 0 10px; line-height: 1.06; }
+  .hero h1 .g { background: linear-gradient(100deg, var(--dense), var(--acc-2), var(--hit)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--ink-dim); max-width: 660px; margin: 0 auto; font-size: 15px; }
+
+  /* ── Control bar ────────────────────────────────────────────────────── */
+  .controls {
+    margin: 24px 0 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel); backdrop-filter: blur(8px);
+  }
+  .q-row { display: flex; gap: 10px; align-items: stretch; }
+  .q-row input[type=text] {
+    flex: 1; padding: 12px 15px; font: 15px var(--sans);
+    background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .q-row input[type=text]:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(124,58,237,0.16); }
+  .run-btn {
+    padding: 0 26px; border: none; border-radius: 10px; cursor: pointer;
+    font: 600 14px var(--sans); color: #fff; letter-spacing: 0.02em;
+    background: linear-gradient(120deg, var(--acc), #6d28d9);
+    box-shadow: 0 6px 22px rgba(124,58,237,0.4); transition: transform .12s, box-shadow .2s, filter .2s;
+  }
+  .run-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+  .run-btn:active { transform: scale(.97); }
+  .run-btn:disabled { opacity: .55; cursor: progress; filter: saturate(.5); }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .chip {
+    padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(124,58,237,0.06);
+    font: 12px var(--mono); color: var(--ink-dim); cursor: pointer; transition: all .15s;
+  }
+  .chip:hover { border-color: var(--acc); color: var(--ink); background: rgba(124,58,237,0.16); }
+  .sliders { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 14px; align-items: center; }
+  .slider { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--ink-dim); }
+  .slider input[type=range] { accent-color: var(--acc); width: 150px; }
+  .slider b { color: var(--ink); min-width: 34px; text-align: right; }
+  .alpha-legend { font: 11px var(--mono); color: var(--ink-faint); }
+  .alpha-legend .d { color: var(--dense); } .alpha-legend .s { color: var(--sparse); }
+
+  /* ── Stage flow ─────────────────────────────────────────────────────── */
+  .flow { margin-top: 22px; display: flex; flex-direction: column; gap: 0; }
+  .stage {
+    position: relative; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
+    background: var(--panel); backdrop-filter: blur(6px);
+    opacity: 0; transform: translateY(14px) scale(0.99);
+    transition: opacity .5s cubic-bezier(.22,.9,.3,1), transform .5s cubic-bezier(.22,.9,.3,1), border-color .4s, box-shadow .4s;
+  }
+  .stage.show { opacity: 1; transform: none; }
+  .stage.active { border-color: var(--line-2); box-shadow: 0 0 0 1px var(--line-2), 0 10px 40px rgba(124,58,237,0.18); }
+  .connector { height: 30px; position: relative; margin: 0 auto; width: 2px; overflow: hidden; }
+  .connector::before {
+    content: ""; position: absolute; inset: 0; width: 2px;
+    background: linear-gradient(180deg, var(--line-2), transparent);
+  }
+  .connector .packet {
+    position: absolute; left: -3px; top: -8px; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--acc-2); box-shadow: 0 0 12px var(--acc-2); opacity: 0;
+  }
+  .connector.fire .packet { animation: travel .42s ease-in forwards; }
+  @keyframes travel { 0% { top: -8px; opacity: 1; } 100% { top: 32px; opacity: 0; } }
+
+  .s-head { display: flex; align-items: center; gap: 11px; margin-bottom: 4px; }
+  .s-num {
+    width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; flex-shrink: 0;
+    font: 600 12px var(--mono); color: var(--acc-2); background: rgba(124,58,237,0.16); border: 1px solid var(--line-2);
+  }
+  .s-title { font-size: 14px; font-weight: 600; letter-spacing: 0.02em; }
+  .s-sub { font: 11px var(--mono); color: var(--ink-faint); }
+  .s-time { margin-left: auto; font: 11px var(--mono); color: var(--ink-faint); white-space: nowrap; }
+  .s-time b { color: var(--hit); }
+  .s-body { margin-top: 12px; }
+
+  /* badges */
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg-2); font-size: 12px;
+  }
+  .badge .k { font: 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+  .badge .v { font-weight: 600; color: var(--ink); }
+  .badge.lit { border-color: var(--line-2); box-shadow: 0 0 16px rgba(124,58,237,0.2); }
+
+  .pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+  .pill { padding: 4px 11px; border-radius: 999px; font: 11px var(--mono); border: 1px solid var(--line); color: var(--ink-dim); }
+  .pill.sub { background: rgba(108,182,255,0.08); border-color: rgba(108,182,255,0.3); color: var(--dense); animation: popin .4s ease both; }
+  @keyframes popin { from { opacity: 0; transform: translateY(6px) scale(.9); } to { opacity: 1; transform: none; } }
+
+  /* embed sparkline */
+  .embed-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+  .spark { display: flex; align-items: flex-end; gap: 3px; height: 54px; padding: 6px 10px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; }
+  .spark i { width: 8px; background: linear-gradient(180deg, var(--acc-2), var(--acc)); border-radius: 2px 2px 0 0; height: 2px; transition: height .5s cubic-bezier(.22,.9,.3,1); }
+
+  /* retrieval columns */
+  .retrieve-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .retrieve-grid { grid-template-columns: 1fr; } }
+  .col-head { display: flex; align-items: center; gap: 8px; font: 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 9px; }
+  .col-head .tag { width: 9px; height: 9px; border-radius: 2px; }
+  .col-head.dense .tag { background: var(--dense); } .col-head.dense { color: var(--dense); }
+  .col-head.sparse .tag { background: var(--sparse); } .col-head.sparse { color: var(--sparse); }
+  .rrow { margin-bottom: 8px; }
+  .rrow .meta { display: flex; align-items: baseline; gap: 8px; font-size: 12px; margin-bottom: 3px; }
+  .rrow .rk { font: 10px var(--mono); color: var(--ink-faint); width: 16px; }
+  .rrow .ti { color: var(--ink); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rrow .sc { font: 11px var(--mono); color: var(--ink-dim); }
+  .bar { height: 6px; border-radius: 4px; background: rgba(255,255,255,0.05); overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; border-radius: 4px; transition: width .6s cubic-bezier(.22,.9,.3,1); }
+  .bar.dense > i { background: linear-gradient(90deg, rgba(108,182,255,0.5), var(--dense)); }
+  .bar.sparse > i { background: linear-gradient(90deg, rgba(255,209,102,0.5), var(--sparse)); }
+  .dom { font: 9px var(--mono); padding: 1px 6px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .dom.legal { color: var(--legal); background: rgba(181,148,255,0.12); }
+  .dom.medical { color: var(--medical); background: rgba(255,155,210,0.12); }
+  .dom.technical { color: var(--technical); background: rgba(92,255,177,0.12); }
+  .dom.other { color: var(--other); background: rgba(133,151,184,0.12); }
+
+  /* fusion */
+  .fuse-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: var(--bg-2); animation: fuseIn .5s cubic-bezier(.22,.9,.3,1) both; }
+  @keyframes fuseIn { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+  .fuse-row.both { border-color: rgba(92,255,177,0.4); box-shadow: 0 0 14px rgba(92,255,177,0.12); }
+  .fuse-left .ti { font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  .fuse-math { font: 11px var(--mono); color: var(--ink-faint); margin-top: 5px; }
+  .fuse-math .d { color: var(--dense); } .fuse-math .s { color: var(--sparse); } .fuse-math .eq { color: var(--ink); }
+  .fuse-bar { width: 100%; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.05); margin-top: 7px; overflow: hidden; }
+  .fuse-bar > i { display: flex; height: 100%; width: 0; transition: width .7s cubic-bezier(.22,.9,.3,1); }
+  .fuse-bar .seg-d { background: var(--dense); } .fuse-bar .seg-s { background: var(--sparse); }
+  .fuse-score { font: 600 13px var(--mono); color: var(--hit); white-space: nowrap; }
+  .both-tag { font: 9px var(--mono); color: var(--hit); border: 1px solid rgba(92,255,177,0.4); border-radius: 5px; padding: 1px 6px; letter-spacing: 0.08em; }
+
+  /* threshold gate */
+  .gate-wrap { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+  .gate {
+    position: relative; width: 130px; height: 130px; border-radius: 50%;
+    background: conic-gradient(var(--acc) calc(var(--p) * 1%), rgba(255,255,255,0.06) 0);
+    display: grid; place-items: center; transition: background .6s cubic-bezier(.22,.9,.3,1);
+  }
+  .gate::after { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: var(--bg-2); }
+  .gate .read { position: relative; z-index: 1; text-align: center; }
+  .gate .read b { font: 600 26px var(--mono); color: var(--ink); }
+  .gate .read small { display: block; font: 10px var(--mono); color: var(--ink-faint); letter-spacing: 0.16em; text-transform: uppercase; }
+
+  /* decision */
+  .decision { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .strat {
+    font: 600 13px var(--mono); padding: 8px 16px; border-radius: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid var(--line-2); color: var(--acc-2); background: rgba(124,58,237,0.12);
+  }
+  .strat.direct { color: var(--hit); border-color: rgba(92,255,177,0.4); background: rgba(92,255,177,0.1); }
+  .strat.self_rag { color: var(--sparse); border-color: rgba(255,209,102,0.4); background: rgba(255,209,102,0.1); }
+  .strat.decompose { color: var(--dense); border-color: rgba(108,182,255,0.4); background: rgba(108,182,255,0.1); }
+  .rationale { color: var(--ink-dim); font-size: 13px; flex: 1; min-width: 220px; }
+
+  .src-note { margin-top: 26px; text-align: center; font: 11px var(--mono); color: var(--ink-faint); }
+  .src-note code { color: var(--acc-2); }
+  .placeholder { color: var(--ink-faint); font-style: italic; font-size: 13px; }
+  .err-banner { margin-top: 14px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,122,122,0.4); background: rgba(255,122,122,0.08); color: var(--hot); font: 12px var(--mono); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <b>kyro</b> <span class="ver">pipeline theater</span>
+    </div>
+  </div>
+  <nav>
+    <a href="/">Playground</a>
+    <a href="/observatory">Observatory</a>
+    <a href="/pipeline" class="active">Pipeline</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="status-pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></div>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <div class="eyebrow">距離 · distance · 距 · gap · every stage, real code</div>
+    <h1>Watch a query become an <span class="g">answer</span>.</h1>
+    <p>Type a question. It flows through kyro's real retrieval stack — classify, decompose, embed, dense ∥ BM25, RRF fusion, adaptive threshold, route. Every number below is computed by production <code>konjoai</code> code, live.</p>
+  </section>
+
+  <section class="controls">
+    <div class="q-row">
+      <input type="text" id="q" placeholder="Ask anything about the corpus…"
+             value="How do I authenticate API requests and handle rate limits?" autocomplete="off" />
+      <button class="run-btn" id="run">▶ Run pipeline</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="sliders">
+      <label class="slider">α (dense weight) <input type="range" id="alpha" min="0" max="1" step="0.05" value="0.7"><b id="alphaV">0.70</b></label>
+      <label class="slider">top-k <input type="range" id="topk" min="2" max="6" step="1" value="4"><b id="topkV">4</b></label>
+      <span class="alpha-legend">RRF = <span class="d">α·1/(k+rₐ)</span> + <span class="s">(1−α)·1/(k+rₛ)</span>, k=60</span>
+    </div>
+  </section>
+
+  <div class="flow" id="flow"></div>
+
+  <div class="src-note">
+    source · <code>konjoai.retrieve.{router,sparse,hybrid}</code> + <code>konjoai.cache.threshold</code> + <code>auto_router</code>
+    · RRF, BM25, classification & thresholds are real production code paths
+  </div>
+</div>
+
+<script>
+'use strict';
+const API = location.origin.startsWith('http') ? location.origin : 'http://127.0.0.1:8766';
+const $ = id => document.getElementById(id);
+const flow = $('flow');
+
+const PRESETS = [
+  'How do I authenticate API requests and handle rate limits?',
+  'What are my GDPR data subject rights?',
+  'How do I dose acetaminophen for a child?',
+  'Compare warfarin and aspirin interactions and explain monitoring',
+  'How do I deploy kyro to Kubernetes?',
+  'Write a haiku about caching',
+];
+
+// ── helpers ──────────────────────────────────────────────────────────────
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const domClass = d => ['legal','medical','technical'].includes(d) ? d : 'other';
+
+function chipRow() {
+  $('chips').innerHTML = PRESETS.map((p,i) =>
+    `<span class="chip" data-i="${i}">${esc(p.length > 42 ? p.slice(0,40)+'…' : p)}</span>`).join('');
+  $('chips').querySelectorAll('.chip').forEach(c =>
+    c.onclick = () => { $('q').value = PRESETS[+c.dataset.i]; run(); });
+}
+
+// Stage scaffolding — built once, populated per run.
+const STAGES = [
+  { id: 'route',     title: 'Route',          sub: 'classify_intent · classify_chunk_complexity · classify_query' },
+  { id: 'decompose', title: 'Decompose',      sub: 'router.decompose_query' },
+  { id: 'embed',     title: 'Embed',          sub: 'float32 · L2-unit (K4 dtype contract)' },
+  { id: 'retrieve',  title: 'Retrieve',       sub: 'dense cosine ∥ BM25Index.search' },
+  { id: 'fuse',      title: 'Fuse · RRF',     sub: 'hybrid.reciprocal_rank_fusion' },
+  { id: 'threshold', title: 'Threshold gate', sub: 'AdaptiveThresholdEngine.resolve' },
+  { id: 'decision',  title: 'Route decision', sub: 'auto_router.AutoRouter.decide' },
+];
+
+function buildScaffold() {
+  flow.innerHTML = '';
+  STAGES.forEach((s, i) => {
+    if (i > 0) {
+      const c = document.createElement('div');
+      c.className = 'connector'; c.id = `conn-${s.id}`;
+      c.innerHTML = '<div class="packet"></div>';
+      flow.appendChild(c);
+    }
+    const el = document.createElement('section');
+    el.className = 'stage'; el.id = `stage-${s.id}`;
+    el.innerHTML = `
+      <div class="s-head">
+        <div class="s-num">${i+1}</div>
+        <div>
+          <div class="s-title">${s.title}</div>
+          <div class="s-sub">${s.sub}</div>
+        </div>
+        <div class="s-time" id="t-${s.id}"></div>
+      </div>
+      <div class="s-body" id="b-${s.id}"><span class="placeholder">awaiting run…</span></div>`;
+    flow.appendChild(el);
+  });
+}
+
+async function revealStage(id, ms) {
+  const conn = $(`conn-${id}`);
+  if (conn) { conn.classList.add('fire'); await sleep(180); }
+  const el = $(`stage-${id}`);
+  el.classList.add('show', 'active');
+  if (ms != null) $(`t-${id}`).innerHTML = `<b>${ms.toFixed(2)}</b> ms`;
+  // settle: drop the active glow after a beat so only the newest stage pulses
+  await sleep(120);
+  document.querySelectorAll('.stage.active').forEach(s => { if (s !== el) s.classList.remove('active'); });
+}
+
+// ── stage renderers ──────────────────────────────────────────────────────
+function renderRoute(r) {
+  const intentClr = { retrieval: 'var(--dense)', aggregation: 'var(--sparse)', chat: 'var(--acc-2)' }[r.intent] || 'var(--ink)';
+  $('b-route').innerHTML = `<div class="badges">
+    <div class="badge lit"><span class="k">intent</span><span class="v" style="color:${intentClr}">${r.intent}</span></div>
+    <div class="badge"><span class="k">complexity</span><span class="v">${r.complexity}</span></div>
+    <div class="badge"><span class="k">est. tokens</span><span class="v">${r.estimated_tokens}</span></div>
+    <div class="badge"><span class="k">cache type</span><span class="v">${r.cache_query_type}</span></div>
+  </div>`;
+}
+
+function renderDecompose(d) {
+  if (!d.decomposed) {
+    $('b-decompose').innerHTML = `<span class="placeholder">single-intent query — no decomposition needed.</span>
+      <div class="pills" style="margin-top:8px"><span class="pill">1 part</span></div>`;
+    return;
+  }
+  const pills = d.sub_queries.map((q,i) =>
+    `<span class="pill sub" style="animation-delay:${i*90}ms">↳ ${esc(q)}</span>`).join('');
+  $('b-decompose').innerHTML = `<div style="font:11px var(--mono);color:var(--ink-faint);margin-bottom:6px">
+    split into ${d.sub_queries.length} sub-queries · retrieved in parallel</div>
+    <div class="pills">${pills}</div>`;
+}
+
+function renderEmbed(e) {
+  const vals = e.preview;
+  const max = Math.max(0.001, ...vals.map(Math.abs));
+  const bars = vals.map(v => `<i style="height:2px" data-h="${Math.round(Math.abs(v)/max*46)+2}"></i>`).join('');
+  $('b-embed').innerHTML = `<div class="embed-row">
+    <div class="spark" id="spark">${bars}</div>
+    <div class="badges">
+      <div class="badge"><span class="k">dim</span><span class="v">${e.dim}</span></div>
+      <div class="badge"><span class="k">dtype</span><span class="v">${e.dtype}</span></div>
+      <div class="badge"><span class="k">‖v‖</span><span class="v">${e.norm.toFixed(3)}</span></div>
+      <div class="badge"><span class="k">non-zero</span><span class="v">${e.nonzero}</span></div>
+    </div>
+  </div>
+  <div style="font:11px var(--mono);color:var(--ink-faint);margin-top:8px">first 16 of ${e.dim} dimensions</div>`;
+  requestAnimationFrame(() => $('spark').querySelectorAll('i').forEach((b,i) =>
+    setTimeout(() => b.style.height = b.dataset.h + 'px', i*22)));
+}
+
+function rankList(rows, kind, maxScore) {
+  return rows.map(r => {
+    const w = maxScore > 0 ? Math.max(4, r.score / maxScore * 100) : 4;
+    return `<div class="rrow">
+      <div class="meta">
+        <span class="rk">#${r.rank}</span>
+        <span class="ti">${esc(r.title)}</span>
+        <span class="dom ${domClass(r.domain)}">${r.domain}</span>
+        <span class="sc">${r.score.toFixed(kind==='sparse'?2:3)}</span>
+      </div>
+      <div class="bar ${kind}"><i data-w="${w}"></i></div>
+    </div>`;
+  }).join('');
+}
+
+function renderRetrieve(dense, sparse) {
+  const dMax = Math.max(...dense.map(r => r.score), 0.0001);
+  const sMax = Math.max(...sparse.map(r => r.score), 0.0001);
+  $('b-retrieve').innerHTML = `<div class="retrieve-grid">
+    <div>
+      <div class="col-head dense"><span class="tag"></span>Dense · cosine</div>
+      ${rankList(dense, 'dense', dMax)}
+    </div>
+    <div>
+      <div class="col-head sparse"><span class="tag"></span>Sparse · BM25</div>
+      ${rankList(sparse, 'sparse', sMax)}
+    </div>
+  </div>`;
+  requestAnimationFrame(() => $('b-retrieve').querySelectorAll('.bar > i').forEach((b,i) =>
+    setTimeout(() => b.style.width = b.dataset.w + '%', 120 + i*60)));
+}
+
+function renderFuse(fused, alpha) {
+  const top = Math.max(...fused.map(f => f.rrf_score), 0.0001);
+  $('b-fuse').innerHTML = fused.map((f, i) => {
+    const dPct = f.rrf_score > 0 ? f.dense_term / f.rrf_score * 100 : 0;
+    const sPct = 100 - dPct;
+    const w = f.rrf_score / top * 100;
+    const dRank = f.dense_rank == null ? '—' : f.dense_rank;
+    const sRank = f.sparse_rank == null ? '—' : f.sparse_rank;
+    return `<div class="fuse-row ${f.in_both?'both':''}" style="animation-delay:${i*80}ms">
+      <div class="fuse-left">
+        <div class="ti">
+          <span class="dom ${domClass(f.domain)}">${f.domain}</span> ${esc(f.title)}
+          ${f.in_both ? '<span class="both-tag">in both</span>' : ''}
+        </div>
+        <div class="fuse-math">
+          <span class="d">${f.dense_term.toFixed(6)}</span> (rₐ=${dRank})
+          + <span class="s">${f.sparse_term.toFixed(6)}</span> (rₛ=${sRank})
+          <span class="eq">= ${f.rrf_score.toFixed(6)}</span>
+        </div>
+        <div class="fuse-bar"><i data-w="${w}"><span class="seg-d" style="width:${dPct}%"></span><span class="seg-s" style="width:${sPct}%"></span></i></div>
+      </div>
+      <div class="fuse-score">${f.rrf_score.toFixed(5)}</div>
+    </div>`;
+  }).join('');
+  requestAnimationFrame(() => $('b-fuse').querySelectorAll('.fuse-bar > i').forEach((b,i) =>
+    setTimeout(() => b.style.width = b.dataset.w + '%', 200 + i*80)));
+}
+
+function renderThreshold(t) {
+  const pct = Math.round(t.value * 100);
+  $('b-threshold').innerHTML = `<div class="gate-wrap">
+    <div class="gate" id="gate" style="--p:0"><div class="read"><b id="gateNum">0.00</b><small>${t.query_type}</small></div></div>
+    <div style="max-width:360px">
+      <div style="font-size:13px;color:var(--ink-dim)">The cache only returns a hit when cosine similarity clears
+      <b style="color:var(--ink)">${t.value.toFixed(2)}</b> for a <b style="color:var(--acc-2)">${t.query_type}</b> query.
+      Stricter for factual/code, looser for creative — kyro tunes the bar to the query type.</div>
+    </div>
+  </div>`;
+  requestAnimationFrame(() => {
+    $('gate').style.setProperty('--p', pct);
+    const num = $('gateNum'); const t0 = performance.now();
+    const step = ts => { const p = Math.min(1,(ts-t0)/700); num.textContent = (t.value*p).toFixed(2); if (p<1) requestAnimationFrame(step); else num.textContent = t.value.toFixed(2); };
+    requestAnimationFrame(step);
+  });
+}
+
+function renderDecision(d) {
+  $('b-decision').innerHTML = `<div class="decision">
+    <span class="strat ${d.strategy}">${d.strategy.replace('_',' ')}</span>
+    <span class="rationale">${esc(d.rationale)}</span>
+  </div>
+  <div style="font:11px var(--mono);color:var(--ink-faint);margin-top:10px">
+    CRAG band <b style="color:var(--ink)">${d.crag_band}</b> · score ${d.crag_score}
+    <span style="opacity:.7">(${d.crag_source})</span>
+  </div>`;
+}
+
+// ── orchestration ──────────────────────────────────────────────────────
+let running = false;
+async function run() {
+  if (running) return;
+  running = true;
+  $('run').disabled = true;
+  const q = $('q').value.trim() || PRESETS[0];
+  const alpha = $('alpha').value, topk = $('topk').value;
+  buildScaffold();
+
+  let data;
+  try {
+    const res = await fetch(`${API}/api/pipeline/analyze?query=${encodeURIComponent(q)}&top_k=${topk}&alpha=${alpha}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+    if (data.error) throw new Error(data.error);
+    setStatus(true, 'live · konjoai');
+  } catch (e) {
+    flow.insertAdjacentHTML('afterbegin', `<div class="err-banner">pipeline offline — start the demo server:&nbsp; <b>python3 demo/server.py</b> &nbsp;(${esc(e.message)})</div>`);
+    setStatus(false, 'offline');
+    running = false; $('run').disabled = false; return;
+  }
+
+  const tm = data.timings_ms;
+  await sleep(120);
+  renderRoute(data.route);        await revealStage('route', tm.route_ms);          await sleep(240);
+  renderDecompose(data.decomposition); await revealStage('decompose', tm.decompose_ms); await sleep(240);
+  renderEmbed(data.embedding);    await revealStage('embed', tm.embed_ms);          await sleep(280);
+  renderRetrieve(data.dense, data.sparse); await revealStage('retrieve', tm.dense_ms + tm.sparse_ms); await sleep(420);
+  renderFuse(data.fused, data.alpha); await revealStage('fuse', tm.fuse_ms);        await sleep(420);
+  renderThreshold(data.threshold); await revealStage('threshold', tm.threshold_ms); await sleep(280);
+  renderDecision(data.decision);  await revealStage('decision', null);
+
+  running = false; $('run').disabled = false;
+}
+
+function setStatus(ok, txt) {
+  $('dot').className = 'dot ' + (ok ? 'ok' : 'err');
+  $('status').textContent = txt;
+}
+
+// ── boot ───────────────────────────────────────────────────────────────
+$('run').onclick = run;
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+$('alpha').oninput = e => $('alphaV').textContent = (+e.target.value).toFixed(2);
+$('topk').oninput  = e => $('topkV').textContent = e.target.value;
+chipRow();
+buildScaffold();
+(async () => {
+  try { const h = await fetch(API + '/api/health'); setStatus(h.ok, h.ok ? 'live · konjoai' : 'offline'); }
+  catch { setStatus(false, 'offline'); }
+  run();
+})();
+</script>
+</body>
+</html>
