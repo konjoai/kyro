@@ -25,7 +25,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from konjoai.cache.analytics import LatencyBuffer, compute_analytics
-from konjoai.cache.federation import FederatedLookup, PeerRegistry, get_federated_lookup, get_peer_registry
+from konjoai.cache.federation import get_federated_lookup, get_peer_registry
 from konjoai.cache.poisoning import get_poisoning_report_store
 from konjoai.cache.rewriter import QueryRewriter, get_rewriter
 from konjoai.cache.semantic_cache import SemanticCache, get_semantic_cache

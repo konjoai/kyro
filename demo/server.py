@@ -47,6 +47,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from pipeline import PipelineEngine  # noqa: E402  (sibling module, demo/ on sys.path)
+
 from konjoai.cache.semantic_cache import SemanticCache, SemanticCacheEntry  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  demo-server  %(message)s")
@@ -676,8 +678,10 @@ class CorpusIndex:
 
 _state = DemoState()
 _corpus = CorpusIndex(Path(__file__).parent / "corpus")
+_pipeline = PipelineEngine(Path(__file__).parent / "corpus", encode)
 _HTML_PATH = Path(__file__).parent / "index.html"
 _OBSERVATORY_PATH = Path(__file__).parent / "observatory.html"
+_PIPELINE_PATH = Path(__file__).parent / "pipeline.html"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -730,6 +734,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_html(_HTML_PATH)
         if path in ("/observatory", "/observatory.html"):
             return self._serve_html(_OBSERVATORY_PATH)
+        if path in ("/pipeline", "/pipeline.html"):
+            return self._serve_html(_PIPELINE_PATH)
         if path == "/api/health":
             return self._send_json(
                 {
@@ -774,6 +780,23 @@ class Handler(BaseHTTPRequestHandler):
                     "source": "CorpusIndex.search() — cosine over fast_embed",
                 }
             )
+        if path == "/api/pipeline/analyze":
+            # User-controlled query — bound length; clamp top_k + alpha.
+            raw = (params.get("query", [""])[0] or "").strip()
+            if len(raw) > 256:
+                raw = raw[:256]
+            if not raw:
+                idx = int(time.time()) % len(CorpusIndex.DEFAULT_DEMO_QUERIES)
+                raw = CorpusIndex.DEFAULT_DEMO_QUERIES[idx]
+            try:
+                top_k = max(1, min(int(params.get("top_k", ["4"])[0]), 6))
+            except ValueError:
+                top_k = 4
+            try:
+                alpha = min(1.0, max(0.0, float(params.get("alpha", ["0.7"])[0])))
+            except ValueError:
+                alpha = 0.7
+            return self._send_json(_pipeline.analyze(raw, top_k=top_k, alpha=alpha))
         return self._send_json({"error": f"no route for GET {path}"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -836,6 +859,7 @@ def main() -> None:
     log.info("Endpoints:")
     log.info("  GET  /                  → demo/index.html")
     log.info("  GET  /observatory       → demo/observatory.html")
+    log.info("  GET  /pipeline          → demo/pipeline.html (hybrid retrieval theater)")
     log.info("  GET  /api/health        → liveness")
     log.info("  GET  /api/cache/stats   → real SemanticCache.stats()")
     log.info("  POST /api/cache/ask     → real cosine + lookup, JSON {question}")
@@ -844,6 +868,7 @@ def main() -> None:
     log.info("  POST /api/cache/reset   → invalidate the cache")
     log.info("  GET  /api/corpus/load   → load demo/corpus/*.txt into the index")
     log.info("  GET  /api/corpus/demo   → run a preset demo query (?query=...&top_k=N)")
+    log.info("  GET  /api/pipeline/analyze → real hybrid pipeline trace (?query=...&top_k=N&alpha=F)")
     log.info("──────────────────────────────────────────────────────────────────")
     log.info("Open %s in your browser. Ctrl-C to stop.", url)
     try:
