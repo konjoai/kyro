@@ -114,13 +114,18 @@ def test_fused_ordering_is_descending(engine: PipelineEngine) -> None:
 
 def test_rrf_terms_reconstruct_real_score(engine: PipelineEngine) -> None:
     """dense_term + sparse_term must equal the production rrf_score for every
-    row — the UI shows the breakdown as the explanation of the real number."""
+    row — the UI shows the breakdown as the explanation of the real number.
+
+    All three values are rounded to 6 decimals for display, so the
+    reconstruction (sum of two rounded terms) may diverge from the rounded
+    total by up to ~1.5e-6; the tolerance reflects that display rounding, not
+    a difference in the underlying math."""
     for alpha in (0.3, 0.7, 1.0):
         fused = engine.analyze("authentication rate limit policy", top_k=4, alpha=alpha)["fused"]
         assert fused, "expected at least one fused result"
         for row in fused:
             recon = row["dense_term"] + row["sparse_term"]
-            assert recon == pytest.approx(row["rrf_score"], abs=1e-6)
+            assert recon == pytest.approx(row["rrf_score"], abs=2e-6)
 
 
 def test_alpha_extremes_zero_the_other_signal(engine: PipelineEngine) -> None:
