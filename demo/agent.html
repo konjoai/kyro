@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>kyro · Agent Theater</title>
 <style>
+  @view-transition { navigation: auto; }
   :root {
     --bg: #06060f; --bg-2: #0a0b18; --panel: rgba(13,15,32,0.72);
     --line: rgba(124,58,237,0.16); --line-2: rgba(124,58,237,0.34);
@@ -153,6 +154,11 @@
   .src-note { margin-top: 26px; text-align: center; font: 11px var(--mono); color: var(--ink-faint); }
   .src-note code { color: var(--acc-2); }
   .err-banner { margin-top: 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,122,122,0.4); background: rgba(255,122,122,0.08); color: var(--hot); font: 12px var(--mono); }
+  :focus-visible { outline: 2px solid var(--acc-2); outline-offset: 2px; border-radius: 6px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    @view-transition { navigation: none; }
+  }
 </style>
 </head>
 <body>
@@ -165,7 +171,8 @@
     <a href="/">Playground</a>
     <a href="/observatory">Observatory</a>
     <a href="/pipeline">Pipeline</a>
-    <a href="/agent" class="active">Agent</a>
+    <a href="/agent" class="active" aria-current="page">Agent</a>
+    <a href="/security">Security</a>
   </nav>
   <div class="spacer"></div>
   <div class="status-pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></div>

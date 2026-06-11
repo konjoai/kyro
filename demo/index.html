@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Kyro · RAG + Semantic Cache</title>
 <style>
+@view-transition{navigation:auto}
 :root{
   --bg:#060612;--panel:#0d0d20;--panel2:#12122a;
   --border:rgba(124,58,237,.2);--border2:rgba(124,58,237,.35);
@@ -323,6 +324,8 @@ canvas{width:100%;display:block}
 .drop-zone:hover,.drop-zone.drag-over{border-color:var(--acc);background:rgba(124,58,237,.06)}
 .drop-icon{font-size:32px;margin-bottom:8px}
 .drop-text{font-size:13px;color:var(--dim)}
+:focus-visible{outline:2px solid var(--acc3);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}@view-transition{navigation:none}}
 </style>
 </head>
 <body>
@@ -344,6 +347,7 @@ canvas{width:100%;display:block}
     <button class="tab-btn" data-tab="feedback" onclick="switchTab('feedback')">👍 Feedback</button>
     <a class="tab-btn" href="/pipeline" style="text-decoration:none">⌥ Pipeline</a>
     <a class="tab-btn" href="/agent" style="text-decoration:none">⊹ Agent</a>
+    <a class="tab-btn" href="/security" style="text-decoration:none">🛡 Security</a>
     <a class="tab-btn" href="/observatory" style="text-decoration:none">🛰 Observatory</a>
   </nav>
   <div id="health-pill">
