@@ -47,6 +47,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from agent import AgentEngine  # noqa: E402  (sibling module, demo/ on sys.path)
 from pipeline import PipelineEngine  # noqa: E402  (sibling module, demo/ on sys.path)
 
 from konjoai.cache.semantic_cache import SemanticCache, SemanticCacheEntry  # noqa: E402
@@ -679,9 +680,11 @@ class CorpusIndex:
 _state = DemoState()
 _corpus = CorpusIndex(Path(__file__).parent / "corpus")
 _pipeline = PipelineEngine(Path(__file__).parent / "corpus", encode)
+_agent = AgentEngine(_pipeline)
 _HTML_PATH = Path(__file__).parent / "index.html"
 _OBSERVATORY_PATH = Path(__file__).parent / "observatory.html"
 _PIPELINE_PATH = Path(__file__).parent / "pipeline.html"
+_AGENT_PATH = Path(__file__).parent / "agent.html"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -702,6 +705,32 @@ class Handler(BaseHTTPRequestHandler):
         self._send_cors()
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_sse(self, events: Any, pace: float = 0.3) -> None:
+        """Stream an iterable of dict events as Server-Sent Events.
+
+        Each event is written as ``data: {json}\\n\\n`` and flushed immediately
+        so the browser renders the ReAct loop live. A small pace between events
+        keeps the reveal cinematic even on instant localhost retrieval.
+        """
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")  # disable proxy buffering
+        self._send_cors()
+        self.end_headers()
+        try:
+            for i, ev in enumerate(events):
+                if i:
+                    time.sleep(pace)
+                payload = json.dumps(ev, ensure_ascii=False)
+                self.wfile.write(f"data: {payload}\n\n".encode())
+                self.wfile.flush()
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            return  # client navigated away mid-stream
 
     def _read_json(self) -> dict[str, Any]:
         n = int(self.headers.get("Content-Length", "0") or "0")
@@ -736,6 +765,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_html(_OBSERVATORY_PATH)
         if path in ("/pipeline", "/pipeline.html"):
             return self._serve_html(_PIPELINE_PATH)
+        if path in ("/agent", "/agent.html"):
+            return self._serve_html(_AGENT_PATH)
         if path == "/api/health":
             return self._send_json(
                 {
@@ -797,6 +828,22 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 alpha = 0.7
             return self._send_json(_pipeline.analyze(raw, top_k=top_k, alpha=alpha))
+        if path in ("/api/agent/stream", "/api/agent/analyze"):
+            question = (params.get("question", [""])[0] or "").strip()[:256]
+            if not question:
+                idx = int(time.time()) % len(CorpusIndex.DEFAULT_DEMO_QUERIES)
+                question = CorpusIndex.DEFAULT_DEMO_QUERIES[idx]
+            try:
+                max_steps = max(1, min(int(params.get("max_steps", ["4"])[0]), 6))
+            except ValueError:
+                max_steps = 4
+            try:
+                top_k = max(1, min(int(params.get("top_k", ["4"])[0]), 6))
+            except ValueError:
+                top_k = 4
+            if path == "/api/agent/stream":
+                return self._send_sse(_agent.stream(question, max_steps=max_steps, top_k=top_k))
+            return self._send_json(_agent.analyze(question, max_steps=max_steps, top_k=top_k))
         return self._send_json({"error": f"no route for GET {path}"}, status=404)
 
     def do_POST(self) -> None:  # noqa: N802
@@ -860,6 +907,7 @@ def main() -> None:
     log.info("  GET  /                  → demo/index.html")
     log.info("  GET  /observatory       → demo/observatory.html")
     log.info("  GET  /pipeline          → demo/pipeline.html (hybrid retrieval theater)")
+    log.info("  GET  /agent             → demo/agent.html (ReAct agent theater)")
     log.info("  GET  /api/health        → liveness")
     log.info("  GET  /api/cache/stats   → real SemanticCache.stats()")
     log.info("  POST /api/cache/ask     → real cosine + lookup, JSON {question}")
@@ -869,6 +917,7 @@ def main() -> None:
     log.info("  GET  /api/corpus/load   → load demo/corpus/*.txt into the index")
     log.info("  GET  /api/corpus/demo   → run a preset demo query (?query=...&top_k=N)")
     log.info("  GET  /api/pipeline/analyze → real hybrid pipeline trace (?query=...&top_k=N&alpha=F)")
+    log.info("  GET  /api/agent/stream  → real ReAct loop as SSE (?question=...&max_steps=N&top_k=K)")
     log.info("──────────────────────────────────────────────────────────────────")
     log.info("Open %s in your browser. Ctrl-C to stop.", url)
     try:

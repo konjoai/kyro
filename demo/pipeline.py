@@ -39,6 +39,7 @@ from konjoai.cache.threshold import AdaptiveThresholdEngine, classify_query
 from konjoai.retrieve.auto_router import AutoRouter
 from konjoai.retrieve.hybrid import (
     BM25Result,
+    HybridResult,
     SearchResult,
     reciprocal_rank_fusion,
 )
@@ -163,11 +164,36 @@ class PipelineEngine:
     def _sparse(self, query: str, top_k: int) -> list[BM25Result]:
         return self._bm25.search(query, top_k=top_k)
 
+    def hybrid(self, query: str, top_k: int = 5, alpha: float = 0.7) -> list[HybridResult]:
+        """Real dense ∥ BM25 retrieval fused with ``reciprocal_rank_fusion``.
+
+        Returns the fused candidate list (rank 0 = best) for callers — such as
+        the agent's retrieve tool — that want the candidates rather than the
+        per-stage UI trace produced by :meth:`analyze`.
+        """
+        if not self._loaded:
+            self.load()
+        top_k = max(1, min(int(top_k), len(self._docs)))
+        alpha = float(min(1.0, max(0.0, alpha)))
+        dense = self._dense(query, top_k)
+        sparse = self._sparse(query, top_k)
+        return reciprocal_rank_fusion(dense, sparse, alpha=alpha, k=RRF_K)
+
     def _meta_for(self, source: str) -> dict[str, Any]:
         for d in self._docs:
             if d["source"] == source:
                 return {"title": d["title"], "domain": d["domain"], "preview": d["preview"]}
         return {"title": source, "domain": "other", "preview": ""}
+
+    def describe_source(self, source: str) -> dict[str, Any]:
+        """Public ``{title, domain, preview}`` lookup for a corpus filename.
+
+        Used by the agent theater to enrich the documents its retrieve tool
+        pulls; falls back to a synthesized title for unknown sources.
+        """
+        if not self._loaded:
+            self.load()
+        return self._meta_for(source)
 
     @staticmethod
     def _crag_band(top_score: float) -> str:
