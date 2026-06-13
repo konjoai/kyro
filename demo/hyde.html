@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kyro · HyDE Theater</title>
+<style>
+  @view-transition { navigation: auto; }
+  :root {
+    --bg: #06060f; --bg-2: #0a0b18; --panel: rgba(13,15,32,0.72);
+    --line: rgba(124,58,237,0.16); --line-2: rgba(124,58,237,0.34);
+    --ink: #e6f1ff; --ink-dim: #8597b8; --ink-faint: #4a5878;
+    --acc: #7c3aed; --acc-2: #a78bfa;
+    --query: #6cb6ff; --hyde: #5cffb1; --gain: #5cffb1; --loss: #ff7a7a; --hot: #ff7a7a;
+    --legal: #b594ff; --medical: #ff9bd2; --technical: #5cffb1; --other: #8597b8;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * , *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); min-height: 100%; }
+  body {
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+    background:
+      radial-gradient(1100px 560px at 82% -10%, rgba(92,255,177,0.10), transparent 60%),
+      radial-gradient(900px 500px at 8% 0%, rgba(108,182,255,0.10), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  a { color: var(--acc-2); text-decoration: none; }
+  :focus-visible { outline: 2px solid var(--acc-2); outline-offset: 2px; border-radius: 6px; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 4px; }
+
+  header {
+    position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px;
+    padding: 0 22px; height: 56px; background: linear-gradient(180deg, rgba(8,9,20,0.92), rgba(8,9,20,0.62));
+    border-bottom: 1px solid var(--line); backdrop-filter: blur(12px);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo { width: 28px; height: 28px; border-radius: 9px; background: conic-gradient(from 220deg, var(--query), var(--acc-2), var(--hyde), var(--query)); box-shadow: 0 0 18px rgba(124,58,237,0.55); animation: spin 15s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .brand b { font-size: 15px; letter-spacing: 0.04em; }
+  .brand .ver { font: 10px var(--mono); color: var(--ink-faint); }
+  nav { display: flex; gap: 4px; margin-left: 6px; flex-wrap: wrap; }
+  nav a { padding: 6px 12px; border-radius: 8px; font-size: 13px; color: var(--ink-dim); transition: all .16s; }
+  nav a:hover { background: rgba(124,58,237,0.16); color: var(--ink); }
+  nav a.active { background: rgba(124,58,237,0.26); color: var(--acc-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .spacer { flex: 1; }
+  .status-pill { display: flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(13,15,32,0.7); font: 11px var(--mono); color: var(--ink-dim); white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); transition: background .4s; }
+  .dot.ok { background: var(--hyde); box-shadow: 0 0 10px var(--hyde); animation: pulse 1.8s ease-in-out infinite; }
+  .dot.busy { background: var(--query); box-shadow: 0 0 10px var(--query); animation: pulse 1s ease-in-out infinite; }
+  .dot.err { background: var(--hot); box-shadow: 0 0 10px var(--hot); }
+  @keyframes pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 22px 90px; }
+  .hero { text-align: center; padding: 18px 0 6px; }
+  .hero .eyebrow { font: 11px var(--mono); letter-spacing: 0.32em; text-transform: uppercase; color: var(--acc-2); }
+  .hero h1 { font-size: 40px; font-weight: 650; letter-spacing: -0.02em; margin: 14px 0 10px; line-height: 1.06; }
+  .hero h1 .g { background: linear-gradient(100deg, var(--query), var(--acc-2), var(--hyde)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--ink-dim); max-width: 680px; margin: 0 auto; font-size: 15px; }
+
+  .controls { margin: 24px 0 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); backdrop-filter: blur(8px); }
+  .q-row { display: flex; gap: 10px; align-items: stretch; }
+  .q-row input[type=text] { flex: 1; padding: 12px 15px; font: 15px var(--sans); background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .q-row input[type=text]:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(124,58,237,0.16); }
+  .run-btn { padding: 0 26px; border: none; border-radius: 10px; cursor: pointer; font: 600 14px var(--sans); color: #fff; background: linear-gradient(120deg, var(--acc), #6d28d9); box-shadow: 0 6px 22px rgba(124,58,237,0.4); transition: transform .12s, filter .2s; white-space: nowrap; }
+  .run-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+  .run-btn:active { transform: scale(.97); }
+  .run-btn:disabled { opacity: .55; cursor: progress; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .chip { padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(124,58,237,0.06); font: 12px var(--mono); color: var(--ink-dim); cursor: pointer; transition: all .15s; }
+  .chip:hover { border-color: var(--acc); color: var(--ink); background: rgba(124,58,237,0.16); }
+  .slider { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); color: var(--ink-dim); margin-top: 13px; }
+  .slider input[type=range] { accent-color: var(--acc); width: 140px; }
+  .slider b { color: var(--ink); }
+
+  .stage { margin-top: 18px; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: var(--panel); backdrop-filter: blur(6px); opacity: 0; transform: translateY(12px); transition: opacity .5s cubic-bezier(.22,.9,.3,1), transform .5s cubic-bezier(.22,.9,.3,1); }
+  .stage.show { opacity: 1; transform: none; }
+  .stage-h { font: 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 11px; display: flex; align-items: center; gap: 9px; }
+  .badge { font: 10px var(--mono); padding: 2px 9px; border-radius: 6px; border: 1px solid var(--line); color: var(--ink-dim); }
+  .badge.q { color: var(--query); border-color: rgba(108,182,255,0.34); background: rgba(108,182,255,0.08); }
+  .badge.h { color: var(--hyde); border-color: rgba(92,255,177,0.34); background: rgba(92,255,177,0.08); }
+  .qtext { font-size: 16px; color: var(--ink); }
+  .hyp { font-size: 14.5px; line-height: 1.7; color: var(--ink); white-space: pre-wrap; }
+  .cursor { display: inline-block; width: 8px; height: 1.05em; background: var(--hyde); vertical-align: text-bottom; margin-left: 2px; animation: blink .8s step-end infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+  .vstats { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 11px; }
+  .vstat { font: 11px var(--mono); padding: 5px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg-2); color: var(--ink-dim); }
+  .vstat b { color: var(--ink); }
+
+  /* gap meter */
+  .gap { margin-top: 18px; border: 1px solid var(--line-2); border-radius: 14px; padding: 18px 20px; background: linear-gradient(180deg, rgba(92,255,177,0.05), rgba(13,15,32,0.72)); opacity: 0; transform: translateY(12px); transition: opacity .5s, transform .5s; }
+  .gap.show { opacity: 1; transform: none; }
+  .gap-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+  .gap-h .t { font: 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); }
+  .gap-h .delta { margin-left: auto; font: 700 22px var(--mono); }
+  .gap-h .delta.up { color: var(--gain); } .gap-h .delta.down { color: var(--loss); }
+  .track { position: relative; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05); overflow: hidden; }
+  .track .fill-base { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, rgba(108,182,255,0.25), rgba(108,182,255,0.5)); transition: width .8s cubic-bezier(.22,.9,.3,1); }
+  .track .fill-hyde { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-right: 2px solid var(--hyde); background: linear-gradient(90deg, rgba(92,255,177,0.12), rgba(92,255,177,0.3)); transition: width .9s cubic-bezier(.22,.9,.3,1); }
+  .track .lbl { position: absolute; top: 50%; transform: translateY(-50%); font: 11px var(--mono); padding-left: 10px; }
+  .track .lbl.base { color: var(--query); } .track .lbl.hyde { color: var(--hyde); right: 10px; padding-left: 0; }
+  .gap-cap { font-size: 12.5px; color: var(--ink-dim); margin-top: 10px; }
+
+  /* retrieval columns */
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+  @media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
+  .col { border: 1px solid var(--line); border-radius: 14px; padding: 15px 16px; background: var(--panel); backdrop-filter: blur(6px); opacity: 0; transform: translateY(12px); transition: opacity .5s, transform .5s; }
+  .col.show { opacity: 1; transform: none; }
+  .col-h { font: 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 11px; display: flex; align-items: center; gap: 8px; }
+  .col-h .tag { width: 9px; height: 9px; border-radius: 2px; }
+  .col.q .col-h { color: var(--query); } .col.q .tag { background: var(--query); }
+  .col.h .col-h { color: var(--hyde); } .col.h .tag { background: var(--hyde); }
+  .doc { margin-bottom: 9px; }
+  .doc .meta { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; margin-bottom: 4px; }
+  .doc .rk { font: 10px var(--mono); color: var(--ink-faint); width: 16px; }
+  .doc .ti { color: var(--ink); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .doc .sc { font: 11px var(--mono); color: var(--ink-dim); }
+  .doc .dl { font: 10px var(--mono); margin-left: 6px; }
+  .doc .dl.up { color: var(--gain); } .doc .dl.down { color: var(--loss); }
+  .bar { height: 7px; border-radius: 4px; background: rgba(255,255,255,0.05); overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; border-radius: 4px; transition: width .7s cubic-bezier(.22,.9,.3,1); }
+  .col.q .bar > i { background: linear-gradient(90deg, rgba(108,182,255,0.5), var(--query)); }
+  .col.h .bar > i { background: linear-gradient(90deg, rgba(92,255,177,0.5), var(--hyde)); }
+  .dom { font: 9px var(--mono); padding: 1px 6px; border-radius: 5px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .dom.legal { color: var(--legal); background: rgba(181,148,255,0.12); }
+  .dom.medical { color: var(--medical); background: rgba(255,155,210,0.12); }
+  .dom.technical { color: var(--technical); background: rgba(92,255,177,0.12); }
+  .dom.other { color: var(--other); background: rgba(133,151,184,0.12); }
+
+  .src-note { margin-top: 26px; text-align: center; font: 11px var(--mono); color: var(--ink-faint); }
+  .src-note code { color: var(--acc-2); }
+  .err-banner { margin-top: 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,122,122,0.4); background: rgba(255,122,122,0.08); color: var(--hot); font: 12px var(--mono); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    @view-transition { navigation: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo"></div><div><b>kyro</b> <span class="ver">hyde theater</span></div></div>
+  <nav aria-label="surfaces">
+    <a href="/">Playground</a>
+    <a href="/observatory">Observatory</a>
+    <a href="/pipeline">Pipeline</a>
+    <a href="/agent">Agent</a>
+    <a href="/security">Security</a>
+    <a href="/hyde" class="active" aria-current="page">HyDE</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="status-pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="eyebrow">距離 · hypothetical document embeddings · real retrieval</div>
+    <h1>Close the <span class="g">gap</span>.</h1>
+    <p>A short query lives in query-space, far from the documents. HyDE writes a hypothetical <em>answer</em> first, embeds <em>that</em>, and lands in document-space — closing the distribution gap. Watch the same real cosine retrieval run on the raw query vs the hypothesis, side by side.</p>
+  </section>
+
+  <section class="controls">
+    <div class="q-row">
+      <input type="text" id="q" placeholder="Ask anything about the corpus…" value="What are my GDPR rights?" autocomplete="off" />
+      <button class="run-btn" id="run">▶ Run HyDE</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <label class="slider">top-k <input type="range" id="topk" min="2" max="6" step="1" value="4"><b id="topkV">4</b></label>
+  </section>
+
+  <section class="stage" id="s-query">
+    <div class="stage-h"><span class="badge q">query-space</span> Raw query</div>
+    <div class="qtext" id="qtext"></div>
+    <div class="vstats" id="qstats"></div>
+  </section>
+
+  <section class="stage" id="s-hyp">
+    <div class="stage-h"><span class="badge h">document-space</span> Hypothetical answer <span class="badge" id="hypSrc">rule-based · no LLM</span></div>
+    <div class="hyp" id="hyptext"></div>
+    <div class="vstats" id="hstats"></div>
+  </section>
+
+  <section class="gap" id="s-gap">
+    <div class="gap-h">
+      <span class="t">Top-document similarity · query → HyDE</span>
+      <span class="delta" id="delta"></span>
+    </div>
+    <div class="track">
+      <div class="fill-base" id="fillBase"></div>
+      <div class="fill-hyde" id="fillHyde"></div>
+      <span class="lbl base" id="lblBase"></span>
+      <span class="lbl hyde" id="lblHyde"></span>
+    </div>
+    <div class="gap-cap" id="gapCap"></div>
+  </section>
+
+  <div class="cols">
+    <section class="col q" id="s-base">
+      <div class="col-h"><span class="tag"></span>Baseline · embed(query)</div>
+      <div id="baseList"></div>
+    </section>
+    <section class="col h" id="s-hyde">
+      <div class="col-h"><span class="tag"></span>HyDE · embed(hypothesis)</div>
+      <div id="hydeList"></div>
+    </section>
+  </div>
+
+  <div class="src-note">
+    source · <code>konjoai.retrieve.hyde</code> intent + real dense cosine over the corpus (<code>pipeline.dense</code>) ·
+    the hypothesis is a labelled rule-based template (no LLM); the embeddings, scores & rankings are measured
+  </div>
+</main>
+
+<script>
+'use strict';
+const API = location.origin.startsWith('http') ? location.origin : 'http://127.0.0.1:8766';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const domClass = d => ['legal','medical','technical'].includes(d) ? d : 'other';
+
+const PRESETS = [
+  'What are my GDPR rights?',
+  'How do I authenticate API requests?',
+  'How do I dose acetaminophen for a child?',
+  'How do I deploy kyro to Kubernetes?',
+  'How are warfarin and aspirin interactions managed?',
+];
+
+function chipRow() {
+  $('chips').innerHTML = PRESETS.map((p,i) => `<span class="chip" data-i="${i}">${esc(p.length>44?p.slice(0,42)+'…':p)}</span>`).join('');
+  $('chips').querySelectorAll('.chip').forEach(c => c.onclick = () => { $('q').value = PRESETS[+c.dataset.i]; run(); });
+}
+function setStatus(cls, txt) { $('dot').className = 'dot ' + cls; $('status').textContent = txt; }
+function show(id) { $(id).classList.add('show'); }
+function hideAll() { ['s-query','s-hyp','s-gap','s-base','s-hyde'].forEach(id => $(id).classList.remove('show')); }
+
+function vstats(v, kind) {
+  return [
+    `<span class="vstat">tokens <b>${v.tokens}</b></span>`,
+    `<span class="vstat">non-zero dims <b>${v.nonzero}</b></span>`,
+    `<span class="vstat">${v.dtype} · ${v.dim}d</span>`,
+  ].join('');
+}
+
+async function typewriter(node, text) {
+  node.textContent = ''; const cur = document.createElement('span'); cur.className = 'cursor'; node.after(cur);
+  if (reduced) { node.textContent = text; cur.remove(); return; }
+  const step = Math.max(1, Math.round(text.length / 80));
+  for (let i = 0; i < text.length; i += step) { node.textContent = text.slice(0, i+step); await sleep(11); }
+  node.textContent = text; cur.remove();
+}
+
+function docRow(d, kind, deltaRank) {
+  const w = Math.max(4, Math.min(100, d.score * 100));
+  let dl = '';
+  if (kind === 'hyde' && deltaRank != null) {
+    if (deltaRank > 0) dl = `<span class="dl up">▲${deltaRank}</span>`;
+    else if (deltaRank < 0) dl = `<span class="dl down">▼${-deltaRank}</span>`;
+    else dl = `<span class="dl">=</span>`;
+  }
+  return `<div class="doc">
+    <div class="meta"><span class="rk">#${d.rank}</span><span class="ti">${esc(d.title)}</span>
+      <span class="dom ${domClass(d.domain)}">${d.domain}</span><span class="sc">${d.score.toFixed(3)}</span>${dl}</div>
+    <div class="bar"><i data-w="${w}"></i></div>
+  </div>`;
+}
+
+function fillBars(id) { requestAnimationFrame(() => $(id).querySelectorAll('.bar > i').forEach((b,i) => setTimeout(() => b.style.width = b.dataset.w + '%', 80 + i*70))); }
+
+let running = false;
+async function run() {
+  if (running) return;
+  running = true; $('run').disabled = true; hideAll(); setStatus('busy','running…');
+  const q = $('q').value.trim() || PRESETS[0];
+  let d;
+  try {
+    const res = await fetch(`${API}/api/hyde/analyze?query=${encodeURIComponent(q)}&top_k=${$('topk').value}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    d = await res.json();
+    if (d.error) throw new Error(d.error);
+  } catch (e) {
+    $('baseList').innerHTML = `<div class="err-banner">HyDE offline — start the demo server:&nbsp; <b>python3 demo/server.py</b></div>`;
+    show('s-base'); setStatus('err','offline'); running = false; $('run').disabled = false; return;
+  }
+  setStatus('ok','live · konjoai');
+
+  // 1 — query
+  $('qtext').textContent = d.question;
+  $('qstats').innerHTML = vstats(d.query_vec, 'q');
+  show('s-query'); await sleep(reduced?0:300);
+
+  // 2 — hypothesis (typed)
+  $('hypSrc').textContent = d.hypothesis_source;
+  $('hstats').innerHTML = vstats(d.hyde_vec, 'h');
+  show('s-hyp');
+  await typewriter($('hyptext'), d.hypothesis);
+  await sleep(reduced?0:200);
+
+  // 3 — gap meter
+  const c = d.comparison;
+  const up = c.delta >= 0;
+  $('delta').textContent = (up?'+':'') + c.delta.toFixed(3);
+  $('delta').className = 'delta ' + (up?'up':'down');
+  $('lblBase').textContent = `query ${c.baseline_top_score.toFixed(3)}`;
+  $('lblHyde').textContent = `HyDE ${c.hyde_top_score.toFixed(3)}`;
+  $('gapCap').innerHTML = `Top document <b style="color:var(--ink)">${esc(c.winner || '—')}</b> · ` +
+    (c.winner_changed ? `HyDE promoted a new winner (was rank ${c.winner_prev_rank ?? '—'} for the raw query).`
+                      : `same top document, but its cosine similarity ${up?'rose':'fell'} by ${Math.abs(c.delta).toFixed(3)} — the query→document gap ${up?'closed':'widened'}.`);
+  show('s-gap');
+  requestAnimationFrame(() => { $('fillBase').style.width = (c.baseline_top_score*100)+'%'; setTimeout(() => $('fillHyde').style.width = (c.hyde_top_score*100)+'%', reduced?0:300); });
+  await sleep(reduced?0:400);
+
+  // 4 — columns
+  const basePos = {}; d.baseline.forEach(r => basePos[r.source] = r.rank);
+  $('baseList').innerHTML = d.baseline.map(r => docRow(r, 'base')).join('');
+  $('hydeList').innerHTML = d.hyde.map(r => {
+    const prev = basePos[r.source]; const dr = prev == null ? null : prev - r.rank;
+    return docRow(r, 'hyde', dr);
+  }).join('');
+  show('s-base'); show('s-hyde'); fillBars('baseList'); fillBars('hydeList');
+
+  running = false; $('run').disabled = false;
+}
+
+$('run').onclick = run;
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') run(); });
+$('topk').oninput = e => $('topkV').textContent = e.target.value;
+chipRow();
+(async () => {
+  try { const h = await fetch(API + '/api/health'); setStatus(h.ok?'ok':'err', h.ok?'live · konjoai':'offline'); }
+  catch { setStatus('err','offline'); }
+  run();
+})();
+</script>
+</body>
+</html>

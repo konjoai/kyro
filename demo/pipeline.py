@@ -164,6 +164,18 @@ class PipelineEngine:
     def _sparse(self, query: str, top_k: int) -> list[BM25Result]:
         return self._bm25.search(query, top_k=top_k)
 
+    def dense(self, query: str, top_k: int = 5) -> list[dict[str, Any]]:
+        """Real dense cosine retrieval as formatted rows (rank 0 = best).
+
+        Embeds ``query`` with the engine's encoder — so passing a HyDE
+        hypothesis paragraph here yields document-space retrieval, which is
+        exactly what the HyDE theater compares against the raw query.
+        """
+        if not self._loaded:
+            self.load()
+        top_k = max(1, min(int(top_k), len(self._docs)))
+        return [self._fmt_dense(r, rank) for rank, r in enumerate(self._dense(query, top_k))]
+
     def hybrid(self, query: str, top_k: int = 5, alpha: float = 0.7) -> list[HybridResult]:
         """Real dense ∥ BM25 retrieval fused with ``reciprocal_rank_fusion``.
 
