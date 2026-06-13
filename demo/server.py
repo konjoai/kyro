@@ -48,6 +48,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from agent import AgentEngine  # noqa: E402  (sibling module, demo/ on sys.path)
+from hyde import HyDEEngine  # noqa: E402  (sibling module, demo/ on sys.path)
 from pipeline import PipelineEngine  # noqa: E402  (sibling module, demo/ on sys.path)
 from security import SecurityEngine  # noqa: E402  (sibling module, demo/ on sys.path)
 
@@ -683,11 +684,13 @@ _corpus = CorpusIndex(Path(__file__).parent / "corpus")
 _pipeline = PipelineEngine(Path(__file__).parent / "corpus", encode)
 _agent = AgentEngine(_pipeline)
 _security = SecurityEngine(encode)
+_hyde = HyDEEngine(_pipeline, encode)
 _HTML_PATH = Path(__file__).parent / "index.html"
 _OBSERVATORY_PATH = Path(__file__).parent / "observatory.html"
 _PIPELINE_PATH = Path(__file__).parent / "pipeline.html"
 _AGENT_PATH = Path(__file__).parent / "agent.html"
 _SECURITY_PATH = Path(__file__).parent / "security.html"
+_HYDE_PATH = Path(__file__).parent / "hyde.html"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -772,6 +775,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._serve_html(_AGENT_PATH)
         if path in ("/security", "/security.html"):
             return self._serve_html(_SECURITY_PATH)
+        if path in ("/hyde", "/hyde.html"):
+            return self._serve_html(_HYDE_PATH)
         if path == "/api/health":
             return self._send_json(
                 {
@@ -849,6 +854,16 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/agent/stream":
                 return self._send_sse(_agent.stream(question, max_steps=max_steps, top_k=top_k))
             return self._send_json(_agent.analyze(question, max_steps=max_steps, top_k=top_k))
+        if path == "/api/hyde/analyze":
+            raw = (params.get("query", [""])[0] or "").strip()[:256]
+            if not raw:
+                idx = int(time.time()) % len(CorpusIndex.DEFAULT_DEMO_QUERIES)
+                raw = CorpusIndex.DEFAULT_DEMO_QUERIES[idx]
+            try:
+                top_k = max(1, min(int(params.get("top_k", ["4"])[0]), 6))
+            except ValueError:
+                top_k = 4
+            return self._send_json(_hyde.analyze(raw, top_k=top_k))
         if path == "/api/security/scenario":
             return self._send_json(_security.scenario())
         if path == "/api/security/stats":
@@ -926,6 +941,7 @@ def main() -> None:
     log.info("  GET  /pipeline          → demo/pipeline.html (hybrid retrieval theater)")
     log.info("  GET  /agent             → demo/agent.html (ReAct agent theater)")
     log.info("  GET  /security          → demo/security.html (cache-poisoning guard theater)")
+    log.info("  GET  /hyde              → demo/hyde.html (HyDE retrieval theater)")
     log.info("  GET  /api/health        → liveness")
     log.info("  GET  /api/cache/stats   → real SemanticCache.stats()")
     log.info("  POST /api/cache/ask     → real cosine + lookup, JSON {question}")
