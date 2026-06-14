@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kyro · Rewrite Theater</title>
+<style>
+  @view-transition { navigation: auto; }
+  :root {
+    --bg: #06060f; --bg-2: #0a0b18; --panel: rgba(13,15,32,0.72);
+    --line: rgba(124,58,237,0.16); --line-2: rgba(124,58,237,0.34);
+    --ink: #e6f1ff; --ink-dim: #8597b8; --ink-faint: #4a5878;
+    --acc: #7c3aed; --acc-2: #a78bfa; --change: #ffd166; --canon: #5cffb1; --hot: #ff7a7a;
+    --mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * , *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); min-height: 100%; }
+  body {
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+    background: radial-gradient(1100px 560px at 82% -10%, rgba(255,209,102,0.08), transparent 60%),
+      radial-gradient(900px 500px at 8% 0%, rgba(124,58,237,0.12), transparent 55%), var(--bg);
+    background-attachment: fixed;
+  }
+  a { color: var(--acc-2); text-decoration: none; }
+  :focus-visible { outline: 2px solid var(--acc-2); outline-offset: 2px; border-radius: 6px; }
+  ::-webkit-scrollbar { width: 7px; height: 7px; }
+  ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 4px; }
+
+  header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px; padding: 0 22px; height: 56px; background: linear-gradient(180deg, rgba(8,9,20,0.92), rgba(8,9,20,0.62)); border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .logo { width: 28px; height: 28px; border-radius: 9px; background: conic-gradient(from 220deg, var(--acc), var(--change), var(--canon), var(--acc)); box-shadow: 0 0 18px rgba(124,58,237,0.55); animation: spin 15s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .brand b { font-size: 15px; letter-spacing: 0.04em; }
+  .brand .ver { font: 10px var(--mono); color: var(--ink-faint); }
+  nav { display: flex; gap: 4px; margin-left: 6px; flex-wrap: wrap; }
+  nav a { padding: 6px 11px; border-radius: 8px; font-size: 13px; color: var(--ink-dim); transition: all .16s; }
+  nav a:hover { background: rgba(124,58,237,0.16); color: var(--ink); }
+  nav a.active { background: rgba(124,58,237,0.26); color: var(--acc-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .spacer { flex: 1; }
+  .status-pill { display: flex; align-items: center; gap: 7px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(13,15,32,0.7); font: 11px var(--mono); color: var(--ink-dim); white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); transition: background .4s; }
+  .dot.ok { background: var(--canon); box-shadow: 0 0 10px var(--canon); animation: pulse 1.8s ease-in-out infinite; }
+  .dot.err { background: var(--hot); box-shadow: 0 0 10px var(--hot); }
+  @keyframes pulse { 0%,100% { opacity: .5; } 50% { opacity: 1; } }
+
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 26px 22px 90px; }
+  .hero { text-align: center; padding: 18px 0 6px; }
+  .hero .eyebrow { font: 11px var(--mono); letter-spacing: 0.32em; text-transform: uppercase; color: var(--acc-2); }
+  .hero h1 { font-size: 40px; font-weight: 650; letter-spacing: -0.02em; margin: 14px 0 10px; line-height: 1.06; }
+  .hero h1 .g { background: linear-gradient(100deg, var(--change), var(--acc-2), var(--canon)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { color: var(--ink-dim); max-width: 660px; margin: 0 auto; font-size: 15px; }
+
+  .controls { margin: 24px 0 8px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); backdrop-filter: blur(8px); }
+  .q-row { display: flex; gap: 10px; }
+  .q-row input[type=text] { flex: 1; padding: 12px 15px; font: 15px var(--sans); background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .q-row input[type=text]:focus { border-color: var(--acc); box-shadow: 0 0 0 3px rgba(124,58,237,0.16); }
+  .run-btn { padding: 0 26px; border: none; border-radius: 10px; cursor: pointer; font: 600 14px var(--sans); color: #fff; background: linear-gradient(120deg, var(--acc), #6d28d9); box-shadow: 0 6px 22px rgba(124,58,237,0.4); transition: transform .12s, filter .2s; white-space: nowrap; }
+  .run-btn:hover { transform: translateY(-1px); filter: brightness(1.08); }
+  .run-btn:active { transform: scale(.97); }
+  .run-btn:disabled { opacity: .55; cursor: progress; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+  .chip { padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: rgba(124,58,237,0.06); font: 12px var(--mono); color: var(--ink-dim); cursor: pointer; transition: all .15s; }
+  .chip:hover { border-color: var(--acc); color: var(--ink); background: rgba(124,58,237,0.16); }
+
+  .section-h { font: 11px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); margin: 26px 0 12px; }
+
+  /* step pipeline */
+  .step { border: 1px solid var(--line); border-radius: 12px; padding: 12px 15px; background: var(--panel); backdrop-filter: blur(6px); margin-bottom: 0; opacity: 0; transform: translateY(12px); transition: opacity .4s cubic-bezier(.22,.9,.3,1), transform .4s cubic-bezier(.22,.9,.3,1), border-color .3s; }
+  .step.show { opacity: 1; transform: none; }
+  .step.changed { border-color: rgba(255,209,102,0.34); }
+  .step.noop { opacity: .6; }
+  .conn { width: 2px; height: 16px; margin: 0 auto; background: linear-gradient(180deg, var(--line-2), transparent); }
+  .s-head { display: flex; align-items: center; gap: 9px; }
+  .s-name { font: 11px var(--mono); letter-spacing: 0.08em; color: var(--ink); }
+  .s-tag { margin-left: auto; font: 9px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; }
+  .s-tag.changed { color: var(--change); background: rgba(255,209,102,0.12); border: 1px solid rgba(255,209,102,0.34); }
+  .s-tag.noop { color: var(--ink-faint); border: 1px solid var(--line); }
+  .s-text { font: 13px var(--mono); margin-top: 9px; word-break: break-word; }
+  .s-text .after { color: var(--ink); }
+  .s-text .before { color: var(--ink-faint); text-decoration: line-through; margin-bottom: 3px; }
+  .canon-card { border: 1px solid var(--line-2); border-radius: 12px; padding: 14px 16px; background: linear-gradient(180deg, rgba(92,255,177,0.06), rgba(13,15,32,0.72)); margin-top: 14px; opacity: 0; transform: translateY(10px); transition: opacity .45s, transform .45s; }
+  .canon-card.show { opacity: 1; transform: none; }
+  .canon-card .lbl { font: 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--canon); margin-bottom: 7px; }
+  .canon-card .key { font: 15px var(--mono); color: var(--ink); }
+  .canon-card .key b { color: var(--canon); }
+
+  /* collapse clusters */
+  .totals { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tcard { flex: 1; min-width: 130px; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; background: var(--panel); }
+  .tcard .v { font: 600 26px var(--mono); color: var(--ink); }
+  .tcard .v.good { color: var(--canon); }
+  .tcard .k { font: 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); margin-top: 3px; }
+  .cluster { border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; background: var(--panel); margin-bottom: 10px; opacity: 0; transform: translateX(-12px); transition: opacity .45s, transform .45s; }
+  .cluster.show { opacity: 1; transform: none; }
+  .cl-head { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+  .cl-intent { font-size: 13px; color: var(--ink); font-weight: 600; }
+  .cl-badge { margin-left: auto; font: 10px var(--mono); padding: 2px 9px; border-radius: 6px; }
+  .cl-badge.win { color: var(--canon); background: rgba(92,255,177,0.12); border: 1px solid rgba(92,255,177,0.34); }
+  .cl-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px 12px; align-items: center; }
+  @media (max-width: 640px) { .cl-grid { grid-template-columns: 1fr; } .arrow { display: none; } }
+  .variant { font: 12px var(--mono); color: var(--ink-dim); padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .arrow { color: var(--ink-faint); text-align: center; font: 13px var(--mono); }
+  .canon { font: 12px var(--mono); color: var(--canon); padding: 6px 10px; border: 1px solid rgba(92,255,177,0.3); border-radius: 8px; background: rgba(92,255,177,0.06); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .src-note { margin-top: 26px; text-align: center; font: 11px var(--mono); color: var(--ink-faint); }
+  .src-note code { color: var(--acc-2); }
+  .err-banner { margin-top: 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,122,122,0.4); background: rgba(255,122,122,0.08); color: var(--hot); font: 12px var(--mono); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+    @view-transition { navigation: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo"></div><div><b>kyro</b> <span class="ver">rewrite theater</span></div></div>
+  <nav aria-label="surfaces">
+    <a href="/">Playground</a>
+    <a href="/observatory">Observatory</a>
+    <a href="/pipeline">Pipeline</a>
+    <a href="/agent">Agent</a>
+    <a href="/security">Security</a>
+    <a href="/hyde">HyDE</a>
+    <a href="/rewrite" class="active" aria-current="page">Rewrite</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="status-pill"><span class="dot" id="dot"></span><span id="status">connecting…</span></div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div class="eyebrow">距離 · query normalization · real rewriter</div>
+    <h1>Canonicalize the <span class="g">query</span>.</h1>
+    <p>Before a cache lookup, kyro normalizes the query through a deterministic, LLM-free pipeline. Differently-phrased questions that canonicalize to the same string share a cache key — turning would-be misses into hits. Watch the six real steps transform a query, then see paraphrases collapse.</p>
+  </section>
+
+  <section class="controls">
+    <div class="q-row">
+      <input type="text" id="q" placeholder="Type a messy query…" value="Hey, what's the REFUND  policy, please??" autocomplete="off" />
+      <button class="run-btn" id="run">▶ Rewrite</button>
+    </div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <div class="section-h">Rewrite pipeline · <span id="stepCount"></span></div>
+  <div id="pipeline"></div>
+  <div class="canon-card" id="canonCard">
+    <div class="lbl">canonical cache key</div>
+    <div class="key" id="canonKey"></div>
+  </div>
+
+  <div class="section-h">Paraphrase collapse · cache keys saved</div>
+  <div class="totals" id="totals"></div>
+  <div id="clusters"></div>
+
+  <div class="src-note">source · <code>konjoai.cache.rewriter.QueryRewriter</code> — the real normalizer on kyro's cache lookup path (<code>explain</code> + <code>rewrite</code>), no stubs</div>
+</main>
+
+<script>
+'use strict';
+const API = location.origin.startsWith('http') ? location.origin : 'http://127.0.0.1:8766';
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const PRESETS = [
+  "Hey, what's the REFUND  policy, please??",
+  "What is your SLA??",
+  "Could you tell me how FAST shipping is?",
+  "how do I install   kyro",
+];
+
+function chipRow() {
+  $('chips').innerHTML = PRESETS.map((p,i) => `<span class="chip" data-i="${i}">${esc(p.length>40?p.slice(0,38)+'…':p)}</span>`).join('');
+  $('chips').querySelectorAll('.chip').forEach(c => c.onclick = () => { $('q').value = PRESETS[+c.dataset.i]; runTrace(); });
+}
+function setStatus(cls, txt) { $('dot').className = 'dot ' + cls; $('status').textContent = txt; }
+
+async function runTrace() {
+  const q = $('q').value.trim();
+  $('pipeline').innerHTML = ''; $('canonCard').classList.remove('show');
+  $('run').disabled = true;
+  let d;
+  try {
+    const res = await fetch(`${API}/api/rewrite/trace?query=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    d = await res.json();
+    if (d.error) throw new Error(d.error);
+  } catch (e) {
+    $('pipeline').innerHTML = `<div class="err-banner">rewriter offline — start the demo server:&nbsp; <b>python3 demo/server.py</b></div>`;
+    setStatus('err','offline'); $('run').disabled = false; return;
+  }
+  setStatus('ok','live · konjoai');
+  $('stepCount').textContent = `${d.changed_count} of ${d.steps.length} steps changed the query`;
+  for (let i = 0; i < d.steps.length; i++) {
+    const s = d.steps[i];
+    if (i) { const c = document.createElement('div'); c.className = 'conn'; $('pipeline').appendChild(c); }
+    const el = document.createElement('div');
+    el.className = 'step ' + (s.changed ? 'changed' : 'noop');
+    el.innerHTML = `
+      <div class="s-head"><span class="s-name">${i+1}. ${esc(s.name)}</span>
+        <span class="s-tag ${s.changed?'changed':'noop'}">${s.changed?'changed':'no-op'}</span></div>
+      ${s.changed ? `<div class="s-text"><div class="before">${esc(s.before)}</div><div class="after">${esc(s.after)}</div></div>`
+                  : `<div class="s-text"><span class="after" style="color:var(--ink-faint)">${esc(s.after)}</span></div>`}`;
+    $('pipeline').appendChild(el);
+    await sleep(reduced ? 0 : 20);
+    el.classList.add('show');
+    await sleep(reduced ? 0 : (s.changed ? 200 : 80));
+  }
+  $('canonKey').innerHTML = `<b>${esc(d.rewritten)}</b>`;
+  $('canonCard').classList.add('show');
+  $('run').disabled = false;
+}
+
+async function loadScenario() {
+  let d;
+  try { d = await (await fetch(`${API}/api/rewrite/scenario`)).json(); }
+  catch { return; }
+  const t = d.totals;
+  $('totals').innerHTML = `
+    <div class="tcard"><div class="v">${t.variants}</div><div class="k">phrasings</div></div>
+    <div class="tcard"><div class="v">${t.unique_keys}</div><div class="k">unique cache keys</div></div>
+    <div class="tcard"><div class="v good">${t.keys_saved}</div><div class="k">keys saved</div></div>
+    <div class="tcard"><div class="v good">+${t.hits_gained}</div><div class="k">cache hits gained</div></div>`;
+  $('clusters').innerHTML = '';
+  for (let i = 0; i < d.clusters.length; i++) {
+    const c = d.clusters[i];
+    const canon = c.rows[0].rewritten;
+    const el = document.createElement('div');
+    el.className = 'cluster';
+    el.innerHTML = `
+      <div class="cl-head"><span class="cl-intent">${esc(c.intent)}</span>
+        <span class="cl-badge win">${c.variants} → ${c.unique_keys} key${c.unique_keys>1?'s':''}</span></div>
+      <div class="cl-grid">
+        <div>${c.rows.map(r => `<div class="variant" title="${esc(r.original)}">${esc(r.original)}</div>`).join('')}</div>
+        <div class="arrow">⟶</div>
+        <div><div class="canon" title="${esc(canon)}">${esc(canon)}</div></div>
+      </div>`;
+    $('clusters').appendChild(el);
+    await sleep(reduced ? 0 : 30);
+    el.classList.add('show');
+    await sleep(reduced ? 0 : 160);
+  }
+}
+
+$('run').onclick = runTrace;
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') runTrace(); });
+chipRow();
+(async () => {
+  try { const h = await fetch(API + '/api/health'); setStatus(h.ok?'ok':'err', h.ok?'live · konjoai':'offline'); }
+  catch { setStatus('err','offline'); }
+  await runTrace();
+  await loadScenario();
+})();
+</script>
+</body>
+</html>
