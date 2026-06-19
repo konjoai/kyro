@@ -14,6 +14,7 @@ POST   /cache/ttl/adjust       — trigger one adaptive-TTL adjustment cycle (Sp
 
 All routes return HTTP 404 when ``cache_enabled`` is False (K3).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -146,6 +147,7 @@ async def warm_cache(body: WarmRequest) -> WarmResponse:
 
     class _Resp:
         """Minimal stand-in that satisfies cache.store()'s response.answer lookup."""
+
         def __init__(self, answer: str) -> None:
             self.answer = answer
 
@@ -155,7 +157,8 @@ async def warm_cache(body: WarmRequest) -> WarmResponse:
     questions = [p.question for p in body.pairs]
     try:
         vecs: np.ndarray = await asyncio.to_thread(
-            encoder.encode, questions  # type: ignore[arg-type]
+            encoder.encode,
+            questions,  # type: ignore[arg-type]
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("cache warm: batch encode failed: %s", exc)
@@ -179,7 +182,9 @@ async def warm_cache(body: WarmRequest) -> WarmResponse:
 
     logger.info(
         "cache warm complete — warmed=%d dup=%d err=%d",
-        warmed, skipped_dup, skipped_err,
+        warmed,
+        skipped_dup,
+        skipped_err,
     )
     return WarmResponse(
         warmed=warmed,
@@ -265,12 +270,16 @@ def _kmeans_cluster(
     """Lloyd's k-means on L2-normalised embeddings. Pure numpy. Max 50 lines."""
     questions = [e[0] for e in entries]
     hit_counts = np.array([e[2] for e in entries], dtype=np.float32)
-
-    # Stack + normalise all embeddings to unit sphere
     vecs = np.vstack([SemanticCache._l2_norm(e[1]) for e in entries])  # (n, dim)
 
-    # Initialise centroids via k-means++ seeding
     rng = np.random.default_rng(seed=42)
+    centroids_arr = _kmeanspp_init(vecs, k, rng)
+    labels = _lloyd_iterations(vecs, centroids_arr, k, max_iter)
+    return _summarise_clusters(vecs, labels, centroids_arr, questions, hit_counts, k)
+
+
+def _kmeanspp_init(vecs: np.ndarray, k: int, rng: np.random.Generator) -> np.ndarray:
+    """Seed *k* centroids on the unit sphere via k-means++ (probability-weighted)."""
     centroids = [vecs[rng.integers(len(vecs))].copy()]
     for _ in range(k - 1):
         dists = np.array([min(float(1 - np.dot(c, v)) for c in centroids) for v in vecs])
@@ -278,13 +287,14 @@ def _kmeans_cluster(
         total = dists.sum()
         probs = dists / total if total > 0 else np.ones(len(vecs)) / len(vecs)
         centroids.append(vecs[rng.choice(len(vecs), p=probs)].copy())
-    centroids_arr = np.array(centroids)  # (k, dim)
+    return np.array(centroids)  # (k, dim)
 
-    # Lloyd iterations
+
+def _lloyd_iterations(vecs: np.ndarray, centroids_arr: np.ndarray, k: int, max_iter: int) -> np.ndarray:
+    """Run Lloyd's algorithm in place on *centroids_arr*; return final labels."""
     labels = np.zeros(len(vecs), dtype=int)
     for _ in range(max_iter):
-        sims = vecs @ centroids_arr.T  # (n, k) cosine similarities
-        new_labels = np.argmax(sims, axis=1)
+        new_labels = np.argmax(vecs @ centroids_arr.T, axis=1)  # cosine similarities
         if np.array_equal(new_labels, labels):
             break
         labels = new_labels
@@ -294,24 +304,33 @@ def _kmeans_cluster(
                 c = vecs[mask].mean(axis=0)
                 norm = np.linalg.norm(c)
                 centroids_arr[ci] = c / norm if norm > 1e-10 else c
+    return labels
 
-    # Build output — one dict per cluster
+
+def _summarise_clusters(
+    vecs: np.ndarray,
+    labels: np.ndarray,
+    centroids_arr: np.ndarray,
+    questions: list[str],
+    hit_counts: np.ndarray,
+    k: int,
+) -> list[dict[str, object]]:
+    """Build one summary dict per non-empty cluster, sorted by descending size."""
     result: list[dict[str, object]] = []
     for ci in range(k):
         mask = labels == ci
         if not mask.any():
             continue
         cluster_qs = [questions[i] for i in np.where(mask)[0]]
-        cluster_hits = hit_counts[mask]
-        member_sims = float((vecs[mask] @ centroids_arr[ci]).mean())
-        result.append({
-            "cluster_id": ci,
-            "size": int(mask.sum()),
-            "avg_hit_count": round(float(cluster_hits.mean()), 2),
-            "avg_centroid_similarity": round(member_sims, 4),
-            "representative_questions": cluster_qs[:5],
-        })
-
+        result.append(
+            {
+                "cluster_id": ci,
+                "size": int(mask.sum()),
+                "avg_hit_count": round(float(hit_counts[mask].mean()), 2),
+                "avg_centroid_similarity": round(float((vecs[mask] @ centroids_arr[ci]).mean()), 4),
+                "representative_questions": cluster_qs[:5],
+            }
+        )
     result.sort(key=lambda c: c["size"], reverse=True)
     return result
 
@@ -364,12 +383,14 @@ async def batch_search(body: SearchQuery) -> dict[str, object]:
                 continue
             sim = float(np.dot(q_norm, SemanticCache._l2_norm(entry_vec.question_vec)))
             answer = resp.answer if hasattr(resp, "answer") else str(resp)
-            scored.append({
-                "question": orig_q,
-                "answer":   answer[:256],
-                "similarity": round(sim, 4),
-                "hit_count":  hits,
-            })
+            scored.append(
+                {
+                    "question": orig_q,
+                    "answer": answer[:256],
+                    "similarity": round(sim, 4),
+                    "hit_count": hits,
+                }
+            )
         scored.sort(key=lambda m: m["similarity"], reverse=True)
         results.append({"query_index": i, "query": q, "matches": scored[: body.top_k]})
 
@@ -481,7 +502,9 @@ class ReportPoisoningRequest(BaseModel):
     """Body for a manual cache-poisoning report."""
 
     question_hash: str = Field(
-        ..., min_length=8, max_length=64,
+        ...,
+        min_length=8,
+        max_length=64,
         description="16-hex SHA-256 prefix of the question (OWASP — no raw text).",
     )
     reason: str = Field(..., min_length=1, max_length=256)
@@ -510,9 +533,7 @@ async def report_poisoning(body: ReportPoisoningRequest) -> ReportPoisoningRespo
     tenant = body.tenant_id or "anonymous"
     store = get_poisoning_report_store()
     await asyncio.to_thread(store.record, tenant, body.question_hash, body.reason)
-    report_hash = hashlib.sha256(
-        f"{tenant}:{body.question_hash}:{body.reason}".encode()
-    ).hexdigest()[:16]
+    report_hash = hashlib.sha256(f"{tenant}:{body.question_hash}:{body.reason}".encode()).hexdigest()[:16]
     return ReportPoisoningResponse(recorded=True, report_hash=report_hash)
 
 
@@ -531,8 +552,7 @@ async def poisoning_reports(
     return {
         "count": len(reports),
         "reports": [
-            {"tenant_id": r.tenant_id, "question_hash": r.question_hash,
-             "reason": r.reason, "timestamp": r.timestamp}
+            {"tenant_id": r.tenant_id, "question_hash": r.question_hash, "reason": r.reason, "timestamp": r.timestamp}
             for r in reports
         ],
     }
@@ -562,13 +582,10 @@ async def preview_rewrite(body: RewriteRequest) -> dict[str, object]:
     rewriter: QueryRewriter = await asyncio.to_thread(get_rewriter)
     result = await asyncio.to_thread(rewriter.explain, body.question)
     return {
-        "original":  result.original,
+        "original": result.original,
         "rewritten": result.rewritten,
-        "changed":   result.changed,
-        "steps": [
-            {"name": s.name, "before": s.before, "after": s.after, "changed": s.changed}
-            for s in result.steps
-        ],
+        "changed": result.changed,
+        "steps": [{"name": s.name, "before": s.before, "after": s.after, "changed": s.changed} for s in result.steps],
     }
 
 
@@ -577,8 +594,8 @@ async def rewrite_config() -> dict[str, object]:
     """Return the active query-rewrite configuration."""
     settings = get_settings()
     return {
-        "enabled":    getattr(settings, "cache_query_rewrite_enabled", False),
-        "steps":      getattr(settings, "cache_query_rewrite_steps", []),
+        "enabled": getattr(settings, "cache_query_rewrite_enabled", False),
+        "steps": getattr(settings, "cache_query_rewrite_steps", []),
         "step_names": (await asyncio.to_thread(get_rewriter)).step_names,
     }
 
@@ -615,7 +632,11 @@ async def list_suspicious(
         for f in findings:
             await asyncio.to_thread(
                 store.flag,
-                f["entry_hash"], f["question"], f["reason"], f["score"], f["signal"],
+                f["entry_hash"],
+                f["question"],
+                f["reason"],
+                f["score"],
+                f["signal"],
             )
     return {"count": len(findings), "suspicious": findings}
 
@@ -630,11 +651,11 @@ async def list_flagged() -> dict[str, object]:
         "flags": [
             {
                 "entry_hash": f.entry_hash,
-                "question":   f.question,
-                "reason":     f.reason,
-                "score":      f.score,
-                "signal":     f.signal,
-                "status":     f.status,
+                "question": f.question,
+                "reason": f.reason,
+                "score": f.score,
+                "signal": f.signal,
+                "status": f.status,
             }
             for f in flags
         ],
@@ -672,8 +693,11 @@ async def reject_suspicious(entry_hash: str) -> dict[str, object]:
         cache = _require_memory_cache()
         with cache._lock:  # type: ignore[attr-defined]
             # The flag store uses normalised keys; scan exact dict for match
-            to_delete = [k for k in cache._exact  # type: ignore[attr-defined]
-                         if hashlib.sha256(k.encode()).hexdigest()[:16] == entry_hash]
+            to_delete = [
+                k
+                for k in cache._exact  # type: ignore[attr-defined]
+                if hashlib.sha256(k.encode()).hexdigest()[:16] == entry_hash
+            ]
         for k in to_delete:
             with cache._lock:  # type: ignore[attr-defined]
                 cache._lru.pop(k, None)  # type: ignore[attr-defined]
@@ -708,9 +732,9 @@ async def register_peer(body: RegisterPeerRequest) -> dict[str, object]:
     registry = get_peer_registry()
     node = await asyncio.to_thread(registry.register, body.url, name=body.name, auth_token=body.auth_token)
     return {
-        "peer_id":   node.peer_id,
-        "url":       node.url,
-        "name":      node.name,
+        "peer_id": node.peer_id,
+        "url": node.url,
+        "name": node.name,
         "registered_at": node.registered_at,
     }
 

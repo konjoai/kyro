@@ -10,6 +10,7 @@ Sprint 11 contract:
 4. If there is a CORRECT/AMBIGUOUS mix, keep CORRECT chunks and refine
    AMBIGUOUS chunks via decomposed sub-queries.
 """
+
 from __future__ import annotations
 
 import logging
@@ -87,9 +88,7 @@ class CRAGEvaluator:
         max_sub_queries: int = 4,
     ) -> None:
         if not (0.0 <= ambiguous_threshold < correct_threshold <= 1.0):
-            raise ValueError(
-                "CRAG thresholds must satisfy 0.0 <= ambiguous < correct <= 1.0"
-            )
+            raise ValueError("CRAG thresholds must satisfy 0.0 <= ambiguous < correct <= 1.0")
         self.correct_threshold = correct_threshold
         self.ambiguous_threshold = ambiguous_threshold
         self.max_sub_queries = max_sub_queries
@@ -101,60 +100,86 @@ class CRAGEvaluator:
 
         scored_chunks = self._score_chunks(query, chunks)
         if not scored_chunks:
-            return CRAGResult(
-                selected_chunks=[],
-                scored_chunks=[],
-                fallback_chunks=[],
-                crag_scores=[],
-                crag_classification=[],
-                refinement_triggered=False,
-                fallback_triggered=False,
-                mean_selected_score=0.0,
-            )
+            return self._empty_result()
 
-        classes = [c.classification for c in scored_chunks]
-        scores = [c.crag_score for c in scored_chunks]
+        correct_chunks, ambiguous_chunks, incorrect_chunks = self._partition(scored_chunks)
 
-        if all(c == CRAGClassification.INCORRECT for c in classes):
+        if len(incorrect_chunks) == len(scored_chunks):
             fallback_chunks = self.web_fallback(query)
-            return CRAGResult(
-                selected_chunks=fallback_chunks,
-                scored_chunks=scored_chunks,
-                fallback_chunks=fallback_chunks,
-                crag_scores=scores,
-                crag_classification=[c.value for c in classes],
+            return self._build_result(
+                scored_chunks,
+                fallback_chunks,
+                fallback_chunks,
                 refinement_triggered=False,
                 fallback_triggered=True,
-                mean_selected_score=self._mean_score(fallback_chunks),
             )
 
-        correct_chunks = [
-            c for c in scored_chunks if c.classification == CRAGClassification.CORRECT
-        ]
-        ambiguous_chunks = [
-            c for c in scored_chunks if c.classification == CRAGClassification.AMBIGUOUS
-        ]
-
         refinement_triggered = bool(ambiguous_chunks and correct_chunks)
-        refined_chunks: list[CRAGChunk] = []
-        if ambiguous_chunks:
-            refined_chunks = self._refine_ambiguous(query, ambiguous_chunks)
+        refined_chunks = self._refine_ambiguous(query, ambiguous_chunks) if ambiguous_chunks else []
 
         selected = correct_chunks + refined_chunks
-        fallback_chunks: list[CRAGChunk] = []
+        fallback_chunks = []
         fallback_triggered = False
-
         if not selected:
             fallback_chunks = self.web_fallback(query)
             selected = fallback_chunks
             fallback_triggered = True
 
+        return self._build_result(
+            scored_chunks,
+            selected,
+            fallback_chunks,
+            refinement_triggered=refinement_triggered,
+            fallback_triggered=fallback_triggered,
+        )
+
+    @staticmethod
+    def _partition(
+        scored_chunks: list[CRAGChunk],
+    ) -> tuple[list[CRAGChunk], list[CRAGChunk], list[CRAGChunk]]:
+        """Split scored chunks into (correct, ambiguous, incorrect) by classification."""
+        correct: list[CRAGChunk] = []
+        ambiguous: list[CRAGChunk] = []
+        incorrect: list[CRAGChunk] = []
+        for c in scored_chunks:
+            if c.classification == CRAGClassification.CORRECT:
+                correct.append(c)
+            elif c.classification == CRAGClassification.AMBIGUOUS:
+                ambiguous.append(c)
+            else:
+                incorrect.append(c)
+        return correct, ambiguous, incorrect
+
+    @staticmethod
+    def _empty_result() -> CRAGResult:
+        """Return the CRAGResult used when no chunks survive scoring."""
+        return CRAGResult(
+            selected_chunks=[],
+            scored_chunks=[],
+            fallback_chunks=[],
+            crag_scores=[],
+            crag_classification=[],
+            refinement_triggered=False,
+            fallback_triggered=False,
+            mean_selected_score=0.0,
+        )
+
+    def _build_result(
+        self,
+        scored_chunks: list[CRAGChunk],
+        selected: list[CRAGChunk],
+        fallback_chunks: list[CRAGChunk],
+        *,
+        refinement_triggered: bool,
+        fallback_triggered: bool,
+    ) -> CRAGResult:
+        """Assemble a CRAGResult, deriving scores/classification from scored_chunks."""
         return CRAGResult(
             selected_chunks=selected,
             scored_chunks=scored_chunks,
             fallback_chunks=fallback_chunks,
-            crag_scores=scores,
-            crag_classification=[c.value for c in classes],
+            crag_scores=[c.crag_score for c in scored_chunks],
+            crag_classification=[c.classification.value for c in scored_chunks],
             refinement_triggered=refinement_triggered,
             fallback_triggered=fallback_triggered,
             mean_selected_score=self._mean_score(selected),

@@ -24,6 +24,7 @@ class Chunker(Protocol):
 
 # ── Recursive character splitter ─────────────────────────────────────────────
 
+
 class RecursiveChunker:
     """Split text recursively on paragraph → sentence → word boundaries."""
 
@@ -93,6 +94,7 @@ class RecursiveChunker:
 
 try:
     import numpy as np  # already required by sentence-transformers
+
     _NUMPY_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _NUMPY_AVAILABLE = False
@@ -108,13 +110,39 @@ def _cosine_similarities(embeddings: np.ndarray) -> np.ndarray:
         ``(N-1,)`` float32 array of adjacent cosine similarities.
     """
     import numpy as np  # noqa: PLC0415 — guard already checked at call site
+
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
     norms = np.where(norms == 0.0, 1.0, norms)
     normed = embeddings / norms
     return np.einsum("ij,ij->i", normed[:-1], normed[1:]).astype(np.float32)
 
 
-class SemanticSplitter:
+class _EncoderBackedChunker:
+    """Mixin providing the lazy encoder load shared by embedding-based chunkers."""
+
+    model_name: str
+    device: str
+
+    def _get_encoder(self):
+        """Return the encoder, loading the model lazily on first call."""
+        if self._enc is None:
+            from konjoai.embed.encoder import SentenceEncoder  # noqa: PLC0415
+
+            self._enc = SentenceEncoder(model_name=self.model_name, device=self.device)
+        return self._enc
+
+    def _encode(self, texts: list[str]) -> np.ndarray:
+        """Encode *texts*; supports both :class:`SentenceEncoder` and raw callables."""
+        import numpy as np  # noqa: PLC0415
+
+        enc = self._get_encoder()
+        if hasattr(enc, "encode"):
+            return enc.encode(texts)
+        result = enc(texts)
+        return np.array(result, dtype=np.float32)
+
+
+class SemanticSplitter(_EncoderBackedChunker):
     """Split documents at semantic paragraph boundaries.
 
     Embeds every sentence individually (plus an optional context buffer of
@@ -160,34 +188,12 @@ class SemanticSplitter:
         _encoder=None,
     ) -> None:
         if not 0.0 <= similarity_threshold <= 1.0:
-            raise ValueError(
-                f"similarity_threshold must be in [0, 1], got {similarity_threshold}"
-            )
+            raise ValueError(f"similarity_threshold must be in [0, 1], got {similarity_threshold}")
         self.model_name = model_name
         self.similarity_threshold = similarity_threshold
         self.buffer_size = buffer_size
         self.device = device
         self._enc = _encoder  # lazy-loaded on first chunk() call when None
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _get_encoder(self):
-        """Return the encoder, loading the model lazily on first call."""
-        if self._enc is None:
-            from konjoai.embed.encoder import SentenceEncoder  # noqa: PLC0415
-            self._enc = SentenceEncoder(model_name=self.model_name, device=self.device)
-        return self._enc
-
-    def _encode(self, texts: list[str]) -> np.ndarray:
-        """Encode *texts*; supports both :class:`SentenceEncoder` and raw callables."""
-        import numpy as np  # noqa: PLC0415
-        enc = self._get_encoder()
-        if hasattr(enc, "encode"):
-            return enc.encode(texts)
-        result = enc(texts)
-        return np.array(result, dtype=np.float32)
 
     # ------------------------------------------------------------------
     # Public API
@@ -227,9 +233,7 @@ class SemanticSplitter:
 
         return self._build_chunks(sentences, split_after, doc)
 
-    def _build_chunks(
-        self, sentences: list[str], split_after: list[int], doc: Document
-    ) -> list[Chunk]:
+    def _build_chunks(self, sentences: list[str], split_after: list[int], doc: Document) -> list[Chunk]:
         """Convert split indices into :class:`Chunk` objects."""
         chunks: list[Chunk] = []
         start = 0
@@ -281,7 +285,7 @@ class SemanticSplitter:
 # ── Late Chunker ──────────────────────────────────────────────────────────────
 
 
-class LateChunker:
+class LateChunker(_EncoderBackedChunker):
     """Post-embedding semantic chunking (Late Chunking).
 
     Implements the Late Chunking technique from *Jina AI (2024)*:
@@ -332,9 +336,7 @@ class LateChunker:
         _encoder=None,
     ) -> None:
         if not 0.0 <= similarity_threshold <= 1.0:
-            raise ValueError(
-                f"similarity_threshold must be in [0, 1], got {similarity_threshold}"
-            )
+            raise ValueError(f"similarity_threshold must be in [0, 1], got {similarity_threshold}")
         if max_chunk_tokens < 1:
             raise ValueError(f"max_chunk_tokens must be ≥ 1, got {max_chunk_tokens}")
         self.model_name = model_name
@@ -346,20 +348,6 @@ class LateChunker:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
-
-    def _get_encoder(self):
-        if self._enc is None:
-            from konjoai.embed.encoder import SentenceEncoder  # noqa: PLC0415
-            self._enc = SentenceEncoder(model_name=self.model_name, device=self.device)
-        return self._enc
-
-    def _encode(self, texts: list[str]) -> np.ndarray:
-        import numpy as np  # noqa: PLC0415
-        enc = self._get_encoder()
-        if hasattr(enc, "encode"):
-            return enc.encode(texts)
-        result = enc(texts)
-        return np.array(result, dtype=np.float32)
 
     # ------------------------------------------------------------------
     # Public API
@@ -454,6 +442,7 @@ class LateChunker:
 
 # ── Sentence-window chunker ───────────────────────────────────────────────────
 
+
 class SentenceWindowChunker:
     """Anchor on sentences; add a window of surrounding sentences as context."""
 
@@ -485,6 +474,7 @@ class SentenceWindowChunker:
 
 
 # ── Factory ───────────────────────────────────────────────────────────────────
+
 
 def get_chunker(
     strategy: str = "recursive",
@@ -532,6 +522,5 @@ def get_chunker(
             _encoder=_encoder,
         )
     raise ValueError(
-        f"Unknown chunking strategy: {strategy!r}. "
-        "Choose 'recursive', 'sentence_window', 'semantic', or 'late'."
+        f"Unknown chunking strategy: {strategy!r}. Choose 'recursive', 'sentence_window', 'semantic', or 'late'."
     )

@@ -12,6 +12,7 @@ Design principles
 * K1: Every method either returns a value or raises.  No silent swallowing
   of exceptions.
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
@@ -20,6 +21,7 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 
 # ── VectorStoreAdapter ────────────────────────────────────────────────────────
+
 
 @runtime_checkable
 class VectorStoreAdapter(Protocol):
@@ -30,11 +32,11 @@ class VectorStoreAdapter(Protocol):
 
     def upsert(
         self,
-        vectors: list[np.ndarray],
+        embeddings: list[np.ndarray],
         payloads: list[dict],
         ids: list[str] | None = None,
     ) -> int:
-        """Write *vectors* with *payloads* into the store.
+        """Write *embeddings* with *payloads* into the store.
 
         Returns the number of vectors successfully indexed.
         """
@@ -64,6 +66,7 @@ class VectorStoreAdapter(Protocol):
 
 # ── EmbedderAdapter ───────────────────────────────────────────────────────────
 
+
 @runtime_checkable
 class EmbedderAdapter(Protocol):
     """A text-to-vector embedding backend.
@@ -92,6 +95,7 @@ class EmbedderAdapter(Protocol):
 
 
 # ── GeneratorAdapter ──────────────────────────────────────────────────────────
+
 
 @runtime_checkable
 class GeneratorAdapter(Protocol):
@@ -127,6 +131,7 @@ class GeneratorAdapter(Protocol):
 
 
 # ── RetrieverAdapter ──────────────────────────────────────────────────────────
+
 
 @runtime_checkable
 class RetrieverAdapter(Protocol):

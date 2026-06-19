@@ -23,6 +23,7 @@ When the ``opentelemetry-sdk`` package is absent, or when ``otel_enabled``
 is False in Settings, every function in this module is a no-op.  The caller
 never branches on OTel availability.
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,6 +43,7 @@ __all__ = ["cache_span", "emit_cache_lookup"]
 try:
     from opentelemetry import trace as _otel_trace  # type: ignore[import-untyped]  # noqa: F401
     from opentelemetry.trace import NonRecordingSpan  # type: ignore[import-untyped]  # noqa: F401
+
     _HAS_OTEL = True
 except ImportError:
     _HAS_OTEL = False
@@ -55,7 +57,6 @@ _DEFAULT_AVG_TOKENS = 256
 def cache_span(
     operation: str,
     *,
-    tracer_name: str = "kyro.cache",
     enabled: bool = True,
 ) -> Generator[object, None, None]:
     """Context manager that wraps a block in an OTel span named ``cache.<operation>``.

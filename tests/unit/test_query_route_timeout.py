@@ -3,71 +3,43 @@
 K2: every hot-path step is observable.
 K3: graceful degradation — 504 on overrun, not 500.
 """
+
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from unittest.mock import patch
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from konjoai.api.routes.query import router
 from konjoai.retrieve.reranker import RerankResult
 
+from ._route_harness import (
+    SettingsStub,
+)
+from ._route_harness import (
+    clear_proxy_env as _clear_proxy_env,
+)
+from ._route_harness import (
+    make_app as _make_app,
+)
+
 # ── Shared settings stubs ────────────────────────────────────────────────────
-
-@dataclass
-class _SettingsNormal:
-    enable_query_router: bool = False       # skip routing so first await is hybrid_search
-    enable_hyde: bool = False
-    enable_telemetry: bool = True
-    use_vectro_retriever: bool = False
-    use_colbert: bool = False
-    enable_crag: bool = False
-    enable_self_rag: bool = False
-    enable_query_decomposition: bool = False
-    decomposition_max_sub_queries: int = 4
-    self_rag_max_iterations: int = 3
-    top_k_dense: int = 5
-    top_k_sparse: int = 5
-    openai_model: str = "stub-model"
-    request_timeout_seconds: float = 30.0
-    enable_graph_rag: bool = False
-    graph_rag_max_communities: int = 5
-    graph_rag_similarity_threshold: float = 0.3
-    otel_enabled: bool = False
-    audit_enabled: bool = False
+# enable_query_router=False so the first awaited hot-path step is hybrid_search.
 
 
-@dataclass
-class _SettingsTimeout:
+def _settings_normal() -> SettingsStub:
+    """Baseline settings: 30 s timeout, routing disabled."""
+    return SettingsStub(enable_query_router=False, top_k_dense=5, top_k_sparse=5)
+
+
+def _settings_timeout() -> SettingsStub:
     """10 ms timeout — fires before any real I/O can complete."""
-    enable_query_router: bool = False
-    enable_hyde: bool = False
-    enable_telemetry: bool = True
-    use_vectro_retriever: bool = False
-    use_colbert: bool = False
-    enable_crag: bool = False
-    enable_self_rag: bool = False
-    enable_query_decomposition: bool = False
-    decomposition_max_sub_queries: int = 4
-    self_rag_max_iterations: int = 3
-    top_k_dense: int = 5
-    top_k_sparse: int = 5
-    openai_model: str = "stub-model"
-    request_timeout_seconds: float = 0.01  # 10 ms — reliably fires before 50 ms sleep
-    enable_graph_rag: bool = False
-    graph_rag_max_communities: int = 5
-    graph_rag_similarity_threshold: float = 0.3
-    otel_enabled: bool = False
-    audit_enabled: bool = False
-
-
-def _make_app() -> FastAPI:
-    app = FastAPI()
-    app.include_router(router)
-    return app
+    return SettingsStub(
+        enable_query_router=False,
+        top_k_dense=5,
+        top_k_sparse=5,
+        request_timeout_seconds=0.01,
+    )
 
 
 def _sample_reranked() -> list[RerankResult]:
@@ -90,16 +62,15 @@ async def _slow_to_thread(_fn, *_args, **_kwargs):
 
 # ── /query timeout tests ──────────────────────────────────────────────────────
 
+
 def test_query_returns_504_on_timeout(monkeypatch):
-    for var in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy",
-                "ALL_PROXY", "all_proxy"):
-        monkeypatch.delenv(var, raising=False)
+    _clear_proxy_env(monkeypatch)
 
     app = _make_app()
     client = TestClient(app)
 
     with (
-        patch("konjoai.api.routes.query.get_settings", return_value=_SettingsTimeout()),
+        patch("konjoai.api.routes.query.get_settings", return_value=_settings_timeout()),
         patch("konjoai.api.routes.query.asyncio.to_thread", _slow_to_thread),
     ):
         resp = client.post("/query", json={"question": "What is refund policy?"})
@@ -114,16 +85,12 @@ def test_query_completes_normally_within_timeout(monkeypatch):
     from konjoai.generate.generator import GenerationResult
     from konjoai.retrieve.hybrid import HybridResult
 
-    for var in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy",
-                "ALL_PROXY", "all_proxy"):
-        monkeypatch.delenv(var, raising=False)
+    _clear_proxy_env(monkeypatch)
 
     app = _make_app()
     client = TestClient(app)
 
-    _hybrid = [
-        HybridResult(content="Policy text.", source="policy.md", rrf_score=0.8, metadata={})
-    ]
+    _hybrid = [HybridResult(content="Policy text.", source="policy.md", rrf_score=0.8, metadata={})]
     _gen_result = GenerationResult(
         answer="You can get a refund within 30 days.",
         model="stub-model",
@@ -135,7 +102,7 @@ def test_query_completes_normally_within_timeout(monkeypatch):
             return _gen_result
 
     with (
-        patch("konjoai.api.routes.query.get_settings", return_value=_SettingsNormal()),
+        patch("konjoai.api.routes.query.get_settings", return_value=_settings_normal()),
         patch("konjoai.retrieve.hybrid.hybrid_search", return_value=_hybrid),
         patch("konjoai.retrieve.reranker.rerank", return_value=_sample_reranked()),
         patch("konjoai.generate.generator.get_generator", return_value=_FakeGenerator()),
@@ -150,16 +117,15 @@ def test_query_completes_normally_within_timeout(monkeypatch):
 
 # ── /query/stream timeout tests ───────────────────────────────────────────────
 
+
 def test_query_stream_returns_504_on_timeout(monkeypatch):
-    for var in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy",
-                "ALL_PROXY", "all_proxy"):
-        monkeypatch.delenv(var, raising=False)
+    _clear_proxy_env(monkeypatch)
 
     app = _make_app()
     client = TestClient(app)
 
     with (
-        patch("konjoai.api.routes.query.get_settings", return_value=_SettingsTimeout()),
+        patch("konjoai.api.routes.query.get_settings", return_value=_settings_timeout()),
         patch("konjoai.api.routes.query.asyncio.to_thread", _slow_to_thread),
     ):
         resp = client.post("/query/stream", json={"question": "Streaming query?"})
@@ -171,15 +137,13 @@ def test_query_stream_returns_504_on_timeout(monkeypatch):
 
 def test_query_timeout_detail_includes_duration(monkeypatch):
     """The 504 detail string must include the configured timeout duration for observability."""
-    for var in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy",
-                "ALL_PROXY", "all_proxy"):
-        monkeypatch.delenv(var, raising=False)
+    _clear_proxy_env(monkeypatch)
 
     app = _make_app()
     client = TestClient(app)
 
     with (
-        patch("konjoai.api.routes.query.get_settings", return_value=_SettingsTimeout()),
+        patch("konjoai.api.routes.query.get_settings", return_value=_settings_timeout()),
         patch("konjoai.api.routes.query.asyncio.to_thread", _slow_to_thread),
     ):
         resp = client.post("/query", json={"question": "Q"})
