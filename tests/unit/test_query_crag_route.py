@@ -1,39 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from konjoai.api.routes.query import router
 from konjoai.generate.generator import GenerationResult
 from konjoai.retrieve.crag import CRAGChunk, CRAGClassification, CRAGResult
-from konjoai.retrieve.hybrid import HybridResult
-from konjoai.retrieve.reranker import RerankResult
 from konjoai.retrieve.router import QueryIntent
 
-
-@dataclass
-class _SettingsStub:
-    enable_query_router: bool = True
-    enable_hyde: bool = False
-    enable_telemetry: bool = True
-    use_vectro_retriever: bool = False
-    use_colbert: bool = False
-    enable_crag: bool = False
-    enable_self_rag: bool = False
-    enable_query_decomposition: bool = False
-    decomposition_max_sub_queries: int = 4
-    top_k_dense: int = 8
-    top_k_sparse: int = 8
-    openai_model: str = "stub-model"
-    request_timeout_seconds: float = 30.0
-    enable_graph_rag: bool = False
-    graph_rag_max_communities: int = 5
-    graph_rag_similarity_threshold: float = 0.3
-    otel_enabled: bool = False
-    audit_enabled: bool = False
+from ._route_harness import (
+    SettingsStub,
+    default_hybrid_results,
+    default_reranked_results,
+)
+from ._route_harness import (
+    clear_proxy_env as _clear_proxy_env,
+)
+from ._route_harness import (
+    make_app as _make_app,
+)
 
 
 class _GeneratorStub:
@@ -44,12 +29,6 @@ class _GeneratorStub:
             model="stub-model",
             usage={"prompt_tokens": 10, "completion_tokens": 2},
         )
-
-
-def _make_app() -> FastAPI:
-    app = FastAPI()
-    app.include_router(router)
-    return app
 
 
 def _make_crag_result() -> CRAGResult:
@@ -84,19 +63,11 @@ def _make_crag_result() -> CRAGResult:
 
 
 def _base_patches(crag_runner: MagicMock):
-    hybrid_results = [
-        HybridResult(content="h1", source="a.txt", rrf_score=0.8, metadata={}),
-        HybridResult(content="h2", source="b.txt", rrf_score=0.7, metadata={}),
-    ]
-    reranked_results = [
-        RerankResult(score=0.95, content="h1", source="a.txt", metadata={}),
-    ]
-
     return (
-        patch("konjoai.api.routes.query.get_settings", return_value=_SettingsStub()),
+        patch("konjoai.api.routes.query.get_settings", return_value=SettingsStub()),
         patch("konjoai.retrieve.router.classify_intent", return_value=QueryIntent.RETRIEVAL),
-        patch("konjoai.retrieve.hybrid.hybrid_search", return_value=hybrid_results),
-        patch("konjoai.retrieve.reranker.rerank", return_value=reranked_results),
+        patch("konjoai.retrieve.hybrid.hybrid_search", return_value=default_hybrid_results()),
+        patch("konjoai.retrieve.reranker.rerank", return_value=default_reranked_results()),
         patch("konjoai.generate.generator.get_generator", return_value=_GeneratorStub()),
         patch("konjoai.cache.get_semantic_cache", return_value=None),
         patch("konjoai.retrieve.crag.get_crag_pipeline", return_value=crag_runner),
@@ -104,17 +75,7 @@ def _base_patches(crag_runner: MagicMock):
 
 
 def test_query_use_crag_body_flag_enables_crag(monkeypatch):
-    for var in (
-        "HTTP_PROXY",
-        "http_proxy",
-        "HTTPS_PROXY",
-        "https_proxy",
-        "ALL_PROXY",
-        "all_proxy",
-        "GRPC_PROXY",
-        "grpc_proxy",
-    ):
-        monkeypatch.delenv(var, raising=False)
+    _clear_proxy_env(monkeypatch)
 
     app = _make_app()
     client = TestClient(app)
@@ -146,17 +107,7 @@ def test_query_use_crag_body_flag_enables_crag(monkeypatch):
 
 
 def test_query_use_crag_header_enables_crag(monkeypatch):
-    for var in (
-        "HTTP_PROXY",
-        "http_proxy",
-        "HTTPS_PROXY",
-        "https_proxy",
-        "ALL_PROXY",
-        "all_proxy",
-        "GRPC_PROXY",
-        "grpc_proxy",
-    ):
-        monkeypatch.delenv(var, raising=False)
+    _clear_proxy_env(monkeypatch)
 
     app = _make_app()
     client = TestClient(app)
@@ -185,17 +136,7 @@ def test_query_use_crag_header_enables_crag(monkeypatch):
 
 
 def test_query_skips_crag_without_opt_in(monkeypatch):
-    for var in (
-        "HTTP_PROXY",
-        "http_proxy",
-        "HTTPS_PROXY",
-        "https_proxy",
-        "ALL_PROXY",
-        "all_proxy",
-        "GRPC_PROXY",
-        "grpc_proxy",
-    ):
-        monkeypatch.delenv(var, raising=False)
+    _clear_proxy_env(monkeypatch)
 
     app = _make_app()
     client = TestClient(app)

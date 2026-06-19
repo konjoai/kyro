@@ -14,6 +14,7 @@ The buffer is a companion to ``SemanticCache`` — attach one via
 route after each lookup.  Routes that want analytics snapshots call
 ``cache.analytics_snapshot()``.
 """
+
 from __future__ import annotations
 
 import math
@@ -27,7 +28,7 @@ from dataclasses import dataclass
 class AccessRecord:
     """One cache access event — immutable once created."""
 
-    timestamp: float   # time.monotonic() — not wall-clock; use for intervals only
+    timestamp: float  # time.monotonic() — not wall-clock; use for intervals only
     latency_ms: float
     is_hit: bool
     similarity: float  # cosine similarity for hits; 0.0 for misses
@@ -108,80 +109,78 @@ def compute_analytics(records: list[AccessRecord], hours: float = 24.0) -> dict:
     if not window:
         return _empty_analytics(hours)
 
-    hits  = [r for r in window if r.is_hit]
-    misses= [r for r in window if not r.is_hit]
+    hits = [r for r in window if r.is_hit]
+    misses = [r for r in window if not r.is_hit]
     total = len(window)
     hit_rate = len(hits) / total if total else 0.0
 
-    all_lat   = sorted(r.latency_ms for r in window)
-    hit_lat   = sorted(r.latency_ms for r in hits)
-    miss_lat  = sorted(r.latency_ms for r in misses)
+    all_lat = sorted(r.latency_ms for r in window)
+    hit_lat = sorted(r.latency_ms for r in hits)
+    miss_lat = sorted(r.latency_ms for r in misses)
 
     def _stats(vals: list[float]) -> dict:
         if not vals:
             return {"p50": 0.0, "p90": 0.0, "p99": 0.0, "mean": 0.0, "min": 0.0, "max": 0.0}
         return {
-            "p50":  round(_percentile(vals, 50),  3),
-            "p90":  round(_percentile(vals, 90),  3),
-            "p99":  round(_percentile(vals, 99),  3),
-            "mean": round(sum(vals) / len(vals),   3),
-            "min":  round(vals[0],                 3),
-            "max":  round(vals[-1],                3),
+            "p50": round(_percentile(vals, 50), 3),
+            "p90": round(_percentile(vals, 90), 3),
+            "p99": round(_percentile(vals, 99), 3),
+            "mean": round(sum(vals) / len(vals), 3),
+            "min": round(vals[0], 3),
+            "max": round(vals[-1], 3),
         }
 
-    # Similarity distribution — 5 buckets: [0–0.2), [0.2–0.4), …, [0.8–1.0]
-    sim_vals  = [r.similarity for r in hits]
-    sim_histo = [0, 0, 0, 0, 0]
-    for s in sim_vals:
-        bucket = min(4, int(s * 5))
-        sim_histo[bucket] += 1
-    sim_distribution = [
-        {"range": f"{i*0.2:.1f}–{(i+1)*0.2:.1f}", "count": sim_histo[i]}
-        for i in range(5)
-    ]
+    return {
+        "window_hours": hours,
+        "total_accesses": total,
+        "hit_count": len(hits),
+        "miss_count": len(misses),
+        "hit_rate": round(hit_rate, 4),
+        "latency": {"all": _stats(all_lat), "hits": _stats(hit_lat), "misses": _stats(miss_lat)},
+        "similarity_distribution": _similarity_distribution(hits),
+        "hourly_hit_rate": _hourly_hit_rate(window, hours),
+    }
 
-    # Hourly breakdown — bucket records into integer-hour offsets from the oldest
+
+def _similarity_distribution(hits: list[AccessRecord]) -> list[dict]:
+    """Return a 5-bucket histogram of hit similarity scores over [0, 1]."""
+    sim_histo = [0, 0, 0, 0, 0]
+    for r in hits:
+        sim_histo[min(4, int(r.similarity * 5))] += 1
+    return [{"range": f"{i * 0.2:.1f}–{(i + 1) * 0.2:.1f}", "count": sim_histo[i]} for i in range(5)]
+
+
+def _hourly_hit_rate(window: list[AccessRecord], hours: float) -> list[dict]:
+    """Bucket records into one-hour offsets and return per-bucket hit rates."""
     now = time.monotonic()
     n_buckets = max(1, int(math.ceil(hours)))
-    bucket_hits   = [0] * n_buckets
+    bucket_hits = [0] * n_buckets
     bucket_totals = [0] * n_buckets
     for r in window:
-        age_hours = (now - r.timestamp) / 3600.0
-        idx = min(n_buckets - 1, int(age_hours))
-        reverse_idx = n_buckets - 1 - idx   # 0 = most recent hour
+        idx = min(n_buckets - 1, int((now - r.timestamp) / 3600.0))
+        reverse_idx = n_buckets - 1 - idx  # 0 = most recent hour
         bucket_totals[reverse_idx] += 1
         if r.is_hit:
             bucket_hits[reverse_idx] += 1
-    hourly = []
-    for i in range(n_buckets):
-        t = bucket_totals[i]
-        hourly.append({
-            "hour_offset": i - (n_buckets - 1),   # negative = past
-            "count":   t,
-            "hit_rate": round(bucket_hits[i] / t, 4) if t else 0.0,
-        })
-
-    return {
-        "window_hours":           hours,
-        "total_accesses":         total,
-        "hit_count":              len(hits),
-        "miss_count":             len(misses),
-        "hit_rate":               round(hit_rate, 4),
-        "latency":                {"all": _stats(all_lat), "hits": _stats(hit_lat), "misses": _stats(miss_lat)},
-        "similarity_distribution": sim_distribution,
-        "hourly_hit_rate":         hourly,
-    }
+    return [
+        {
+            "hour_offset": i - (n_buckets - 1),  # negative = past
+            "count": bucket_totals[i],
+            "hit_rate": round(bucket_hits[i] / bucket_totals[i], 4) if bucket_totals[i] else 0.0,
+        }
+        for i in range(n_buckets)
+    ]
 
 
 def _empty_analytics(hours: float) -> dict:
     empty_stats = {"p50": 0.0, "p90": 0.0, "p99": 0.0, "mean": 0.0, "min": 0.0, "max": 0.0}
     return {
-        "window_hours":            hours,
-        "total_accesses":          0,
-        "hit_count":               0,
-        "miss_count":              0,
-        "hit_rate":                0.0,
-        "latency":                 {"all": empty_stats, "hits": empty_stats, "misses": empty_stats},
-        "similarity_distribution": [{"range": f"{i*0.2:.1f}–{(i+1)*0.2:.1f}", "count": 0} for i in range(5)],
-        "hourly_hit_rate":         [],
+        "window_hours": hours,
+        "total_accesses": 0,
+        "hit_count": 0,
+        "miss_count": 0,
+        "hit_rate": 0.0,
+        "latency": {"all": empty_stats, "hits": empty_stats, "misses": empty_stats},
+        "similarity_distribution": [{"range": f"{i * 0.2:.1f}–{(i + 1) * 0.2:.1f}", "count": 0} for i in range(5)],
+        "hourly_hit_rate": [],
     }

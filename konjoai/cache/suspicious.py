@@ -26,6 +26,7 @@ K3: ``GET /cache/suspicious`` returns an empty list when the cache has fewer
 than 2×k entries (not enough data for reliable clustering).
 K5: pure stdlib + numpy.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -43,11 +44,11 @@ import numpy as np
 class SuspiciousFlag:
     """A single flagged cache entry awaiting review."""
 
-    entry_hash: str          # SHA-256 prefix of the normalised question
-    question: str            # the (normalised) question text
-    reason: str              # human-readable detection reason
-    score: float             # outlier score (higher = more suspicious)
-    signal: str              # "embedding_outlier" | "hit_count_anomaly" | "answer_length_anomaly"
+    entry_hash: str  # SHA-256 prefix of the normalised question
+    question: str  # the (normalised) question text
+    reason: str  # human-readable detection reason
+    score: float  # outlier score (higher = more suspicious)
+    signal: str  # "embedding_outlier" | "hit_count_anomaly" | "answer_length_anomaly"
     status: Literal["pending", "approved", "rejected"] = "pending"
     created_at: float = field(default_factory=time.monotonic)
 
@@ -72,9 +73,7 @@ class SuspiciousFlagStore:
         with self._lock:
             if len(self._flags) >= self.MAX_FLAGS and entry_hash not in self._flags:
                 # Evict the oldest resolved flag to make room
-                oldest_resolved = next(
-                    (k for k, f in self._flags.items() if f.status != "pending"), None
-                )
+                oldest_resolved = next((k for k, f in self._flags.items() if f.status != "pending"), None)
                 if oldest_resolved:
                     del self._flags[oldest_resolved]
             self._flags[entry_hash] = SuspiciousFlag(
@@ -151,10 +150,10 @@ def scan_for_suspicious(
     if n < max(4, k * 2):
         return []
 
-    questions   = [e[1] for e in entries]
-    vecs        = np.vstack([e[2].ravel() for e in entries]).astype(np.float32)
-    hit_counts  = np.array([e[3] for e in entries], dtype=np.float32)
-    answers     = [e[4].answer if hasattr(e[4], "answer") else str(e[4]) for e in entries]
+    questions = [e[1] for e in entries]
+    vecs = np.vstack([e[2].ravel() for e in entries]).astype(np.float32)
+    hit_counts = np.array([e[3] for e in entries], dtype=np.float32)
+    answers = [e[4].answer if hasattr(e[4], "answer") else str(e[4]) for e in entries]
     ans_lengths = np.array([len(a) for a in answers], dtype=np.float32)
 
     # L2-normalise vecs for cosine distance
@@ -163,60 +162,22 @@ def scan_for_suspicious(
     unit_vecs = vecs / norms
 
     suspicious: list[dict] = []
-
-    # ── Signal 1: embedding outlier (per-cluster) ─────────────────────────
-    actual_k = min(k, n // 2)
-    centroids, labels = _mini_kmeans(unit_vecs, actual_k, iters=15)
-    for ci in range(actual_k):
-        mask = labels == ci
-        if mask.sum() < 2:
-            continue
-        cluster_vecs = unit_vecs[mask]
-        centroid = centroids[ci]
-        dists = 1.0 - cluster_vecs @ centroid   # cosine distance
-        mean_d = float(dists.mean())
-        std_d  = float(dists.std()) + 1e-9
-        for local_i, global_i in enumerate(np.where(mask)[0]):
-            score = (dists[local_i] - mean_d) / std_d
-            if score > z_threshold:
-                q = questions[global_i]
-                suspicious.append({
-                    "entry_hash": _entry_hash(q.lower().strip()),
-                    "question": q,
-                    "reason": f"embedding distance {score:.2f}σ above cluster mean (cluster {ci})",
-                    "score": round(float(score), 3),
-                    "signal": "embedding_outlier",
-                })
-
-    # ── Signal 2: hit-count anomaly ────────────────────────────────────────
-    hc_mean = float(hit_counts.mean())
-    hc_std  = float(hit_counts.std()) + 1e-9
-    for i, hc in enumerate(hit_counts):
-        score = (hc - hc_mean) / hc_std
-        if score > z_threshold:
-            q = questions[i]
-            suspicious.append({
-                "entry_hash": _entry_hash(q.lower().strip()),
-                "question": q,
-                "reason": f"hit count {hc:.0f} is {score:.2f}σ above mean",
-                "score": round(float(score), 3),
-                "signal": "hit_count_anomaly",
-            })
-
-    # ── Signal 3: answer length anomaly ───────────────────────────────────
-    al_mean = float(ans_lengths.mean())
-    al_std  = float(ans_lengths.std()) + 1e-9
-    for i, al in enumerate(ans_lengths):
-        score = abs(al - al_mean) / al_std
-        if score > z_threshold:
-            q = questions[i]
-            suspicious.append({
-                "entry_hash": _entry_hash(q.lower().strip()),
-                "question": q,
-                "reason": f"answer length {al:.0f} chars is {score:.2f}σ from mean",
-                "score": round(float(score), 3),
-                "signal": "answer_length_anomaly",
-            })
+    suspicious += _embedding_outlier_findings(unit_vecs, questions, k, n, z_threshold)
+    suspicious += _zscore_findings(
+        hit_counts,
+        questions,
+        z_threshold,
+        "hit_count_anomaly",
+        lambda hc, s: f"hit count {hc:.0f} is {s:.2f}σ above mean",
+    )
+    suspicious += _zscore_findings(
+        ans_lengths,
+        questions,
+        z_threshold,
+        "answer_length_anomaly",
+        lambda al, s: f"answer length {al:.0f} chars is {s:.2f}σ from mean",
+        two_sided=True,
+    )
 
     # Deduplicate by entry_hash, keep highest score
     by_hash: dict[str, dict] = {}
@@ -227,9 +188,66 @@ def scan_for_suspicious(
     return sorted(by_hash.values(), key=lambda x: x["score"], reverse=True)
 
 
-def _mini_kmeans(
-    vecs: np.ndarray, k: int, iters: int = 15
-) -> tuple[np.ndarray, np.ndarray]:
+def _make_finding(question: str, reason: str, score: float, signal: str) -> dict:
+    """Build a single suspicious-entry record for the API response."""
+    return {
+        "entry_hash": _entry_hash(question.lower().strip()),
+        "question": question,
+        "reason": reason,
+        "score": round(float(score), 3),
+        "signal": signal,
+    }
+
+
+def _embedding_outlier_findings(
+    unit_vecs: np.ndarray, questions: list[str], k: int, n: int, z_threshold: float
+) -> list[dict]:
+    """Flag entries whose embedding is a per-cluster cosine-distance outlier."""
+    findings: list[dict] = []
+    actual_k = min(k, n // 2)
+    centroids, labels = _mini_kmeans(unit_vecs, actual_k, iters=15)
+    for ci in range(actual_k):
+        mask = labels == ci
+        if mask.sum() < 2:
+            continue
+        dists = 1.0 - unit_vecs[mask] @ centroids[ci]  # cosine distance
+        mean_d = float(dists.mean())
+        std_d = float(dists.std()) + 1e-9
+        for local_i, global_i in enumerate(np.where(mask)[0]):
+            score = (dists[local_i] - mean_d) / std_d
+            if score > z_threshold:
+                findings.append(
+                    _make_finding(
+                        questions[global_i],
+                        f"embedding distance {score:.2f}σ above cluster mean (cluster {ci})",
+                        score,
+                        "embedding_outlier",
+                    )
+                )
+    return findings
+
+
+def _zscore_findings(
+    values: np.ndarray,
+    questions: list[str],
+    z_threshold: float,
+    signal: str,
+    reason: object,
+    *,
+    two_sided: bool = False,
+) -> list[dict]:
+    """Flag entries whose scalar metric is a z-score outlier over the population."""
+    mean = float(values.mean())
+    std = float(values.std()) + 1e-9
+    findings: list[dict] = []
+    for i, v in enumerate(values):
+        score = abs(v - mean) / std if two_sided else (v - mean) / std
+        if score > z_threshold:
+            findings.append(_make_finding(questions[i], reason(v, score), score, signal))
+    return findings
+
+
+def _mini_kmeans(vecs: np.ndarray, k: int, iters: int = 15) -> tuple[np.ndarray, np.ndarray]:
     """Lightweight k-means++ on L2-normalised unit vectors.  Returns (centroids, labels)."""
     rng = np.random.default_rng(seed=42)
     n = len(vecs)
