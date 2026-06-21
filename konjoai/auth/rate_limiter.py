@@ -169,6 +169,7 @@ class RateLimiter:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _get_or_create_bucket(self, tenant_id: str, endpoint: str) -> _Bucket:
+        """Return the bucket for ``(tenant_id, endpoint)``, creating it if absent."""
         key = (tenant_id, endpoint)
         with self._registry_lock:
             if key not in self._buckets:

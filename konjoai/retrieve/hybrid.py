@@ -1,3 +1,4 @@
+"""Hybrid retrieval via reciprocal rank fusion of dense and sparse results."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from konjoai.store.qdrant import SearchResult
 
 @dataclass
 class HybridResult:
+    """A chunk with its fused reciprocal-rank score."""
+
     rrf_score: float
     content: str
     source: str

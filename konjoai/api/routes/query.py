@@ -1,3 +1,4 @@
+"""Query routes: the full RAG pipeline and its SSE streaming variant."""
 from __future__ import annotations
 
 import asyncio
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/query", tags=["query"])
 
 
 def _parse_bool_header(raw: str | None) -> bool:
+    """Interpret a header value as a boolean (1/true/yes/on → True)."""
     if raw is None:
         return False
     return raw.strip().lower() in {"1", "true", "yes", "on"}
@@ -210,6 +212,7 @@ async def query(  # noqa: C901
             )
 
             def _retrieve_sub_query(sub_query: str) -> list[HybridResult]:
+                """Retrieve one decomposition sub-query via Vectro or hybrid search."""
                 if settings.use_vectro_retriever:
                     return get_vectro_retriever().search(
                         sub_query,
@@ -348,11 +351,13 @@ async def query(  # noqa: C901
             with timed(tel, "self_rag"):
 
                 def _gen(active_docs=None) -> str:
+                    """Generate an answer from the given docs (defaults to reranked)."""
                     docs = active_docs if active_docs else reranked
                     active_context = "\n\n---\n\n".join(d.content for d in docs)
                     return generator.generate(question=req.question, context=active_context).answer
 
                 def _retrieve_refined(refined_query: str):
+                    """Retrieve and rerank for a Self-RAG refined query."""
                     if settings.use_vectro_retriever:
                         refined_hybrid = get_vectro_retriever().search(
                             refined_query,
@@ -535,6 +540,7 @@ async def query_stream(  # noqa: C901
         if intent == QueryIntent.CHAT:
 
             def _chat_stream() -> IterGenerator[str, None, None]:
+                """Stream the canned CHAT-intent reply as SSE token frames."""
                 chat_answer = (
                     "I'm KonjoOS, a retrieval-augmented generation assistant. Ask me a question about your documents!"
                 )
@@ -594,6 +600,7 @@ async def query_stream(  # noqa: C901
         generator = get_generator()
 
         def _stream_tokens() -> IterGenerator[str, None, None]:
+            """Stream generated answer tokens as SSE frames, recording them for the cache."""
             _chunks: list[StreamChunk] = []
             _record = stream_cache is not None and stream_q_vec is not None
             _last_t: float | None = None

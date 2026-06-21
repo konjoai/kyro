@@ -1,3 +1,4 @@
+"""Agent routes: bounded ReAct loop over Kyro retrieval tools (sync + SSE stream)."""
 from __future__ import annotations
 
 import asyncio
@@ -22,6 +23,8 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 class AgentStepResponse(BaseModel):
+    """One ReAct step: thought, chosen action, action input, and observation."""
+
     thought: str
     action: str
     action_input: str
@@ -29,12 +32,16 @@ class AgentStepResponse(BaseModel):
 
 
 class AgentQueryRequest(BaseModel):
+    """An agent query: the question plus retrieval top_k and ReAct step bounds."""
+
     question: str = Field(..., min_length=1)
     top_k: int = Field(5, ge=1, le=50)
     max_steps: int = Field(5, ge=1, le=20)
 
 
 class AgentQueryResponse(BaseModel):
+    """Agent answer with sources, model/usage, the ReAct trace, and telemetry."""
+
     answer: str
     sources: list[SourceDoc]
     model: str
@@ -124,6 +131,7 @@ async def agent_query_stream(req: AgentQueryRequest) -> StreamingResponse:
     timeout_seconds = float(settings.request_timeout_seconds)
 
     async def _produce_events() -> AsyncIterator[dict]:
+        """Drive the agent in a worker thread, yielding its events onto the async side."""
         loop = asyncio.get_running_loop()
         agent = RAGAgent(top_k=req.top_k, max_steps=req.max_steps)
         queue: asyncio.Queue[object] = asyncio.Queue()
@@ -131,6 +139,7 @@ async def agent_query_stream(req: AgentQueryRequest) -> StreamingResponse:
         error_holder: dict[str, BaseException] = {}
 
         def _drive() -> None:
+            """Run the blocking agent stream, pushing events (or errors) to the queue."""
             try:
                 for event in agent.run_stream(req.question):
                     loop.call_soon_threadsafe(queue.put_nowait, event)
@@ -152,6 +161,7 @@ async def agent_query_stream(req: AgentQueryRequest) -> StreamingResponse:
             await worker
 
     async def _stream_body() -> AsyncIterator[bytes]:
+        """Serialise agent events to SSE frames plus terminal telemetry and [DONE]."""
         try:
             with timed(tel, "agent_stream", top_k=req.top_k, max_steps=req.max_steps):
                 async for event in _produce_events():
@@ -195,6 +205,7 @@ async def agent_query_stream(req: AgentQueryRequest) -> StreamingResponse:
             raise
 
     async def _execute_with_timeout() -> StreamingResponse:
+        """Build the StreamingResponse inside the timeout-bounded coroutine."""
         # Materialize the generator inside a timeout-bounded coroutine so
         # producer-side bugs surface as 504 rather than mid-stream errors.
         return StreamingResponse(_stream_body(), media_type="text/event-stream")

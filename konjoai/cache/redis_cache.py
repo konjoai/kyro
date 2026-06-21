@@ -50,6 +50,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _RedisEntry:
+    """One cached entry: question, l2-normalised float32 vector bytes, and response."""
+
     question: str
     vec_bytes: bytes      # raw float32 buffer, l2-normalised at store time
     response: object
@@ -109,21 +111,26 @@ class RedisSemanticCache:
     # ── Key layout ────────────────────────────────────────────────────────────
 
     def _tenant(self) -> str:
+        """Return the active tenant_id, or the anonymous bucket when unset."""
         tid = self._tenant_provider()
         return tid if tid else ANONYMOUS_TENANT
 
     def _entries_key(self) -> str:
+        """Redis hash key holding the current tenant's entries."""
         return f"{self._namespace}:{self._tenant()}:entries"
 
     def _lru_key(self) -> str:
+        """Redis sorted-set key tracking the current tenant's LRU order."""
         return f"{self._namespace}:{self._tenant()}:lru"
 
     @staticmethod
     def _normalise(text: str) -> str:
+        """Return the stripped, lower-cased form used as the entry key."""
         return text.strip().lower()
 
     @staticmethod
     def _l2_norm(vec: np.ndarray) -> np.ndarray:
+        """Flatten to float32 and l2-normalise; return as-is if near-zero norm."""
         flat = vec.ravel().astype(np.float32)
         norm = float(np.linalg.norm(flat))
         if norm < 1e-10:
@@ -133,6 +140,7 @@ class RedisSemanticCache:
     # ── Safe Redis call wrapper ───────────────────────────────────────────────
 
     def _safely(self, op: str, fn: Callable[[], Any]) -> Any:
+        """Run a Redis call, logging and returning None on transport failure."""
         try:
             return fn()
         except Exception as exc:  # noqa: BLE001 — Redis transport, NOT silent
@@ -257,6 +265,7 @@ class RedisSemanticCache:
 
     @staticmethod
     def _unpickle(raw: Any) -> _RedisEntry | None:
+        """Decode raw bytes into a _RedisEntry, or None on corrupt/unexpected data."""
         if raw is None:
             return None
         try:

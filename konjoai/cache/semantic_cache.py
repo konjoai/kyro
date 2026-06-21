@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SemanticCacheEntry:
+    """A cached question/response pair with its embedding, TTL, and access stats."""
+
     question: str
     question_vec: np.ndarray      # float32, shape (1, dim)
     response: object              # QueryResponse — typed as object to avoid circular import

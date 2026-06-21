@@ -199,6 +199,7 @@ class CRAGEvaluator:
         return []
 
     def _score_chunks(self, query: str, chunks: list[Any]) -> list[CRAGChunk]:
+        """Score and classify each retrieved chunk against the query."""
         if not chunks:
             return []
         pairs = [(query, str(getattr(c, "content", ""))) for c in chunks]
@@ -219,6 +220,7 @@ class CRAGEvaluator:
         return out
 
     def _refine_ambiguous(self, query: str, ambiguous_chunks: list[CRAGChunk]) -> list[CRAGChunk]:
+        """Re-score ambiguous chunks against sub-queries, promoting those above threshold to CORRECT."""
         sub_queries = self._decompose_query(query)
         self._reembed_subqueries(sub_queries)
 
@@ -241,6 +243,7 @@ class CRAGEvaluator:
         return refined
 
     def _score_pairs(self, pairs: list[tuple[str, str]]) -> list[float]:
+        """Score (query, content) pairs via the cross-encoder, falling back to Jaccard."""
         model = self._get_cross_encoder_model()
         if model is None:
             return [self._jaccard(a, b) for a, b in pairs]
@@ -256,6 +259,7 @@ class CRAGEvaluator:
 
     @staticmethod
     def _sigmoid(x: float) -> float:
+        """Numerically stable logistic sigmoid normalizing a raw score to [0, 1]."""
         if x >= 0:
             z = math.exp(-x)
             return 1.0 / (1.0 + z)
@@ -264,6 +268,7 @@ class CRAGEvaluator:
 
     @staticmethod
     def _jaccard(a: str, b: str) -> float:
+        """Token-level Jaccard similarity between two strings."""
         ta = set(re.findall(r"\w+", a.lower()))
         tb = set(re.findall(r"\w+", b.lower()))
         if not ta or not tb:
@@ -271,6 +276,7 @@ class CRAGEvaluator:
         return len(ta & tb) / len(ta | tb)
 
     def _classify(self, score: float) -> CRAGClassification:
+        """Map a normalized score to a CORRECT/AMBIGUOUS/INCORRECT band."""
         if score > self.correct_threshold:
             return CRAGClassification.CORRECT
         if score < self.ambiguous_threshold:
@@ -278,6 +284,7 @@ class CRAGEvaluator:
         return CRAGClassification.AMBIGUOUS
 
     def _decompose_query(self, query: str) -> list[str]:
+        """Split the query into sub-queries, returning the original on failure."""
         try:
             from konjoai.retrieve.router import decompose_query
 
@@ -305,12 +312,14 @@ class CRAGEvaluator:
 
     @staticmethod
     def _mean_score(chunks: list[CRAGChunk]) -> float:
+        """Average CRAG score across chunks, or 0.0 when empty."""
         if not chunks:
             return 0.0
         return sum(c.crag_score for c in chunks) / len(chunks)
 
     @staticmethod
     def _get_cross_encoder_model() -> Any | None:
+        """Return the reranker's cross-encoder model, or None if unavailable."""
         try:
             from konjoai.retrieve.reranker import get_reranker
 
@@ -341,6 +350,7 @@ class DocumentGrader:
         self._eval = CRAGEvaluator(correct_threshold=threshold, ambiguous_threshold=0.3)
 
     def grade(self, query: str, documents: list[Any]) -> list[CRAGChunk]:
+        """Score and classify documents against the query."""
         return self._eval._score_chunks(query, documents)
 
 

@@ -1,3 +1,5 @@
+"""RAGAS evaluation harness — faithfulness, answer relevancy, and context metrics."""
+
 from __future__ import annotations
 
 import logging

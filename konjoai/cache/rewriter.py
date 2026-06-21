@@ -106,26 +106,31 @@ class RewriteResult:
 
 
 def _step_lowercase(q: str) -> str:
+    """Lower-case the query."""
     return q.lower()
 
 
 def _step_normalize_whitespace(q: str) -> str:
+    """Collapse runs of whitespace into single spaces."""
     return " ".join(q.split())
 
 
 def _step_strip_punctuation(q: str) -> str:
+    """Replace punctuation with spaces, preserving in-word apostrophes."""
     # Strip leading/trailing non-alphanumeric characters; preserve apostrophes
     # within words so contractions survive until the expand step.
     return re.sub(r"[^\w\s']", " ", q).strip()
 
 
 def _step_expand_contractions(q: str) -> str:
+    """Expand known contractions to their full forms."""
     words = q.split()
     result = [_CONTRACTIONS.get(w.lower(), w) for w in words]
     return " ".join(result)
 
 
 def _step_strip_fillers(q: str) -> str:
+    """Strip a leading filler prefix (e.g. "please", "can you")."""
     lower = q.lower()
     for prefix in _FILLER_PREFIXES:
         if lower.startswith(prefix):
@@ -134,6 +139,7 @@ def _step_strip_fillers(q: str) -> str:
 
 
 def _step_strip_trailing_question_mark(q: str) -> str:
+    """Remove trailing question marks and surrounding whitespace."""
     return q.rstrip("?").strip()
 
 

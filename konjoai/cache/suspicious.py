@@ -99,14 +99,17 @@ class SuspiciousFlagStore:
             return [f for f in self._flags.values() if f.status == "pending"]
 
     def all_flags(self) -> list[SuspiciousFlag]:
+        """Return all stored flags regardless of status."""
         with self._lock:
             return list(self._flags.values())
 
     def get(self, entry_hash: str) -> SuspiciousFlag | None:
+        """Return the flag for ``entry_hash``, or ``None`` if absent."""
         with self._lock:
             return self._flags.get(entry_hash)
 
     def clear(self) -> None:
+        """Remove all stored flags."""
         with self._lock:
             self._flags.clear()
 
@@ -115,6 +118,7 @@ class SuspiciousFlagStore:
 
 
 def _entry_hash(normalised_question: str) -> str:
+    """Return a short SHA-256 hash identifying a cache entry."""
     return hashlib.sha256(normalised_question.encode()).hexdigest()[:16]
 
 

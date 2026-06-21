@@ -279,6 +279,7 @@ class MultiTurnCache:
 
     @staticmethod
     def _keyed(question: str, turn_hash: str) -> str:
+        """Prefix a question with its conversation turn hash for cache keying."""
         return f"[conv:{turn_hash}] {question}"
 
 

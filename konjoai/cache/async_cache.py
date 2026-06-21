@@ -55,10 +55,21 @@ logger = logging.getLogger(__name__)
 class _SyncBackend(Protocol):
     """Minimal contract every sync cache backend in the package satisfies."""
 
-    def lookup(self, question: str, q_vec: np.ndarray) -> object | None: ...
-    def store(self, question: str, q_vec: np.ndarray, response: object) -> None: ...
-    def invalidate(self) -> None: ...
-    def stats(self) -> dict: ...
+    def lookup(self, question: str, q_vec: np.ndarray) -> object | None:
+        """Return a cached response, or None on a miss."""
+        ...
+
+    def store(self, question: str, q_vec: np.ndarray, response: object) -> None:
+        """Store a response keyed by the question and its vector."""
+        ...
+
+    def invalidate(self) -> None:
+        """Clear all entries for the active tenant."""
+        ...
+
+    def stats(self) -> dict:
+        """Return hit/miss telemetry for the backend."""
+        ...
 
 
 def _inflight_key(question: str, tenant: str | None) -> str:
@@ -124,23 +135,27 @@ class AsyncSemanticCache:
     # ── Async lookup / store / invalidate ────────────────────────────────
 
     async def lookup(self, question: str, q_vec: np.ndarray) -> object | None:
+        """Await the backend lookup, offloading to a thread when configured."""
         if self._offload:
             return await asyncio.to_thread(self._backend.lookup, question, q_vec)
         return self._backend.lookup(question, q_vec)
 
     async def store(self, question: str, q_vec: np.ndarray, response: object) -> None:
+        """Await the backend store, offloading to a thread when configured."""
         if self._offload:
             await asyncio.to_thread(self._backend.store, question, q_vec, response)
             return
         self._backend.store(question, q_vec, response)
 
     async def invalidate(self) -> None:
+        """Await the backend invalidate, offloading to a thread when configured."""
         if self._offload:
             await asyncio.to_thread(self._backend.invalidate)
             return
         self._backend.invalidate()
 
     async def stats(self) -> dict:
+        """Return backend stats merged with this wrapper's singleflight telemetry."""
         if self._offload:
             base = await asyncio.to_thread(self._backend.stats)
         else:

@@ -251,6 +251,7 @@ class KyroMCPServer:
 
         @server.list_tools()
         async def _list_tools() -> list[types.Tool]:
+            """Return the MCP tool definitions exposed by this server."""
             return [
                 types.Tool(
                     name=t["name"],
@@ -264,6 +265,7 @@ class KyroMCPServer:
         async def _call_tool(
             name: str, arguments: dict[str, Any]
         ) -> list[types.TextContent]:
+            """Dispatch an MCP tool call, returning its result as text content."""
             try:
                 text = await self.dispatch(name, arguments or {})
             except KyroError as exc:

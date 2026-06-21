@@ -1,3 +1,5 @@
+"""konjoai command-line interface — ingest, query, serve, and status commands."""
+
 from __future__ import annotations
 
 import logging

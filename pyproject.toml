@@ -93,3 +93,16 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
+
+[tool.interrogate]
+# "interrogate --fail-under 100 on all public APIs" (.claude/rules/python-conventions.md).
+# Private (_-prefixed), dunder, __init__, nested, and property accessors are
+# implementation detail, not public API, so they are excluded from the gate.
+fail-under = 100
+ignore-private = true
+ignore-magic = true
+ignore-init-method = true
+ignore-nested-functions = true
+ignore-property-decorators = true
+ignore-semiprivate = true
+exclude = ["tests", "evals", "demo", "build", "dist"]

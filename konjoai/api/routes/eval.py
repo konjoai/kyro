@@ -1,3 +1,4 @@
+"""Eval route: score provided QA pairs with the RAGAS harness."""
 from __future__ import annotations
 
 import logging

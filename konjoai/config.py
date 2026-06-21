@@ -1,3 +1,4 @@
+"""Application configuration — Pydantic settings loaded from env/.env."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -7,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Typed Kyro configuration sourced from environment variables and ``.env``."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -235,4 +238,5 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Return the cached process-wide Settings instance."""
     return Settings()

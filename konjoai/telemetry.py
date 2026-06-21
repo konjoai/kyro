@@ -53,6 +53,7 @@ class StepTiming:
     metadata: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
+        """Return ``{"duration_ms": ..., **metadata}`` for JSON serialization."""
         d: dict = {"duration_ms": round(self.duration_ms, 3)}
         d.update(self.metadata)
         return d

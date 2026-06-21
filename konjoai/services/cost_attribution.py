@@ -49,6 +49,7 @@ class TenantCostReport:
     avg_response_tokens: int
 
     def as_dict(self) -> dict[str, object]:
+        """Return a JSON-serialisable dict of the report fields (rounded)."""
         return {
             "tenant_id": self.tenant_id,
             "total_queries": self.total_queries,
@@ -64,6 +65,8 @@ class TenantCostReport:
 
 @dataclass
 class _TenantBucket:
+    """Mutable per-tenant cache hit/miss counters."""
+
     hits: int = 0
     misses: int = 0
 

@@ -1,3 +1,4 @@
+"""Sentence-transformers encoder with a float32, L2-normalised dtype contract."""
 from __future__ import annotations
 
 import logging

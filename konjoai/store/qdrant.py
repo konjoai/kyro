@@ -1,3 +1,4 @@
+"""Qdrant vector-store wrappers: sync/async upsert and tenant-scoped search."""
 from __future__ import annotations
 
 import logging
@@ -13,6 +14,8 @@ _store: QdrantStore | None = None
 
 @dataclass
 class SearchResult:
+    """A single dense-search hit with its score, content, and payload metadata."""
+
     id: str
     score: float
     content: str
@@ -224,6 +227,7 @@ class AsyncQdrantStore:
         self._collection = settings.qdrant_collection
 
     async def search(self, query_vector: np.ndarray, top_k: int = 20) -> list[SearchResult]:
+        """Async dense cosine search returning the top-*k* results."""
         vec = query_vector.flatten().tolist()
         result = await self._client.query_points(
             collection_name=self._collection,

@@ -1,3 +1,4 @@
+"""Pydantic request/response schemas shared across the KonjoOS API routers."""
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
@@ -5,6 +6,8 @@ from pydantic import BaseModel, Field
 # ── Ingest ───────────────────────────────────────────────────────────────────────────────────────
 
 class IngestRequest(BaseModel):
+    """Parameters for an ingest request: source path and chunking config."""
+
     path: str = Field(..., description="File or directory path to ingest.")
     strategy: str = Field("recursive", description="Chunking strategy: 'recursive' or 'sentence_window'.")
     chunk_size: int = Field(512, ge=64, le=4096)
@@ -12,6 +15,8 @@ class IngestRequest(BaseModel):
 
 
 class IngestResponse(BaseModel):
+    """Outcome of an ingest: chunk/source counts and optional dedup/drift metrics."""
+
     chunks_indexed: int
     sources_processed: int
     vectro_metrics: dict | None = None     # K6: None when vectro_quantize=False
@@ -20,6 +25,8 @@ class IngestResponse(BaseModel):
 
 
 class ManifestResponse(BaseModel):
+    """Corpus manifest metadata: file count, content hash, and index timestamp."""
+
     available: bool
     corpus_dir: str
     file_count: int
@@ -28,6 +35,8 @@ class ManifestResponse(BaseModel):
 
 
 class VerifyResponse(BaseModel):
+    """Corpus drift check: overall ok flag plus the list of changed files."""
+
     available: bool
     ok: bool | None
     total_files: int
@@ -66,6 +75,8 @@ class VectroPipelineResponse(BaseModel):
 # ── Query ─────────────────────────────────────────────────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
+    """A RAG query plus per-request feature toggles (HyDE, CRAG, Self-RAG, etc.)."""
+
     question: str = Field(..., min_length=1)
     top_k: int = Field(5, ge=1, le=50)
     use_hyde: bool = Field(False, description="Replace the raw query embedding with a Vectro-compatible HyDE hypothesis embedding (Gao et al. 2022).")
@@ -79,12 +90,16 @@ class QueryRequest(BaseModel):
 
 
 class SourceDoc(BaseModel):
+    """A retrieved source: its origin, a truncated content preview, and its score."""
+
     source: str
     content_preview: str  # first 200 chars
     score: float
 
 
 class QueryResponse(BaseModel):
+    """RAG answer with sources, usage, and optional CRAG/Self-RAG/GraphRAG metadata."""
+
     answer: str
     sources: list[SourceDoc]
     model: str
@@ -115,6 +130,8 @@ class QueryResponse(BaseModel):
 # ── Eval ─────────────────────────────────────────────────────────────────────────────────────────
 
 class EvalRequest(BaseModel):
+    """QA pairs to score: questions, answers, contexts, and optional ground truths."""
+
     questions: list[str]
     answers: list[str]
     contexts: list[list[str]]
@@ -122,12 +139,16 @@ class EvalRequest(BaseModel):
 
 
 class EvalResponse(BaseModel):
+    """RAGAS metric scores keyed by metric name."""
+
     scores: dict[str, float]
 
 
 # ── Health ───────────────────────────────────────────────────────────────────────────────────────
 
 class HealthResponse(BaseModel):
+    """Liveness snapshot: service status, vector count, and BM25 build state."""
+
     status: str
     vector_count: int
     bm25_built: bool

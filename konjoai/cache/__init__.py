@@ -1,3 +1,4 @@
+"""Semantic cache package: in-memory and Redis backends, async wrapper, federation, and multi-turn support."""
 from konjoai.cache.async_cache import AsyncSemanticCache
 from konjoai.cache.async_cache import wrap as async_wrap
 from konjoai.cache.multiturn import (

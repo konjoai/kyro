@@ -62,16 +62,19 @@ class _IPRecord:
                 self._locked_until = now + self.lockout_seconds
 
     def is_locked(self, now: float | None = None) -> bool:
+        """Return True if the lockout window has not yet expired."""
         if now is None:
             now = time.monotonic()
         with self._lock:
             return now < self._locked_until
 
     def locked_until(self) -> float:
+        """Return the monotonic timestamp at which the lockout expires."""
         with self._lock:
             return self._locked_until
 
     def reset(self) -> None:
+        """Clear all recorded failures and any active lockout."""
         with self._lock:
             self._failures.clear()
             self._locked_until = 0.0
@@ -182,6 +185,7 @@ class BruteForceGuard:
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _get_record(self, ip: str) -> _IPRecord:
+        """Return the :class:`_IPRecord` for *ip*, creating it on first access."""
         with self._registry_lock:
             if ip not in self._records:
                 self._records[ip] = _IPRecord(

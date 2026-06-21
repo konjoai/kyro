@@ -74,6 +74,7 @@ class FeedbackRequest(BaseModel):
     @field_validator("signal")
     @classmethod
     def _validate_signal(cls, v: str) -> str:
+        """Reject any signal not in ``VALID_SIGNALS``."""
         if v not in VALID_SIGNALS:
             raise ValueError(
                 f"signal must be one of {sorted(VALID_SIGNALS)}, got {v!r}"

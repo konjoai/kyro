@@ -46,16 +46,21 @@ class AuditEventOut(BaseModel):
 
     @classmethod
     def from_event(cls, event: AuditEvent) -> AuditEventOut:
+        """Build the response view from an ``AuditEvent`` (None fields dropped)."""
         return cls(**event.as_dict())
 
 
 class AuditEventsResponse(BaseModel):
+    """A page of audit events with the total returned and the enabled flag."""
+
     events: list[AuditEventOut]
     total: int
     audit_enabled: bool
 
 
 class AuditStatsResponse(BaseModel):
+    """Per-event-type counts plus the audit-enabled flag."""
+
     stats: dict[str, int]
     audit_enabled: bool
 

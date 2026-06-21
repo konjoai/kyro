@@ -104,11 +104,14 @@ class ThresholdConfig:
         return float(getattr(self, query_type.value))
 
     def as_dict(self) -> dict[str, float]:
+        """Return thresholds keyed by query-type name."""
         return {t.value: self.for_type(t) for t in QueryType}
 
 
 @dataclass
 class _TypeStats:
+    """Hit/miss counters for a single query type."""
+
     hits: int = 0
     misses: int = 0
 
@@ -134,10 +137,12 @@ class ThresholdStats:
         self._data: dict[QueryType, _TypeStats] = {t: _TypeStats() for t in QueryType}
 
     def record_hit(self, query_type: QueryType) -> None:
+        """Increment the hit counter for the given query type."""
         with self._lock:
             self._data[query_type].hits += 1
 
     def record_miss(self, query_type: QueryType) -> None:
+        """Increment the miss counter for the given query type."""
         with self._lock:
             self._data[query_type].misses += 1
 
@@ -155,6 +160,7 @@ class ThresholdStats:
             }
 
     def reset(self) -> None:
+        """Zero all per-type hit and miss counters."""
         with self._lock:
             for s in self._data.values():
                 s.hits = 0

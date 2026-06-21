@@ -1,3 +1,5 @@
+"""Query decomposition: split a question into sub-queries, retrieve in parallel, and synthesize."""
+
 from __future__ import annotations
 
 import asyncio
@@ -12,6 +14,8 @@ from konjoai.retrieve.router import decompose_query
 
 @dataclass
 class DecompositionPlan:
+    """Sub-queries and synthesis guidance produced by decomposing a question."""
+
     sub_queries: list[str]
     synthesis_hint: str
     used_fallback: bool = False
@@ -19,11 +23,15 @@ class DecompositionPlan:
 
 @dataclass
 class SubQueryAnswer:
+    """A single sub-query paired with its answer."""
+
     sub_query: str
     answer: str
 
 
 class RetrievalFn(Protocol):
+    """Callable that retrieves results for a query, sync or async."""
+
     def __call__(self, query: str) -> list[Any] | Awaitable[list[Any]]: ...
 
 
@@ -44,6 +52,7 @@ class QueryDecomposer:
         self._max_sub_queries = max(1, max_sub_queries)
 
     def decompose(self, question: str) -> DecompositionPlan:
+        """Produce a decomposition plan via the LLM, falling back to regex on parse failure."""
         if not question.strip():
             raise ValueError("question must be non-empty")
 
@@ -66,6 +75,7 @@ class QueryDecomposer:
         )
 
     def _parse(self, raw: str) -> DecompositionPlan | None:
+        """Parse and validate the model's JSON into a plan, or None if invalid."""
         payload = self._extract_json(raw)
         if payload is None:
             return None
@@ -103,6 +113,7 @@ class QueryDecomposer:
 
     @staticmethod
     def _extract_json(raw: str) -> dict[str, Any] | None:
+        """Extract a JSON object from raw model output, stripping code fences."""
         text = raw.strip()
 
         if text.startswith("```"):
@@ -131,6 +142,7 @@ class ParallelRetriever:
     """Execute sub-query retrieval concurrently with asyncio.gather()."""
 
     async def retrieve(self, sub_queries: list[str], retrieve_fn: RetrievalFn) -> list[list[Any]]:
+        """Retrieve results for all sub-queries concurrently, preserving order."""
         tasks: list[Awaitable[list[Any]]] = []
         for query in sub_queries:
             result = retrieve_fn(query)
@@ -153,6 +165,7 @@ class AnswerSynthesizer:
         sub_answers: list[SubQueryAnswer],
         synthesis_hint: str,
     ) -> str:
+        """Synthesize sub-answers into one final answer, or empty string if none."""
         if not sub_answers:
             return ""
 

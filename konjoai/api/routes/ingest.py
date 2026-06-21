@@ -1,3 +1,4 @@
+"""Ingest routes: chunk/embed/upsert documents and manage the corpus manifest."""
 from __future__ import annotations
 
 import logging
@@ -117,6 +118,8 @@ def ingest(
 
 
 class ManifestBody(BaseModel):
+    """Request body carrying the corpus directory to index for a manifest."""
+
     corpus_dir: str
 
 

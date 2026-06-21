@@ -173,6 +173,7 @@ def _hourly_hit_rate(window: list[AccessRecord], hours: float) -> list[dict]:
 
 
 def _empty_analytics(hours: float) -> dict:
+    """Return a zeroed analytics payload for an empty access window."""
     empty_stats = {"p50": 0.0, "p90": 0.0, "p99": 0.0, "mean": 0.0, "min": 0.0, "max": 0.0}
     return {
         "window_hours": hours,

@@ -88,6 +88,7 @@ class PeerRegistry:
         return node
 
     def remove(self, peer_id: str) -> bool:
+        """Remove a peer by id; return False if it was not registered."""
         with self._lock:
             if peer_id not in self._peers:
                 return False
@@ -95,14 +96,17 @@ class PeerRegistry:
         return True
 
     def get(self, peer_id: str) -> PeerNode | None:
+        """Return the peer with this id, or None if unknown."""
         with self._lock:
             return self._peers.get(peer_id)
 
     def all_peers(self) -> list[PeerNode]:
+        """Return a snapshot list of all registered peers."""
         with self._lock:
             return list(self._peers.values())
 
     def healthy_peers(self) -> list[PeerNode]:
+        """Return peers that are not known-unhealthy or still meet the availability floor."""
         with self._lock:
             return [p for p in self._peers.values()
                     if p.last_healthy is not False or p.availability >= self.MIN_AVAILABILITY]
@@ -110,6 +114,7 @@ class PeerRegistry:
     # ── Health tracking ───────────────────────────────────────────────────────
 
     def _update_availability(self, peer_id: str, success: bool) -> None:
+        """Record a health probe result, updating the peer's EWMA availability."""
         with self._lock:
             p = self._peers.get(peer_id)
             if p is None:
@@ -122,6 +127,7 @@ class PeerRegistry:
             )
 
     def record_hit(self, peer_id: str) -> None:
+        """Increment the hit-contribution counter for a peer."""
         with self._lock:
             p = self._peers.get(peer_id)
             if p:

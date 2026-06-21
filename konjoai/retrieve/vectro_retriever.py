@@ -120,6 +120,7 @@ class VectroRetrieverAdapter:
     # ------------------------------------------------------------------
 
     def _ensure_corpus_loaded(self) -> None:
+        """Load the in-memory corpus once, double-checked under the lock."""
         if self._corpus_vectors is not None:
             return
         with self._lock:
