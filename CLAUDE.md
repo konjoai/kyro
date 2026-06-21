@@ -2,7 +2,7 @@
 
 Production RAG pipeline with hybrid retrieval (BM25 + dense), HyDE, ColBERT reranking, RAGAS evaluation, streaming agent, GraphRAG, distributed semantic cache (Redis), multi-tenancy, OTel/Prometheus, and MCP server.
 
-**v1.2.0** — 798 tests passing. Package name: `konjoai`.
+**v1.9.1** — 1287 tests passing. Package name: `konjoai`.
 
 ## Stack
 Python 3.10+ · FastAPI · Qdrant · sentence-transformers · PyTorch · OpenAI/Anthropic SDK · RAGAS · Redis · Prometheus · OpenTelemetry · Helm · MCP
