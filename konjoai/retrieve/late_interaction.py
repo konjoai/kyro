@@ -25,6 +25,7 @@ K-invariants:
     K3 — Never raises; returns empty array for empty inputs.
     K4 — float32 throughout; no implicit upcasting.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -67,21 +68,15 @@ def maxsim_score(
     doc_vecs_batch = np.asarray(doc_vecs_batch, dtype=np.float32)
 
     if query_vecs.ndim != 2:
-        raise ValueError(
-            f"query_vecs must be 2-D (Q, D), got shape {query_vecs.shape}"
-        )
+        raise ValueError(f"query_vecs must be 2-D (Q, D), got shape {query_vecs.shape}")
     if doc_vecs_batch.ndim != 3:
-        raise ValueError(
-            f"doc_vecs_batch must be 3-D (K, S, D), got shape {doc_vecs_batch.shape}"
-        )
+        raise ValueError(f"doc_vecs_batch must be 3-D (K, S, D), got shape {doc_vecs_batch.shape}")
 
     Q, D_q = query_vecs.shape
     K, S, D_d = doc_vecs_batch.shape
 
     if D_q != D_d:
-        raise ValueError(
-            f"Dimension mismatch: query_vecs dim={D_q}, doc_vecs_batch dim={D_d}"
-        )
+        raise ValueError(f"Dimension mismatch: query_vecs dim={D_q}, doc_vecs_batch dim={D_d}")
 
     # Empty candidate list — K-invariant K3: never raises.
     if K == 0:
@@ -107,7 +102,7 @@ def maxsim_score(
     sim = np.einsum("qd,ksd->kqs", query_norm, doc_norm)  # (K, Q, S)
 
     # ── MaxSim: for each (k, q), take max over doc tokens s ──────────────────
-    max_sim = sim.max(axis=-1)   # (K, Q)
+    max_sim = sim.max(axis=-1)  # (K, Q)
 
     # ── Sum over query tokens q ───────────────────────────────────────────────
     scores = max_sim.sum(axis=-1)  # (K,)
@@ -154,6 +149,7 @@ def rerank_with_maxsim(
     if get_embedding is None:
         try:
             from konjoai.embed.encoder import get_encoder
+
             _enc = get_encoder()
 
             def get_embedding(text: str) -> object:  # noqa: F811
@@ -181,6 +177,7 @@ def rerank_with_maxsim(
 
     # Attach MaxSim scores and re-sort descending
     import copy
+
     reranked = []
     for r, s in zip(results, scores):
         rc = copy.copy(r)

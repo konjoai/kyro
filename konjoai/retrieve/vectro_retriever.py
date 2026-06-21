@@ -21,6 +21,7 @@ Design contract:
     - Never raises; always returns a (possibly empty) list.
     - Thread-safe for read access (no mutable state during search).
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,6 +46,7 @@ _VECTRO_PY_AVAILABLE: bool = False
 try:
     from vectro.python.retriever import VectroRetriever  # type: ignore[import-not-found]
     from vectro_py import EmbeddingDataset, PyEmbedding  # type: ignore[import-not-found]
+
     _VECTRO_PY_AVAILABLE = True
     logger.debug("VectroRetrieverAdapter: vectro_py Rust bindings available — using SIMD path")
 except ImportError:
@@ -68,12 +70,12 @@ class VectroRetrieverAdapter:
 
     def __init__(self, alpha: float = 0.7) -> None:
         self._alpha = float(np.clip(alpha, 0.0, 1.0))
-        self._corpus_vectors: np.ndarray | None = None   # (N, dim) float32
+        self._corpus_vectors: np.ndarray | None = None  # (N, dim) float32
         self._corpus_texts: list[str] = []
         self._corpus_sources: list[str] = []
         self._corpus_ids: list[str] = []
         self._retriever: VectroRetriever | None = None  # Rust-backed, if available
-        self._bm25: object | None = None                  # rank_bm25 fallback
+        self._bm25: object | None = None  # rank_bm25 fallback
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -96,7 +98,8 @@ class VectroRetrieverAdapter:
         if n > MAX_CORPUS_POINTS:
             logger.debug(
                 "VectroRetrieverAdapter: corpus (%d) > MAX (%d) — falling back",
-                n, MAX_CORPUS_POINTS,
+                n,
+                MAX_CORPUS_POINTS,
             )
             return self._fallback(query, top_k)
 
@@ -142,9 +145,9 @@ class VectroRetrieverAdapter:
                 return
             if total > MAX_CORPUS_POINTS:
                 logger.info(
-                    "VectroRetrieverAdapter: collection has %d points (> %d); "
-                    "skipping in-memory load",
-                    total, MAX_CORPUS_POINTS,
+                    "VectroRetrieverAdapter: collection has %d points (> %d); skipping in-memory load",
+                    total,
+                    MAX_CORPUS_POINTS,
                 )
                 self._corpus_vectors = np.empty((0,), dtype=np.float32)  # sentinel
                 return
@@ -156,7 +159,8 @@ class VectroRetrieverAdapter:
             self._corpus_ids = ids
             logger.info(
                 "VectroRetrieverAdapter: loaded corpus n=%d dim=%d",
-                len(texts), vecs.shape[1] if vecs.ndim == 2 else 0,
+                len(texts),
+                vecs.shape[1] if vecs.ndim == 2 else 0,
             )
 
             if _VECTRO_PY_AVAILABLE:
@@ -194,6 +198,7 @@ class VectroRetrieverAdapter:
         """Build rank_bm25 index for the pure-Python fallback path."""
         try:
             from rank_bm25 import BM25Okapi  # type: ignore[import-not-found]
+
             tokenised = [t.lower().split() for t in self._corpus_texts]
             self._bm25 = BM25Okapi(tokenised)
             logger.debug("VectroRetrieverAdapter: BM25 fallback index ready")
@@ -208,8 +213,7 @@ class VectroRetrieverAdapter:
                 HybridResult(
                     rrf_score=float(r.combined_score),
                     content=r.text,
-                    source=self._corpus_sources[self._corpus_ids.index(r.id)]
-                    if r.id in self._corpus_ids else "",
+                    source=self._corpus_sources[self._corpus_ids.index(r.id)] if r.id in self._corpus_ids else "",
                     metadata={
                         "dense_score": float(r.dense_score),
                         "bm25_score": float(r.bm25_score),
@@ -226,6 +230,7 @@ class VectroRetrieverAdapter:
         """Pure-Python cosine + BM25 fallback when Rust bindings are absent."""
         try:
             from konjoai.embed.encoder import get_encoder
+
             enc = get_encoder()
             q_vec = enc.encode([query])[0].astype(np.float32)
 
@@ -269,6 +274,7 @@ class VectroRetrieverAdapter:
     def _fallback(query: str, top_k: int) -> list[HybridResult]:
         """Delegate to the existing Qdrant ANN + BM25 RRF pipeline."""
         from konjoai.retrieve.hybrid import hybrid_search
+
         return hybrid_search(query, top_k_dense=top_k, top_k_sparse=top_k)
 
 
@@ -279,6 +285,7 @@ def get_vectro_retriever() -> VectroRetrieverAdapter:
         with _adapter_lock:
             if _adapter is None:
                 from konjoai.config import get_settings
+
                 s = get_settings()
                 _adapter = VectroRetrieverAdapter(alpha=s.vectro_retriever_alpha)
     return _adapter

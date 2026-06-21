@@ -13,6 +13,7 @@ Coverage:
 - K3: disabled → zero overhead (no store allocation needed for request path)
 - Tenant isolation: summary filtered by tenant_id
 """
+
 from __future__ import annotations
 
 import threading
@@ -22,6 +23,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 # ── Helpers / shared fixtures ─────────────────────────────────────────────────
+
 
 def _make_client(feedback_enabled: bool = True, max_events: int = 1000) -> TestClient:
     """Build a FastAPI TestClient with a patched settings stub."""
@@ -86,9 +88,11 @@ def _make_client(feedback_enabled: bool = True, max_events: int = 1000) -> TestC
 # 1. FeedbackEvent model
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFeedbackEventModel:
     def test_minimal_construction(self):
         from konjoai.feedback.models import THUMBS_UP, FeedbackEvent
+
         ev = FeedbackEvent(
             question_hash="a1b2c3d4e5f6a7b8",
             signal=THUMBS_UP,
@@ -106,6 +110,7 @@ class TestFeedbackEventModel:
 
     def test_full_construction(self):
         from konjoai.feedback.models import THUMBS_DOWN, FeedbackEvent
+
         ev = FeedbackEvent(
             question_hash="abc123",
             signal=THUMBS_DOWN,
@@ -125,6 +130,7 @@ class TestFeedbackEventModel:
 
     def test_as_dict_omits_none(self):
         from konjoai.feedback.models import THUMBS_UP, FeedbackEvent
+
         ev = FeedbackEvent(
             question_hash="a1b2",
             signal=THUMBS_UP,
@@ -140,6 +146,7 @@ class TestFeedbackEventModel:
 
     def test_as_dict_includes_set_fields(self):
         from konjoai.feedback.models import THUMBS_DOWN, FeedbackEvent
+
         ev = FeedbackEvent(
             question_hash="x",
             signal=THUMBS_DOWN,
@@ -153,10 +160,12 @@ class TestFeedbackEventModel:
 
     def test_signal_constants_distinct(self):
         from konjoai.feedback.models import THUMBS_DOWN, THUMBS_UP
+
         assert THUMBS_UP != THUMBS_DOWN
 
     def test_valid_signals_set(self):
         from konjoai.feedback.models import THUMBS_DOWN, THUMBS_UP, VALID_SIGNALS
+
         assert THUMBS_UP in VALID_SIGNALS
         assert THUMBS_DOWN in VALID_SIGNALS
         assert len(VALID_SIGNALS) == 2
@@ -166,8 +175,10 @@ class TestFeedbackEventModel:
 # 2. FeedbackStore
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _make_event(signal="thumbs_up", tenant="t1", q_hash="abc123", score=None, ts="2026-01-01T00:00:00Z"):
     from konjoai.feedback.models import FeedbackEvent
+
     return FeedbackEvent(
         question_hash=q_hash,
         signal=signal,
@@ -180,32 +191,38 @@ def _make_event(signal="thumbs_up", tenant="t1", q_hash="abc123", score=None, ts
 class TestFeedbackStore:
     def setup_method(self):
         from konjoai.feedback.store import _reset_singleton
+
         _reset_singleton()
 
     def test_construction_defaults(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         assert s.max_events == 1000
         assert s.size == 0
 
     def test_construction_custom_max(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore(max_events=5)
         assert s.max_events == 5
 
     def test_construction_invalid_max(self):
         from konjoai.feedback.store import FeedbackStore
+
         with pytest.raises(ValueError):
             FeedbackStore(max_events=0)
 
     def test_record_increases_size(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event())
         assert s.size == 1
 
     def test_record_multiple(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         for i in range(5):
             s.record(_make_event(q_hash=f"q{i}"))
@@ -213,6 +230,7 @@ class TestFeedbackStore:
 
     def test_lru_eviction_at_max(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore(max_events=3)
         for i in range(5):
             s.record(_make_event(q_hash=f"q{i}"))
@@ -223,6 +241,7 @@ class TestFeedbackStore:
 
     def test_query_newest_first(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(q_hash="first"))
         s.record(_make_event(q_hash="second"))
@@ -232,6 +251,7 @@ class TestFeedbackStore:
 
     def test_query_filter_by_tenant(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(tenant="acme"))
         s.record(_make_event(tenant="beta"))
@@ -241,6 +261,7 @@ class TestFeedbackStore:
 
     def test_query_filter_by_signal(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(signal="thumbs_up"))
         s.record(_make_event(signal="thumbs_down"))
@@ -250,6 +271,7 @@ class TestFeedbackStore:
 
     def test_query_filter_by_question_hash(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(q_hash="abc"))
         s.record(_make_event(q_hash="xyz"))
@@ -259,6 +281,7 @@ class TestFeedbackStore:
 
     def test_query_limit(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         for i in range(10):
             s.record(_make_event(q_hash=f"q{i}"))
@@ -267,6 +290,7 @@ class TestFeedbackStore:
 
     def test_query_limit_capped_at_1000(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore(max_events=2000)
         for i in range(100):
             s.record(_make_event(q_hash=f"q{i}"))
@@ -276,11 +300,13 @@ class TestFeedbackStore:
 
     def test_query_empty_store(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         assert s.query() == []
 
     def test_summary_empty(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         sm = s.summary()
         assert sm["total"] == 0
@@ -290,6 +316,7 @@ class TestFeedbackStore:
 
     def test_summary_counts(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(signal="thumbs_up"))
         s.record(_make_event(signal="thumbs_up"))
@@ -301,6 +328,7 @@ class TestFeedbackStore:
 
     def test_summary_avg_relevance(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(score=0.8))
         s.record(_make_event(score=0.4))
@@ -309,6 +337,7 @@ class TestFeedbackStore:
 
     def test_summary_no_relevance_scores(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(score=None))
         sm = s.summary()
@@ -316,6 +345,7 @@ class TestFeedbackStore:
 
     def test_summary_by_question(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(q_hash="q1", signal="thumbs_up"))
         s.record(_make_event(q_hash="q1", signal="thumbs_down"))
@@ -327,6 +357,7 @@ class TestFeedbackStore:
 
     def test_summary_tenant_filter(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(tenant="acme", signal="thumbs_up"))
         s.record(_make_event(tenant="beta", signal="thumbs_up"))
@@ -338,6 +369,7 @@ class TestFeedbackStore:
 
     def test_clear(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event())
         s.record(_make_event())
@@ -347,12 +379,14 @@ class TestFeedbackStore:
 
     def test_len_matches_size(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event())
         assert len(s) == s.size
 
     def test_iter(self):
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore()
         s.record(_make_event(q_hash="x"))
         events = list(s)
@@ -362,6 +396,7 @@ class TestFeedbackStore:
     def test_thread_safety(self):
         """20 threads × 50 writes each = 1000 total (bounded to max_events)."""
         from konjoai.feedback.store import FeedbackStore
+
         s = FeedbackStore(max_events=1000)
         errors = []
 
@@ -383,6 +418,7 @@ class TestFeedbackStore:
 
     def test_singleton_returns_same_instance(self):
         from konjoai.feedback.store import _reset_singleton, get_feedback_store
+
         _reset_singleton()
         s1 = get_feedback_store()
         s2 = get_feedback_store()
@@ -390,6 +426,7 @@ class TestFeedbackStore:
 
     def test_reset_clears_singleton(self):
         from konjoai.feedback.store import _reset_singleton, get_feedback_store
+
         _reset_singleton()
         s1 = get_feedback_store()
         _reset_singleton()
@@ -401,14 +438,17 @@ class TestFeedbackStore:
 # 3. Config
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFeedbackConfig:
     def test_feedback_enabled_default_false(self):
         from konjoai.config import Settings
+
         s = Settings()
         assert s.feedback_enabled is False
 
     def test_feedback_max_events_default(self):
         from konjoai.config import Settings
+
         s = Settings()
         assert s.feedback_max_events == 1000
 
@@ -417,21 +457,26 @@ class TestFeedbackConfig:
 # 4. API — disabled (K3)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _make_disabled_settings():
     from dataclasses import dataclass
+
     @dataclass
     class _S:
         feedback_enabled: bool = False
         feedback_max_events: int = 1000
+
     return _S()
 
 
 def _make_enabled_settings(max_events: int = 1000):
     from dataclasses import dataclass
+
     @dataclass
     class _S:
         feedback_enabled: bool = True
         feedback_max_events: int = max_events
+
     return _S()
 
 
@@ -440,6 +485,7 @@ def _feedback_app(settings_stub):
     from fastapi import FastAPI
 
     from konjoai.api.routes.feedback import router as fb_router
+
     app = FastAPI()
     app.include_router(fb_router)
     return app
@@ -450,6 +496,7 @@ class TestFeedbackAPIDisabled:
 
     def setup_method(self):
         from konjoai.feedback.store import _reset_singleton
+
         _reset_singleton()
 
     def test_post_feedback_returns_404(self):
@@ -457,10 +504,13 @@ class TestFeedbackAPIDisabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc123",
-                    "signal": "thumbs_up",
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc123",
+                        "signal": "thumbs_up",
+                    },
+                )
         assert resp.status_code == 404
 
     def test_get_summary_returns_404(self):
@@ -476,10 +526,13 @@ class TestFeedbackAPIDisabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc",
-                    "signal": "thumbs_up",
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc",
+                        "signal": "thumbs_up",
+                    },
+                )
         assert "FEEDBACK_ENABLED" in resp.json().get("detail", "")
 
 
@@ -487,9 +540,11 @@ class TestFeedbackAPIDisabled:
 # 5. API — enabled
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFeedbackAPIEnabled:
     def setup_method(self):
         from konjoai.feedback.store import _reset_singleton
+
         _reset_singleton()
 
     def test_post_thumbs_up_returns_201(self):
@@ -497,10 +552,13 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "a1b2c3d4e5f6a7b8",
-                    "signal": "thumbs_up",
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "a1b2c3d4e5f6a7b8",
+                        "signal": "thumbs_up",
+                    },
+                )
         assert resp.status_code == 201
 
     def test_post_thumbs_down_returns_201(self):
@@ -508,10 +566,13 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "a1b2c3d4e5f6a7b8",
-                    "signal": "thumbs_down",
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "a1b2c3d4e5f6a7b8",
+                        "signal": "thumbs_down",
+                    },
+                )
         assert resp.status_code == 201
 
     def test_response_contract_recorded_true(self):
@@ -519,10 +580,13 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc123",
-                    "signal": "thumbs_up",
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc123",
+                        "signal": "thumbs_up",
+                    },
+                )
         body = resp.json()
         assert body["recorded"] is True
         assert body["question_hash"] == "abc123"
@@ -534,11 +598,14 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc123",
-                    "signal": "thumbs_up",
-                    "relevance_score": 0.85,
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc123",
+                        "signal": "thumbs_up",
+                        "relevance_score": 0.85,
+                    },
+                )
         assert resp.status_code == 201
 
     def test_post_with_all_optional_fields(self):
@@ -546,14 +613,17 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc123",
-                    "signal": "thumbs_down",
-                    "relevance_score": 0.2,
-                    "comment": "The answer was off-topic.",
-                    "model": "gpt-4o",
-                    "latency_ms": 512.3,
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc123",
+                        "signal": "thumbs_down",
+                        "relevance_score": 0.2,
+                        "comment": "The answer was off-topic.",
+                        "model": "gpt-4o",
+                        "latency_ms": 512.3,
+                    },
+                )
         assert resp.status_code == 201
 
     def test_invalid_signal_returns_422(self):
@@ -561,10 +631,13 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc",
-                    "signal": "invalid_signal",
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc",
+                        "signal": "invalid_signal",
+                    },
+                )
         assert resp.status_code == 422
 
     def test_missing_question_hash_returns_422(self):
@@ -588,11 +661,14 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc",
-                    "signal": "thumbs_up",
-                    "relevance_score": 1.5,  # > 1.0 → invalid
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc",
+                        "signal": "thumbs_up",
+                        "relevance_score": 1.5,  # > 1.0 → invalid
+                    },
+                )
         assert resp.status_code == 422
 
     def test_relevance_score_negative_returns_422(self):
@@ -600,11 +676,14 @@ class TestFeedbackAPIEnabled:
         app = _feedback_app(stub)
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
-                resp = client.post("/feedback", json={
-                    "question_hash": "abc",
-                    "signal": "thumbs_up",
-                    "relevance_score": -0.1,
-                })
+                resp = client.post(
+                    "/feedback",
+                    json={
+                        "question_hash": "abc",
+                        "signal": "thumbs_up",
+                        "relevance_score": -0.1,
+                    },
+                )
         assert resp.status_code == 422
 
     def test_get_summary_returns_200(self):
@@ -630,6 +709,7 @@ class TestFeedbackAPIEnabled:
 
     def test_summary_reflects_submitted_feedback(self):
         from konjoai.feedback.store import _reset_singleton
+
         _reset_singleton()
         stub = _make_enabled_settings()
         app = _feedback_app(stub)
@@ -648,19 +728,28 @@ class TestFeedbackAPIEnabled:
     def test_summary_with_tenant_filter(self):
         from konjoai.feedback.models import FeedbackEvent
         from konjoai.feedback.store import _reset_singleton, get_feedback_store
+
         _reset_singleton()
         stub = _make_enabled_settings()
         app = _feedback_app(stub)
         # Pre-populate store with two tenants
         store = get_feedback_store()
-        store.record(FeedbackEvent(
-            question_hash="q1", signal="thumbs_up",
-            timestamp="2026-01-01T00:00:00Z", tenant_id="acme",
-        ))
-        store.record(FeedbackEvent(
-            question_hash="q2", signal="thumbs_down",
-            timestamp="2026-01-01T00:00:00Z", tenant_id="beta",
-        ))
+        store.record(
+            FeedbackEvent(
+                question_hash="q1",
+                signal="thumbs_up",
+                timestamp="2026-01-01T00:00:00Z",
+                tenant_id="acme",
+            )
+        )
+        store.record(
+            FeedbackEvent(
+                question_hash="q2",
+                signal="thumbs_down",
+                timestamp="2026-01-01T00:00:00Z",
+                tenant_id="beta",
+            )
+        )
         with patch("konjoai.api.routes.feedback.get_settings", return_value=stub):
             with TestClient(app) as client:
                 resp = client.get("/feedback/summary?tenant_id=acme")
@@ -673,6 +762,7 @@ class TestFeedbackAPIEnabled:
 # 6. OWASP PII contract
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFeedbackOWASP:
     """Raw question text must never appear in any stored or returned event."""
 
@@ -680,6 +770,7 @@ class TestFeedbackOWASP:
         """The /feedback endpoint has no 'question' field — only question_hash."""
 
         from konjoai.api.routes.feedback import FeedbackRequest
+
         fields = FeedbackRequest.model_fields
         assert "question" not in fields, "FeedbackRequest must not accept raw question text"
 
@@ -688,6 +779,7 @@ class TestFeedbackOWASP:
         import dataclasses
 
         from konjoai.feedback.models import FeedbackEvent
+
         field_names = {f.name for f in dataclasses.fields(FeedbackEvent)}
         assert "question" not in field_names
         assert "question_hash" in field_names
@@ -697,6 +789,7 @@ class TestFeedbackOWASP:
         import dataclasses
 
         from konjoai.feedback.models import FeedbackEvent
+
         field_names = {f.name for f in dataclasses.fields(FeedbackEvent)}
         assert "comment" not in field_names
         assert "comment_hash" in field_names
@@ -712,12 +805,14 @@ class TestFeedbackOWASP:
         comment_hash = hash_text(raw_comment)
 
         s = FeedbackStore()
-        s.record(FeedbackEvent(
-            question_hash="q1",
-            signal="thumbs_down",
-            timestamp="t",
-            comment_hash=comment_hash,
-        ))
+        s.record(
+            FeedbackEvent(
+                question_hash="q1",
+                signal="thumbs_down",
+                timestamp="t",
+                comment_hash=comment_hash,
+            )
+        )
         events = s.query()
         assert len(events) == 1
         d = events[0].as_dict()
@@ -729,6 +824,7 @@ class TestFeedbackOWASP:
 # 7. Package exports
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFeedbackPackageExports:
     def test_all_symbols_importable(self):
         from konjoai.feedback import (
@@ -736,6 +832,7 @@ class TestFeedbackPackageExports:
             THUMBS_UP,
             VALID_SIGNALS,
         )
+
         assert THUMBS_UP == "thumbs_up"
         assert THUMBS_DOWN == "thumbs_down"
         assert len(VALID_SIGNALS) == 2

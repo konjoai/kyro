@@ -1,4 +1,5 @@
 """KonjoOS FastAPI application: lifespan warmup, CORS, and router wiring."""
+
 from __future__ import annotations
 
 import logging

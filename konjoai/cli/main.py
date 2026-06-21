@@ -39,7 +39,9 @@ def cli(ctx: click.Context, verbose: bool) -> None:
 
 @cli.command()
 @click.argument("path", type=click.Path(exists=True))
-@click.option("--strategy", default="recursive", show_default=True, help="Chunking strategy: recursive | sentence_window.")
+@click.option(
+    "--strategy", default="recursive", show_default=True, help="Chunking strategy: recursive | sentence_window."
+)
 @click.option("--chunk-size", default=512, show_default=True, help="Target token count per chunk.")
 @click.option("--overlap", default=64, show_default=True, help="Overlap between consecutive chunks.")
 @click.option("--quiet", "-q", is_flag=True, default=False, help="Suppress informational output.")
@@ -93,9 +95,7 @@ def ingest(ctx: click.Context, path: str, strategy: str, chunk_size: int, overla
     bm25.build(all_contents, all_sources, all_metadatas)
 
     if not quiet:
-        click.echo(
-            f"✓ Indexed {len(all_contents)} chunks from {len(sources_seen)} source(s)."
-        )
+        click.echo(f"✓ Indexed {len(all_contents)} chunks from {len(sources_seen)} source(s).")
 
 
 @cli.command()

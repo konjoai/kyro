@@ -13,15 +13,14 @@ Usage (internal):
     finally:
         _current_tenant_id.reset(token)  # restore previous value
 """
+
 from __future__ import annotations
 
 from contextvars import ContextVar, Token
 
 ANONYMOUS_TENANT: str = "__anonymous__"
 
-_current_tenant_id: ContextVar[str | None] = ContextVar(
-    "kyro_tenant_id", default=None
-)
+_current_tenant_id: ContextVar[str | None] = ContextVar("kyro_tenant_id", default=None)
 
 
 def get_current_tenant_id() -> str | None:

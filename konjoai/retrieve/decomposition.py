@@ -171,10 +171,7 @@ class AnswerSynthesizer:
 
         context_parts = []
         for idx, item in enumerate(sub_answers, start=1):
-            context_parts.append(
-                f"[{idx}] Sub-query: {item.sub_query}\n"
-                f"[{idx}] Sub-answer: {item.answer}"
-            )
+            context_parts.append(f"[{idx}] Sub-query: {item.sub_query}\n[{idx}] Sub-answer: {item.answer}")
         context = "\n\n".join(context_parts)
 
         synthesis_question = (

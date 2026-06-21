@@ -17,6 +17,7 @@ It exposes ``GET /tenants/{tenant_id}/cost_report`` via the tenants router.
 K3 — feature-flagged: the tracker is only active when ``cache_enabled=True``
 in Settings.  When disabled, ``record()`` is a pure no-op.
 """
+
 from __future__ import annotations
 
 import threading
@@ -157,10 +158,10 @@ def get_cost_tracker() -> TenantCostTracker:
 
                     s = get_settings()
                     cost = getattr(s, "cost_per_1k_tokens", _DEFAULT_COST_PER_1K_TOKENS)
-                    avg  = getattr(s, "avg_response_tokens", _DEFAULT_AVG_RESPONSE_TOKENS)
+                    avg = getattr(s, "avg_response_tokens", _DEFAULT_AVG_RESPONSE_TOKENS)
                 except Exception:  # noqa: BLE001 — settings unavailable in tests
                     cost = _DEFAULT_COST_PER_1K_TOKENS
-                    avg  = _DEFAULT_AVG_RESPONSE_TOKENS
+                    avg = _DEFAULT_AVG_RESPONSE_TOKENS
                 _tracker = TenantCostTracker(cost_per_1k_tokens=cost, avg_response_tokens=avg)
     return _tracker
 

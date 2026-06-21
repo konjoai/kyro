@@ -10,6 +10,7 @@ Konjo gates exercised:
   K3 — the loop, decomposition and retrieval are real ``konjoai`` code.
   K6 — the global retrieve-tool patch is fully reverted (no test bleed).
 """
+
 from __future__ import annotations
 
 import json
@@ -84,7 +85,13 @@ def test_step_events_have_full_shape(engine: AgentEngine) -> None:
     out = engine.analyze("rate limiting policy", max_steps=4, top_k=3)
     for step in out["steps"]:
         assert step.keys() >= {
-            "index", "thought", "action", "action_input", "observation", "docs", "elapsed_ms",
+            "index",
+            "thought",
+            "action",
+            "action_input",
+            "observation",
+            "docs",
+            "elapsed_ms",
         }
         assert step["action"] in {"retrieve", "finish"}
         if step["action"] == "retrieve":
@@ -111,9 +118,7 @@ def test_empty_question_yields_error(engine: AgentEngine) -> None:
 
 def test_planner_actions_parse_with_real_react_parser() -> None:
     planner = DemoPlanner(["sub one", "sub two"])
-    actions = [
-        _parse_action_payload(planner.generate("q", "ctx").answer) for _ in range(3)
-    ]
+    actions = [_parse_action_payload(planner.generate("q", "ctx").answer) for _ in range(3)]
     assert [a.action for a in actions] == ["retrieve", "retrieve", "finish"]
     assert actions[0].action_input == "sub one"
     assert actions[-1].final_answer  # grounded answer present on finish

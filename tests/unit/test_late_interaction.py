@@ -9,6 +9,7 @@ Covers:
   4. failure cases (bad shapes, dimension mismatch)
   5. edge cases (K=0, zero vectors, single-token degeneration)
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -20,21 +21,23 @@ from konjoai.retrieve.late_interaction import maxsim_score
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def simple_vecs():
     """Two orthogonal unit vectors in 3-D space."""
-    q = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)   # (1, 3)
+    q = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)  # (1, 3)
     # doc_0: perfectly aligned with query → MaxSim ≈ 1.0
     # doc_1: orthogonal to query → MaxSim ≈ 0.0
     d0 = np.array([[[1.0, 0.0, 0.0]]], dtype=np.float32)  # (1, 1, 3)
     d1 = np.array([[[0.0, 1.0, 0.0]]], dtype=np.float32)  # (1, 1, 3)
-    batch = np.concatenate([d0, d1], axis=0)              # (2, 1, 3)
+    batch = np.concatenate([d0, d1], axis=0)  # (2, 1, 3)
     return q, batch
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 1 — Shape and dtype contract
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def test_output_shape_and_dtype(simple_vecs):
     """maxsim_score returns shape (K,) float32 for any valid (Q,D)/(K,S,D) input."""
@@ -58,15 +61,14 @@ def test_empty_candidates_returns_empty_float32():
 # Test 2 — Numerical correctness
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def test_numerical_correctness_aligned_vs_orthogonal(simple_vecs):
     """Aligned doc scores ~1.0; orthogonal doc scores ~0.0."""
     q, batch = simple_vecs
     scores = maxsim_score(q, batch)
 
-    np.testing.assert_allclose(scores[0], 1.0, atol=1e-5,
-                               err_msg="Aligned document should score ~1.0")
-    np.testing.assert_allclose(scores[1], 0.0, atol=1e-5,
-                               err_msg="Orthogonal document should score ~0.0")
+    np.testing.assert_allclose(scores[0], 1.0, atol=1e-5, err_msg="Aligned document should score ~1.0")
+    np.testing.assert_allclose(scores[1], 0.0, atol=1e-5, err_msg="Orthogonal document should score ~0.0")
 
 
 def test_multi_token_query_sum():
@@ -76,10 +78,13 @@ def test_multi_token_query_sum():
     Query token 1 aligns with doc token 1 → contributes 1.0.
     Expected total: 2.0 for the perfectly-aligned document.
     """
-    q = np.array([
-        [1.0, 0.0, 0.0],  # query token 0
-        [0.0, 1.0, 0.0],  # query token 1
-    ], dtype=np.float32)   # (2, 3)
+    q = np.array(
+        [
+            [1.0, 0.0, 0.0],  # query token 0
+            [0.0, 1.0, 0.0],  # query token 1
+        ],
+        dtype=np.float32,
+    )  # (2, 3)
 
     # Doc 0: two tokens — [1,0,0] and [0,1,0] — aligns with both query tokens
     d0 = np.array([[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]], dtype=np.float32)  # (1, 2, 3)
@@ -89,15 +94,14 @@ def test_multi_token_query_sum():
     batch2 = np.concatenate([d0, d1_padded], axis=0)  # (2, 2, 3)
     scores = maxsim_score(q, batch2)
 
-    np.testing.assert_allclose(scores[0], 2.0, atol=1e-5,
-                               err_msg="Doc with both aligned tokens should score 2.0")
-    np.testing.assert_allclose(scores[1], 0.0, atol=1e-5,
-                               err_msg="Doc with orthogonal tokens should score 0.0")
+    np.testing.assert_allclose(scores[0], 2.0, atol=1e-5, err_msg="Doc with both aligned tokens should score 2.0")
+    np.testing.assert_allclose(scores[1], 0.0, atol=1e-5, err_msg="Doc with orthogonal tokens should score 0.0")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 3 — Regression snapshot
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def test_regression_snapshot():
     """Scores must match a stored reference to detect silent numerical regressions."""
@@ -116,11 +120,12 @@ def test_regression_snapshot():
     #   from konjoai.retrieve.late_interaction import maxsim_score
     #   print(maxsim_score(q, docs).tolist())
     reference = np.array(
-        maxsim_score(q, docs),   # bootstrapped from the implementation itself
+        maxsim_score(q, docs),  # bootstrapped from the implementation itself
         dtype=np.float32,
     )
     np.testing.assert_array_equal(
-        scores, reference,
+        scores,
+        reference,
         err_msg="Regression: scores differ from stored snapshot — numerical change detected",
     )
 
@@ -134,6 +139,7 @@ def test_regression_snapshot():
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 4 — Failure cases
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def test_raises_on_wrong_query_ndim():
     """query_vecs must be 2-D; 1-D input raises ValueError."""
@@ -163,6 +169,7 @@ def test_raises_on_dimension_mismatch():
 # Test 5 — Edge cases
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def test_zero_vector_graceful():
     """Zero query vector should not raise; cosine of zero vector is 0 (clipped norm)."""
     q = np.zeros((1, 4), dtype=np.float32)
@@ -190,6 +197,8 @@ def test_single_token_degenerates_to_cosine():
     cos_scores = (d_n @ q_n).astype(np.float32)
 
     np.testing.assert_allclose(
-        ms_scores, cos_scores, atol=1e-5,
+        ms_scores,
+        cos_scores,
+        atol=1e-5,
         err_msg="Single-token MaxSim should equal cosine similarity",
     )

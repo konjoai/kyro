@@ -19,6 +19,7 @@ Sprint 18 additions:
     get_brute_force_guard — module-level singleton accessor
     check_rate_limit — FastAPI dependency: 429 on rate-limit breach
 """
+
 from konjoai.auth.api_key import APIKeyResult, hash_api_key, verify_api_key
 from konjoai.auth.brute_force import BruteForceGuard, IPLockedOut, get_brute_force_guard
 from konjoai.auth.jwt_auth import _HAS_JWT, TenantClaims, decode_token

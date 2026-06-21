@@ -21,6 +21,7 @@ Net result: the agent's *behaviour* — when it retrieves, which documents it
 pulls, when it stops — is real code. Only token generation and the storage
 backend are stubbed, exactly as a production swap would isolate them.
 """
+
 from __future__ import annotations
 
 import json

@@ -1,4 +1,5 @@
 """BM25 sparse lexical retrieval index."""
+
 from __future__ import annotations
 
 import logging
@@ -139,6 +140,7 @@ def get_sparse_index() -> BM25Index:
         _index = BM25Index()
         try:
             from konjoai.config import get_settings
+
             path = get_settings().bm25_persist_path
             if path:
                 _index.load(path)

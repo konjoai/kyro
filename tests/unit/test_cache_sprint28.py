@@ -1,4 +1,5 @@
 """Sprint 28 — batch search, analytics buffer, and adaptive TTL tests."""
+
 from __future__ import annotations
 
 import time
@@ -48,7 +49,7 @@ def _stub_encode(questions: list[str]) -> np.ndarray:
     dim = 32
     out = np.zeros((len(questions), dim), dtype=np.float32)
     for i, q in enumerate(questions):
-        rng = np.random.default_rng(seed=abs(hash(q)) % (2 ** 31))
+        rng = np.random.default_rng(seed=abs(hash(q)) % (2**31))
         v = rng.standard_normal(dim).astype(np.float32)
         out[i] = v / (np.linalg.norm(v) + 1e-10)
     return out
@@ -106,8 +107,8 @@ class TestLatencyBuffer:
 class TestComputeAnalytics:
     def _records(self, n_hits: int, n_misses: int, age_secs: float = 0.0) -> list[AccessRecord]:
         ts = time.monotonic() - age_secs
-        hits  = [AccessRecord(ts, 5.0 + i, True,  0.90 + 0.01*i) for i in range(n_hits)]
-        misses= [AccessRecord(ts, 300.0,   False, 0.0)  for _ in range(n_misses)]
+        hits = [AccessRecord(ts, 5.0 + i, True, 0.90 + 0.01 * i) for i in range(n_hits)]
+        misses = [AccessRecord(ts, 300.0, False, 0.0) for _ in range(n_misses)]
         return hits + misses
 
     def test_empty_records_returns_zeros(self) -> None:
@@ -214,8 +215,11 @@ class TestTopKSimilar:
         v = _vec(7)
         key = SemanticCache._normalise("stale")
         entry = SemanticCacheEntry(
-            question="stale", question_vec=v, response=_Resp("old"),
-            created_at=time.monotonic() - 200, ttl_seconds=10,
+            question="stale",
+            question_vec=v,
+            response=_Resp("old"),
+            created_at=time.monotonic() - 200,
+            ttl_seconds=10,
         )
         with cache._lock:
             cache._lru[key] = entry
@@ -230,18 +234,23 @@ class TestTopKSimilar:
 class TestAdaptiveTTL:
     def _hot_entry(self, question: str, vec: np.ndarray, ttl: int = 3600) -> SemanticCacheEntry:
         e = SemanticCacheEntry(
-            question=question, question_vec=vec, response=_Resp("ans"),
+            question=question,
+            question_vec=vec,
+            response=_Resp("ans"),
             created_at=time.monotonic() - 3600,  # 1 hour old
-            hit_count=20,                          # 20 hits in 1 hour = 480/day
+            hit_count=20,  # 20 hits in 1 hour = 480/day
             ttl_seconds=ttl,
         )
         return e
 
     def _cold_entry(self, question: str, vec: np.ndarray, ttl: int = 3600) -> SemanticCacheEntry:
         return SemanticCacheEntry(
-            question=question, question_vec=vec, response=_Resp("ans"),
+            question=question,
+            question_vec=vec,
+            response=_Resp("ans"),
             created_at=time.monotonic() - 86400 * 4,  # 4 days old, never hit
-            hit_count=0, ttl_seconds=ttl,
+            hit_count=0,
+            ttl_seconds=ttl,
             last_accessed=time.monotonic() - 86400 * 4,
         )
 
@@ -277,8 +286,12 @@ class TestAdaptiveTTL:
         cache = SemanticCache(max_size=20, threshold=0.95)
         key = SemanticCache._normalise("q")
         entry = SemanticCacheEntry(
-            question="q", question_vec=_vec(0), response=_Resp("a"),
-            created_at=time.monotonic() - 3600, hit_count=100, ttl_seconds=30,
+            question="q",
+            question_vec=_vec(0),
+            response=_Resp("a"),
+            created_at=time.monotonic() - 3600,
+            hit_count=100,
+            ttl_seconds=30,
         )
         with cache._lock:
             cache._lru[key] = entry
@@ -349,8 +362,7 @@ class TestBatchSearchRoute:
     def test_returns_404_when_disabled(self) -> None:
         app = _make_app()
         client = TestClient(app)
-        with patch("konjoai.api.routes.cache.get_settings",
-                   return_value=_Settings(cache_enabled=False)):
+        with patch("konjoai.api.routes.cache.get_settings", return_value=_Settings(cache_enabled=False)):
             resp = client.post("/cache/search", json={"queries": ["x"], "top_k": 3})
         assert resp.status_code == 404
 
@@ -380,8 +392,7 @@ class TestAnalyticsRoute:
     def test_returns_404_when_disabled(self) -> None:
         app = _make_app()
         client = TestClient(app)
-        with patch("konjoai.api.routes.cache.get_settings",
-                   return_value=_Settings(cache_enabled=False)):
+        with patch("konjoai.api.routes.cache.get_settings", return_value=_Settings(cache_enabled=False)):
             assert client.get("/cache/analytics").status_code == 404
 
 

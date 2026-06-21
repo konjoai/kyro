@@ -1,4 +1,5 @@
 """Cross-encoder reranking of retrieval candidates."""
+
 from __future__ import annotations
 
 import logging

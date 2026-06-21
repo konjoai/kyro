@@ -13,6 +13,7 @@ Coverage targets:
 - docs/ directory contains all expected pages
 - release.yml: tag trigger, pypi publish job, docker publish job
 """
+
 from __future__ import annotations
 
 import re
@@ -37,10 +38,12 @@ def _pyproject() -> str:
 class TestPackageVersion:
     def test_version_is_1_9_1(self) -> None:
         import konjoai
+
         assert konjoai.__version__ == "1.9.1"
 
     def test_version_matches_pyproject(self) -> None:
         import konjoai
+
         text = _pyproject()
         match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
         assert match is not None
@@ -48,6 +51,7 @@ class TestPackageVersion:
 
     def test_version_is_semver(self) -> None:
         import konjoai
+
         assert re.match(r"^\d+\.\d+\.\d+$", konjoai.__version__)
 
 
@@ -157,22 +161,27 @@ class TestPyprojectEntryPoints:
 class TestSubPackageImports:
     def test_sdk_importable(self) -> None:
         from konjoai.sdk import KonjoClient
+
         assert KonjoClient is not None
 
     def test_mcp_importable(self) -> None:
         from konjoai.mcp import KyroMCPServer
+
         assert KyroMCPServer is not None
 
     def test_auth_importable(self) -> None:
         from konjoai.auth import TenantClaims
+
         assert TenantClaims is not None
 
     def test_config_importable(self) -> None:
         from konjoai.config import get_settings
+
         assert get_settings is not None
 
     def test_feedback_importable(self) -> None:
         from konjoai.feedback import THUMBS_DOWN, THUMBS_UP, get_feedback_store
+
         assert get_feedback_store is not None
         assert THUMBS_UP == "thumbs_up"
         assert THUMBS_DOWN == "thumbs_down"

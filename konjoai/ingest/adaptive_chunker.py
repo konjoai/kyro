@@ -38,6 +38,7 @@ K4: No float arrays cross this module's boundary.
 K5: Zero new dependencies (stdlib + existing ``regex``/``re`` only).
 K1: All public functions raise on invalid input rather than returning None.
 """
+
 from __future__ import annotations
 
 import re
@@ -129,6 +130,7 @@ def adaptive_chunk_size(complexity: float, hierarchy: list[int]) -> int:
 
 # ── Multi-granularity chunker ─────────────────────────────────────────────────
 
+
 @dataclass
 class GranularChunk:
     """A chunk annotated with its granularity level."""
@@ -136,8 +138,8 @@ class GranularChunk:
     content: str
     source: str
     chunk_index: int
-    granularity: str            # "parent" | "base" | "child"
-    chunk_size: int             # actual configured size for this granularity
+    granularity: str  # "parent" | "base" | "child"
+    chunk_size: int  # actual configured size for this granularity
     metadata: dict = field(default_factory=dict)
 
 
@@ -165,10 +167,7 @@ class MultiGranularityChunker:
         self.overlap = overlap
         if len(self.sizes) < 2:
             raise ValueError("sizes must contain at least 2 entries")
-        self._chunkers = [
-            RecursiveChunker(chunk_size=s, overlap=min(overlap, s // 4))
-            for s in self.sizes
-        ]
+        self._chunkers = [RecursiveChunker(chunk_size=s, overlap=min(overlap, s // 4)) for s in self.sizes]
 
     def chunk(self, doc: Document) -> list[GranularChunk]:
         """Return chunks at all granularity levels for *doc*."""
@@ -199,8 +198,6 @@ class MultiGranularityChunker:
         """
         labels = self._LABELS[: len(self.sizes)]
         if granularity not in labels:
-            raise ValueError(
-                f"Unknown granularity {granularity!r}; valid: {labels}"
-            )
+            raise ValueError(f"Unknown granularity {granularity!r}; valid: {labels}")
         idx = labels.index(granularity)
         return self._chunkers[idx].chunk(doc)

@@ -8,6 +8,7 @@ Quick start::
     response = client.query("What is the capital of Ethiopia?")
     print(response.answer)
 """
+
 from __future__ import annotations
 
 from konjoai.sdk.client import KonjoClient

@@ -18,6 +18,7 @@ instantly, saving Qdrant latency and generator tokens.
 Design: pure regex + heuristic — no model, no network call, < 1 ms on any hardware.
 This satisfies K5 (zero new deps) and K2 (telemetry-able, sub-millisecond step).
 """
+
 from __future__ import annotations
 
 import logging
@@ -190,6 +191,7 @@ def _get_complexity_scorer():
     global _complexity_scorer  # noqa: PLW0603
     if _complexity_scorer is None:
         from konjoai.ingest.adaptive_chunker import QueryComplexityScorer  # noqa: PLC0415
+
         _complexity_scorer = QueryComplexityScorer()
     return _complexity_scorer
 

@@ -11,6 +11,7 @@ Konjo gates exercised:
   K3  — every metric is a *real* count from the live SemanticCache, not a mock.
   K6  — adding ``metrics()`` is purely additive — ``stats()`` and ``ask()`` still work.
 """
+
 from __future__ import annotations
 
 import json
@@ -91,9 +92,9 @@ def test_metrics_field_types_match_dashboard_contract(state: DemoState) -> None:
 
 def test_cache_hit_rate_reflects_real_semantic_cache(state: DemoState) -> None:
     """K3: not mocked — the rate must equal SemanticCache.stats()['hit_rate']."""
-    state.ask("What is the capital of France?")           # miss
-    state.ask("What is the capital of France?")           # exact hit
-    state.ask("What is your refund policy?")              # miss
+    state.ask("What is the capital of France?")  # miss
+    state.ask("What is the capital of France?")  # exact hit
+    state.ask("What is your refund policy?")  # miss
 
     m = state.metrics()
     cache_stats = state.cache.stats()

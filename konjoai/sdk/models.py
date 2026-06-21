@@ -1,4 +1,5 @@
 """Typed response models returned by the Kyro Python SDK client."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ class SDKQueryResponse:
 @dataclass(frozen=True)
 class SDKStreamChunk:
     """A single streamed token chunk from ``KonjoClient.query_stream``."""
+
     text: str
 
 
@@ -81,5 +83,6 @@ class SDKAgentStreamEvent:
     into a plain dict so callers can branch on ``type`` without depending on
     a specific schema version.
     """
+
     type: str
     data: dict = field(default_factory=dict)

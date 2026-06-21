@@ -1,4 +1,5 @@
 """Auto-strategy router: maps CRAG output → retrieval strategy."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -48,10 +49,7 @@ class AutoRouter:
             rationale = "CRAG classification is ambiguous; applying self-RAG refinement."
         else:
             strategy = RouteStrategy.DECOMPOSE
-            rationale = (
-                f"CRAG classified retrieval as '{crag_classification}'; "
-                "decomposing query to improve retrieval."
-            )
+            rationale = f"CRAG classified retrieval as '{crag_classification}'; decomposing query to improve retrieval."
 
         return RouteDecision(
             strategy=strategy,

@@ -13,6 +13,7 @@ check_rate_limit:
 The context var is reset after the response is returned by yielding in a
 generator-style dependency so FastAPI handles cleanup correctly.
 """
+
 from __future__ import annotations
 
 import logging
@@ -187,6 +188,7 @@ async def check_rate_limit(
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _get_client_ip(request: Request | None) -> str:
     """Extract the best-effort client IP from the request.

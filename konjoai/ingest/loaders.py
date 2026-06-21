@@ -1,4 +1,5 @@
 """Document loaders for PDF, Markdown, text, HTML, and source-code files."""
+
 from __future__ import annotations
 
 import logging
@@ -15,7 +16,7 @@ class Document:
     """A single loaded document before chunking."""
 
     content: str
-    source: str   # file path or URL
+    source: str  # file path or URL
     metadata: dict = field(default_factory=dict)
 
 
@@ -29,6 +30,7 @@ class Loader(Protocol):
 
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
+
 
 class PDFLoader:
     """Load a PDF file using pypdf."""
@@ -58,6 +60,7 @@ class PDFLoader:
 
 # ── Markdown / Plain Text ─────────────────────────────────────────────────────
 
+
 class MarkdownLoader:
     """Load Markdown or plain-text files."""
 
@@ -77,6 +80,7 @@ class TextLoader:
 
 
 # ── HTML ──────────────────────────────────────────────────────────────────────
+
 
 class HTMLLoader:
     """Strip HTML tags and load the visible text."""
@@ -99,13 +103,21 @@ class HTMLLoader:
 
 # ── Code ──────────────────────────────────────────────────────────────────────
 
+
 class CodeLoader:
     """Load source-code files verbatim, adding language metadata."""
 
     _EXT_MAP: dict[str, str] = {
-        ".py": "python", ".rs": "rust", ".go": "go", ".ts": "typescript",
-        ".js": "javascript", ".java": "java", ".cpp": "cpp", ".c": "c",
-        ".rb": "ruby", ".sh": "shell",
+        ".py": "python",
+        ".rs": "rust",
+        ".go": "go",
+        ".ts": "typescript",
+        ".js": "javascript",
+        ".java": "java",
+        ".cpp": "cpp",
+        ".c": "c",
+        ".rb": "ruby",
+        ".sh": "shell",
     }
 
     def load(self, path: Path) -> list[Document]:

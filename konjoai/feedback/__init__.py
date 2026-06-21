@@ -15,6 +15,7 @@ Usage::
         tenant_id="acme-corp",
     ))
 """
+
 from __future__ import annotations
 
 from konjoai.feedback.models import (

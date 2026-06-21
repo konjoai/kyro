@@ -1,4 +1,5 @@
 """Unit tests for BM25Index.save() / load() persistence (G6 fix)."""
+
 from __future__ import annotations
 
 import pytest
@@ -7,6 +8,7 @@ from konjoai.retrieve.sparse import BM25Index
 
 try:
     import rank_bm25 as _rb  # noqa: F401
+
     _HAS_BM25 = True
 except ImportError:
     _HAS_BM25 = False
@@ -16,6 +18,7 @@ pytestmark = pytest.mark.skipif(not _HAS_BM25, reason="rank-bm25 not installed")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _built_index(tmp_path) -> tuple[BM25Index, list[str], list[str]]:
     idx = BM25Index()
@@ -29,6 +32,7 @@ def _built_index(tmp_path) -> tuple[BM25Index, list[str], list[str]]:
 # ---------------------------------------------------------------------------
 # Shape / dtype contract tests
 # ---------------------------------------------------------------------------
+
 
 def test_built_flag():
     idx = BM25Index()
@@ -47,6 +51,7 @@ def test_build_then_search():
 # ---------------------------------------------------------------------------
 # Persistence tests
 # ---------------------------------------------------------------------------
+
 
 def test_save_creates_file(tmp_path):
     idx, _, _ = _built_index(tmp_path)

@@ -9,6 +9,7 @@ Invariants:
 - K5: pure Python stdlib — ``threading``, ``time``, ``collections``.
 - K1: ``check_ip`` either returns ``None`` (OK) or raises ``IPLockedOut``.
 """
+
 from __future__ import annotations
 
 import threading
@@ -33,8 +34,7 @@ class IPLockedOut(Exception):
         self.lockout_seconds = lockout_seconds
         self.retry_after = retry_after  # monotonic timestamp when lockout expires
         super().__init__(
-            f"IP {ip!r} is locked out for {lockout_seconds}s due to repeated "
-            "failed authentication attempts."
+            f"IP {ip!r} is locked out for {lockout_seconds}s due to repeated failed authentication attempts."
         )
 
 

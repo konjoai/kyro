@@ -4,6 +4,7 @@ Guards against missing PyJWT with _HAS_JWT (K5: no new hard dep).
 When multi_tenancy_enabled=True but PyJWT is absent, decode_token raises
 RuntimeError immediately so the operator knows to install the dep.
 """
+
 from __future__ import annotations
 
 import logging
@@ -15,12 +16,14 @@ logger = logging.getLogger(__name__)
 
 try:
     import jwt as _jwt  # PyJWT>=2.8
+
     _HAS_JWT = True
 except ImportError:
     _HAS_JWT = False
 
 
 # ── Data contract ─────────────────────────────────────────────────────────────
+
 
 @dataclass
 class TenantClaims:
@@ -32,6 +35,7 @@ class TenantClaims:
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
 
 def decode_token(
     token: str,
@@ -56,13 +60,10 @@ def decode_token(
                       invalid, or the tenant_id claim is missing.
     """
     if not _HAS_JWT:
-        raise RuntimeError(
-            "PyJWT is required for JWT authentication: pip install PyJWT>=2.8"
-        )
+        raise RuntimeError("PyJWT is required for JWT authentication: pip install PyJWT>=2.8")
     if not secret:
         raise ValueError(
-            "JWT secret key is empty — set jwt_secret_key in settings or "
-            "the JWT_SECRET_KEY environment variable."
+            "JWT secret key is empty — set jwt_secret_key in settings or the JWT_SECRET_KEY environment variable."
         )
     try:
         payload: dict = _jwt.decode(token, secret, algorithms=[algorithm])
@@ -73,9 +74,7 @@ def decode_token(
 
     raw_id = payload.get(tenant_id_claim)
     if not raw_id:
-        raise ValueError(
-            f"JWT token is missing required claim '{tenant_id_claim}'"
-        )
+        raise ValueError(f"JWT token is missing required claim '{tenant_id_claim}'")
 
     return TenantClaims(
         tenant_id=str(raw_id),

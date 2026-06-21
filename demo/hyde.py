@@ -18,6 +18,7 @@ This engine shows the effect live and honestly:
   (:meth:`pipeline.PipelineEngine.dense`). The before/after rankings, scores,
   and the closed gap are measured, not staged.
 """
+
 from __future__ import annotations
 
 import re
@@ -34,11 +35,59 @@ __all__ = ["HyDEEngine"]
 # Mirror of the question words / stop tokens we strip when distilling a query
 # into the content terms the hypothesis is built around.
 _STOP = {
-    "the", "a", "an", "is", "are", "was", "were", "be", "of", "to", "for", "in",
-    "on", "at", "what", "which", "how", "where", "when", "why", "who", "do",
-    "does", "did", "you", "your", "my", "i", "it", "that", "this", "with", "and",
-    "or", "but", "as", "from", "by", "so", "if", "can", "could", "would",
-    "should", "have", "has", "had", "will", "about", "tell", "me", "us", "any",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "of",
+    "to",
+    "for",
+    "in",
+    "on",
+    "at",
+    "what",
+    "which",
+    "how",
+    "where",
+    "when",
+    "why",
+    "who",
+    "do",
+    "does",
+    "did",
+    "you",
+    "your",
+    "my",
+    "i",
+    "it",
+    "that",
+    "this",
+    "with",
+    "and",
+    "or",
+    "but",
+    "as",
+    "from",
+    "by",
+    "so",
+    "if",
+    "can",
+    "could",
+    "would",
+    "should",
+    "have",
+    "has",
+    "had",
+    "will",
+    "about",
+    "tell",
+    "me",
+    "us",
+    "any",
 }
 
 

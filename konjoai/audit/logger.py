@@ -9,6 +9,7 @@ The ``AuditLogger`` wraps a backend and enforces K3: when
 ``audit_enabled=False`` every ``log()`` call is a pure no-op with zero
 allocation overhead.
 """
+
 from __future__ import annotations
 
 import json
@@ -140,10 +141,7 @@ class JsonLinesBackend:
         for line in lines:
             try:
                 data = json.loads(line)
-                event = AuditEvent(**{
-                    k: v for k, v in data.items()
-                    if k in AuditEvent.__dataclass_fields__
-                })
+                event = AuditEvent(**{k: v for k, v in data.items() if k in AuditEvent.__dataclass_fields__})
                 if tenant_id is not None and event.tenant_id != tenant_id:
                     continue
                 if event_type is not None and event.event_type != event_type:
@@ -221,6 +219,7 @@ def get_audit_logger() -> AuditLogger:
         with _singleton_lock:
             if _audit_logger is None:
                 from konjoai.config import get_settings
+
                 settings = get_settings()
                 enabled = getattr(settings, "audit_enabled", False)
                 backend_name = getattr(settings, "audit_backend", "memory")

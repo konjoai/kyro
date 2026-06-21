@@ -18,6 +18,7 @@ Coverage targets:
 - get_tenant_id dep: brute-force counter incremented on JWT failure
 - get_tenant_id dep: brute-force counter cleared on JWT success
 """
+
 from __future__ import annotations
 
 import threading

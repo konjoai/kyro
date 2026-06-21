@@ -1,4 +1,5 @@
 """Bounded ReAct agent loop: Thought/Action/Observation over hybrid retrieval."""
+
 from __future__ import annotations
 
 import json
@@ -183,9 +184,7 @@ class RAGAgent:
                         thought=payload.thought,
                         action=action,
                         action_input=payload.action_input,
-                        observation=(
-                            f"unknown action '{action}' — expected one of {', '.join(registry.actions())}"
-                        ),
+                        observation=(f"unknown action '{action}' — expected one of {', '.join(registry.actions())}"),
                     )
                 )
                 continue

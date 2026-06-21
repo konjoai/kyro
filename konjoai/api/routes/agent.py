@@ -1,4 +1,5 @@
 """Agent routes: bounded ReAct loop over Kyro retrieval tools (sync + SSE stream)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -103,16 +104,19 @@ async def agent_query(req: AgentQueryRequest) -> AgentQueryResponse:
         from datetime import datetime
 
         from konjoai.audit import get_audit_logger
+
         _latency = sum(t.elapsed_ms for t in tel.steps) if tel.steps else 0.0
-        get_audit_logger().log(AuditEvent(
-            event_type=AGENT_QUERY,
-            timestamp=datetime.now(UTC).isoformat(),
-            endpoint="/agent/query",
-            status_code=200,
-            latency_ms=_latency,
-            question_hash=hash_text(req.question),
-            result_count=len(sources),
-        ))
+        get_audit_logger().log(
+            AuditEvent(
+                event_type=AGENT_QUERY,
+                timestamp=datetime.now(UTC).isoformat(),
+                endpoint="/agent/query",
+                status_code=200,
+                latency_ms=_latency,
+                question_hash=hash_text(req.question),
+                result_count=len(sources),
+            )
+        )
 
     return response
 

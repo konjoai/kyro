@@ -1,9 +1,11 @@
 """Pydantic request/response schemas shared across the KonjoOS API routers."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
 # ── Ingest ───────────────────────────────────────────────────────────────────────────────────────
+
 
 class IngestRequest(BaseModel):
     """Parameters for an ingest request: source path and chunking config."""
@@ -19,9 +21,9 @@ class IngestResponse(BaseModel):
 
     chunks_indexed: int
     sources_processed: int
-    vectro_metrics: dict | None = None     # K6: None when vectro_quantize=False
-    chunks_deduplicated: int = 0           # chunks removed by near-dedup filter; 0 when dedup_threshold=None
-    drift_count: int | None = None         # corpus drift count from auto-verify; None when rag_auto_verify=False
+    vectro_metrics: dict | None = None  # K6: None when vectro_quantize=False
+    chunks_deduplicated: int = 0  # chunks removed by near-dedup filter; 0 when dedup_threshold=None
+    drift_count: int | None = None  # corpus drift count from auto-verify; None when rag_auto_verify=False
 
 
 class ManifestResponse(BaseModel):
@@ -46,12 +48,17 @@ class VerifyResponse(BaseModel):
 
 # ── Vectro pipeline ─────────────────────────────────────────────────────────────────────────────────────────
 
+
 class VectroPipelineRequest(BaseModel):
     """Request body for POST /vectro/pipeline."""
+
     input_jsonl: str = Field(..., description="Path to JSONL file.  Each line: {'id': str, 'vector': [f32]}")
     out_dir: str | None = Field(None, description="Output directory.  Defaults to a tempdir.")
-    format: str = Field("nf4", pattern="^(nf4|pq|int8|rq|auto)$",
-                        description="Quantization format.  rq/auto are stubs until vectro_lib v5.0.")
+    format: str = Field(
+        "nf4",
+        pattern="^(nf4|pq|int8|rq|auto)$",
+        description="Quantization format.  rq/auto are stubs until vectro_lib v5.0.",
+    )
     m: int = Field(16, ge=4, le=64, description="HNSW M parameter.")
     ef_construction: int = Field(200, ge=10, description="HNSW construction beam width.")
     ef_search: int = Field(50, ge=10, description="HNSW search beam width.")
@@ -62,6 +69,7 @@ class VectroPipelineRequest(BaseModel):
 
 class VectroPipelineResponse(BaseModel):
     """Response from POST /vectro/pipeline."""
+
     n_vectors: int
     dims: int
     format: str
@@ -74,19 +82,30 @@ class VectroPipelineResponse(BaseModel):
 
 # ── Query ─────────────────────────────────────────────────────────────────────────────────────────
 
+
 class QueryRequest(BaseModel):
     """A RAG query plus per-request feature toggles (HyDE, CRAG, Self-RAG, etc.)."""
 
     question: str = Field(..., min_length=1)
     top_k: int = Field(5, ge=1, le=50)
-    use_hyde: bool = Field(False, description="Replace the raw query embedding with a Vectro-compatible HyDE hypothesis embedding (Gao et al. 2022).")
+    use_hyde: bool = Field(
+        False,
+        description="Replace the raw query embedding with a Vectro-compatible HyDE hypothesis embedding (Gao et al. 2022).",
+    )
     use_crag: bool = Field(False, description="Enable CRAG critique for this request only.")
     use_self_rag: bool = Field(False, description="Enable Self-RAG reflective loop for this request only.")
     use_decomposition: bool = Field(False, description="Enable Sprint 13 query decomposition for this request only.")
-    use_graph_rag: bool = Field(False, description="Enable Sprint 15 GraphRAG community-based retrieval for this request only.")
+    use_graph_rag: bool = Field(
+        False, description="Enable Sprint 15 GraphRAG community-based retrieval for this request only."
+    )
     stream: bool = Field(False, description="Hint only; use POST /query/stream to actually stream tokens.")
-    auto_route: bool = Field(False, description="Enable Sprint 25 AutoRouter to map CRAG classification to retrieval strategy for this request only.")
-    conversation_id: str | None = Field(None, description="Optional conversation ID for multi-turn semantic cache context (Sprint 28).")
+    auto_route: bool = Field(
+        False,
+        description="Enable Sprint 25 AutoRouter to map CRAG classification to retrieval strategy for this request only.",
+    )
+    conversation_id: str | None = Field(
+        None, description="Optional conversation ID for multi-turn semantic cache context (Sprint 28)."
+    )
 
 
 class SourceDoc(BaseModel):
@@ -104,16 +123,16 @@ class QueryResponse(BaseModel):
     sources: list[SourceDoc]
     model: str
     usage: dict
-    telemetry: dict | None = None       # per-step latency dict; None if telemetry disabled
-    intent: str = "retrieval"           # "retrieval" | "aggregation" | "chat"
-    cache_hit: bool = False             # True when response served from semantic cache
+    telemetry: dict | None = None  # per-step latency dict; None if telemetry disabled
+    intent: str = "retrieval"  # "retrieval" | "aggregation" | "chat"
+    cache_hit: bool = False  # True when response served from semantic cache
     # ── Self-correcting retrieval metadata (Sprints 11–12) ──────────────────────────────────────────────
-    crag_confidence: float | None = None    # mean relevance score from CRAG; None when disabled
-    crag_fallback: bool | None = None       # True if CRAG triggered corrective fallback
+    crag_confidence: float | None = None  # mean relevance score from CRAG; None when disabled
+    crag_fallback: bool | None = None  # True if CRAG triggered corrective fallback
     crag_scores: list[float] | None = None  # per-chunk normalized CRAG scores [0, 1]
     crag_classification: list[str] | None = None  # per-chunk class labels
-    crag_refinement_triggered: bool | None = None # True when ambiguous chunks invoked refinement
-    self_rag_support: float | None = None   # mean support score from Self-RAG; None when disabled
+    crag_refinement_triggered: bool | None = None  # True when ambiguous chunks invoked refinement
+    self_rag_support: float | None = None  # mean support score from Self-RAG; None when disabled
     self_rag_iterations: int | None = None  # number of Self-RAG generate→critique cycles
     self_rag_iteration_scores: list[dict[str, float]] | None = None  # per-iteration ISREL/ISSUP/ISUSE
     self_rag_total_tokens: int | None = None  # cumulative generated token count across Self-RAG iterations
@@ -123,11 +142,12 @@ class QueryResponse(BaseModel):
     # ── GraphRAG community metadata (Sprint 15) ───────────────────────────────────────────────────────────────────────────
     graph_rag_communities: list[str] | None = None  # community label list; None when GraphRAG disabled
     # ── AutoRouter metadata (Sprint 25) ─────────────────────────────────────────────────────────────────────────────────────
-    auto_route_strategy: str | None = None       # RouteStrategy value; None when AutoRouter disabled
-    auto_route_rationale: str | None = None      # human-readable rationale from AutoRouter
+    auto_route_strategy: str | None = None  # RouteStrategy value; None when AutoRouter disabled
+    auto_route_rationale: str | None = None  # human-readable rationale from AutoRouter
 
 
 # ── Eval ─────────────────────────────────────────────────────────────────────────────────────────
+
 
 class EvalRequest(BaseModel):
     """QA pairs to score: questions, answers, contexts, and optional ground truths."""
@@ -145,6 +165,7 @@ class EvalResponse(BaseModel):
 
 
 # ── Health ───────────────────────────────────────────────────────────────────────────────────────
+
 
 class HealthResponse(BaseModel):
     """Liveness snapshot: service status, vector count, and BM25 build state."""

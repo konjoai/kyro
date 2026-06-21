@@ -65,8 +65,7 @@ def evaluate(
         from ragas.run_config import RunConfig as _RunConfig
     except ImportError as e:
         raise ImportError(
-            "RAGAS and dependencies are required:\n"
-            "  pip install ragas datasets langchain-openai\n"
+            "RAGAS and dependencies are required:\n  pip install ragas datasets langchain-openai\n"
         ) from e
 
     data: dict[str, list] = {
@@ -87,9 +86,9 @@ def evaluate(
     # asyncio.Semaphore(1) proved unreliable: RAGAS spins each metric in its own
     # asyncio.run() scope, so the semaphore is invisible across those loops.
     # threading.Lock is process-wide and works regardless of event-loop topology.
-    _tlock = _threading.Lock()        # brief critical section — slot reservation only
+    _tlock = _threading.Lock()  # brief critical section — slot reservation only
     _next_slot: list = [_time.monotonic()]  # monotonic time of next free rate-limit slot
-    _rpm_interval: float = 1.0        # squish (local, no rate limit) — 1 s gap keeps MLX happy
+    _rpm_interval: float = 1.0  # squish (local, no rate limit) — 1 s gap keeps MLX happy
 
     class _ThrottledChatOpenAI(ChatOpenAI):
         """Rate-limits to ≤ 3 RPM via slot reservation + asyncio.sleep.
@@ -100,6 +99,7 @@ def evaluate(
           The event loop stays live during the wait; other coroutines progress.
         * Result: calls fire at T≈0, T+22s, T+44s … regardless of topology.
         """
+
         async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs):
             # smoke signal — appears before any sleep so we know this path is reached
             logger.info("THROTTLE: _agenerate reached (n_msg=%d)", len(messages))
@@ -129,7 +129,10 @@ def evaluate(
     _n_calls = len(questions) * len(metrics)
     logger.info(
         "Running RAGAS evaluation: %d samples × %d metrics = %d calls, ~%.0fs at 1s interval (squish)",
-        len(questions), len(metrics), _n_calls, _n_calls * _rpm_interval,
+        len(questions),
+        len(metrics),
+        _n_calls,
+        _n_calls * _rpm_interval,
     )
 
     # timeout per-job wall-clock from dispatch: needs to cover full serialised queue wait
@@ -161,14 +164,16 @@ if __name__ == "__main__":
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--run-name", required=True, help="Label for this eval run (used in output directory)")
-    parser.add_argument("--corpus", default="evals/corpus/eval_questions.json",
-                        help="Path to eval corpus JSON")
-    parser.add_argument("--n-samples", type=int, default=25,
-                        help="Maximum number of corpus items to evaluate")
-    parser.add_argument("--mock", action="store_true",
-                        help="Use ground_truth as the answer (upper-bound harness test, no LLM needed)")
-    parser.add_argument("--live-retrieval", action="store_true",
-                        help="Call hybrid_search() per question instead of using pre-baked corpus context_docs")
+    parser.add_argument("--corpus", default="evals/corpus/eval_questions.json", help="Path to eval corpus JSON")
+    parser.add_argument("--n-samples", type=int, default=25, help="Maximum number of corpus items to evaluate")
+    parser.add_argument(
+        "--mock", action="store_true", help="Use ground_truth as the answer (upper-bound harness test, no LLM needed)"
+    )
+    parser.add_argument(
+        "--live-retrieval",
+        action="store_true",
+        help="Call hybrid_search() per question instead of using pre-baked corpus context_docs",
+    )
     args = parser.parse_args()
 
     # --- Load corpus ---
@@ -187,6 +192,7 @@ if __name__ == "__main__":
     # --- Contexts: live retrieval or pre-baked corpus ---
     if args.live_retrieval:
         from konjoai.retrieve.hybrid import hybrid_search
+
         contexts = []
         for _q in questions:
             _results = hybrid_search(_q)
@@ -201,6 +207,7 @@ if __name__ == "__main__":
     _llm_model: str = "gpt-4o-mini"
     try:
         from konjoai.config import get_settings
+
         _s = get_settings()
         _llm_model = _s.ragas_llm
         if _s.generator_backend == "squish":
@@ -221,6 +228,7 @@ if __name__ == "__main__":
         logger.info("--mock mode: using ground_truths as answers (upper-bound, harness only)")
     else:
         from konjoai.generate.generator import get_generator
+
         _gen = get_generator()
         answers = []
         for _item in corpus:
@@ -231,7 +239,10 @@ if __name__ == "__main__":
 
     # --- Run RAGAS ---
     scores = evaluate(
-        questions, answers, contexts, ground_truths,
+        questions,
+        answers,
+        contexts,
+        ground_truths,
         llm_model=_llm_model,
         llm_api_key=_llm_api_key,
         llm_base_url=_llm_base_url,
@@ -243,15 +254,20 @@ if __name__ == "__main__":
     run_dir.mkdir(parents=True, exist_ok=False)
 
     (run_dir / "scores.json").write_text(json.dumps(scores, indent=2))
-    (run_dir / "config.json").write_text(json.dumps({
-        "run_name": args.run_name,
-        "n_samples": len(corpus),
-        "corpus": str(corpus_path),
-        "mock": args.mock,
-        "live_retrieval": args.live_retrieval,
-        "generator_backend": os.environ.get("GENERATOR_BACKEND", "unknown"),
-        "timestamp": _ts,
-    }, indent=2))
+    (run_dir / "config.json").write_text(
+        json.dumps(
+            {
+                "run_name": args.run_name,
+                "n_samples": len(corpus),
+                "corpus": str(corpus_path),
+                "mock": args.mock,
+                "live_retrieval": args.live_retrieval,
+                "generator_backend": os.environ.get("GENERATOR_BACKEND", "unknown"),
+                "timestamp": _ts,
+            },
+            indent=2,
+        )
+    )
 
     print(f"\n=== RAGAS Results: {args.run_name} ===")
     for _k, _v in sorted(scores.items()):

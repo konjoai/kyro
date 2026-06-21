@@ -1,4 +1,5 @@
 """Sentence-transformers encoder with a float32, L2-normalised dtype contract."""
+
 from __future__ import annotations
 
 import logging
@@ -30,9 +31,7 @@ class SentenceEncoder:
         batch_size: int = 64,
     ) -> None:
         if SentenceTransformer is None:
-            raise ImportError(
-                "sentence-transformers is required: pip install sentence-transformers"
-            )
+            raise ImportError("sentence-transformers is required: pip install sentence-transformers")
 
         self._model = SentenceTransformer(model_name, device=device)
         self._batch_size = batch_size
@@ -61,9 +60,7 @@ class SentenceEncoder:
             show_progress_bar=False,
         )
         arr = np.array(vecs, dtype=np.float32)
-        assert arr.ndim == 2 and arr.shape[1] == self._dim, (
-            f"Unexpected embedding shape: {arr.shape}"
-        )
+        assert arr.ndim == 2 and arr.shape[1] == self._dim, f"Unexpected embedding shape: {arr.shape}"
         return arr
 
     def encode_query(self, text: str) -> np.ndarray:

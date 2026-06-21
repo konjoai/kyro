@@ -9,6 +9,7 @@ Konjo gates exercised:
   K3 — retrieval is real konjoai dense cosine; the hypothesis is disclosed.
   K4 — vector stats report the float32 embedding contract.
 """
+
 from __future__ import annotations
 
 import sys
@@ -63,13 +64,24 @@ def engine(tmp_path: Path) -> HyDEEngine:
 def test_analyze_has_full_shape(engine: HyDEEngine) -> None:
     out = engine.analyze("What are my GDPR rights?", top_k=3)
     assert out.keys() >= {
-        "question", "hypothesis", "hypothesis_source", "baseline", "hyde",
-        "query_vec", "hyde_vec", "comparison", "source",
+        "question",
+        "hypothesis",
+        "hypothesis_source",
+        "baseline",
+        "hyde",
+        "query_vec",
+        "hyde_vec",
+        "comparison",
+        "source",
     }
     assert "no llm" in out["hypothesis_source"].lower()
     assert "hyde" in out["source"].lower()
     assert out["comparison"].keys() >= {
-        "baseline_top_score", "hyde_top_score", "delta", "winner", "winner_changed",
+        "baseline_top_score",
+        "hyde_top_score",
+        "delta",
+        "winner",
+        "winner_changed",
     }
 
 

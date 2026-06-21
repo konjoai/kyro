@@ -1,4 +1,5 @@
 """Ingest routes: chunk/embed/upsert documents and manage the corpus manifest."""
+
 from __future__ import annotations
 
 import logging
@@ -60,6 +61,7 @@ def ingest(
     n_deduped = 0
     if settings.dedup_threshold is not None:
         from konjoai.ingest.dedup import filter_near_duplicates
+
         embeddings, all_contents, all_sources, all_metadatas, n_deduped = filter_near_duplicates(
             embeddings, all_contents, all_sources, all_metadatas, settings.dedup_threshold
         )
@@ -73,6 +75,7 @@ def ingest(
 
     # ── Semantic cache invalidation (K3: stale data protection) ──────────────
     from konjoai.cache import get_semantic_cache
+
     _cache = get_semantic_cache()
     if _cache is not None:
         _cache.invalidate()
@@ -82,6 +85,7 @@ def ingest(
     drift_count: int | None = None
     if settings.rag_auto_verify and settings.rag_corpus_dir:
         from konjoai.ingest.rag_bridge import verify_corpus
+
         verify_result = verify_corpus(settings.rag_corpus_dir)
         if verify_result["available"]:
             drift_count = verify_result["drift_count"]
@@ -103,16 +107,19 @@ def ingest(
         from datetime import datetime
 
         from konjoai.audit import get_audit_logger
-        get_audit_logger().log(AuditEvent(
-            event_type=INGEST,
-            timestamp=datetime.now(UTC).isoformat(),
-            endpoint="/ingest",
-            status_code=200,
-            latency_ms=0.0,
-            path_hash=hash_text(req.path),
-            chunks_indexed=len(all_contents),
-            chunks_deduplicated=n_deduped,
-        ))
+
+        get_audit_logger().log(
+            AuditEvent(
+                event_type=INGEST,
+                timestamp=datetime.now(UTC).isoformat(),
+                endpoint="/ingest",
+                status_code=200,
+                latency_ms=0.0,
+                path_hash=hash_text(req.path),
+                chunks_indexed=len(all_contents),
+                chunks_deduplicated=n_deduped,
+            )
+        )
 
     return response
 
@@ -131,6 +138,7 @@ def ingest_manifest(body: ManifestBody) -> ManifestResponse:
     When Squish is unavailable, returns ``available=False`` (K3).
     """
     from konjoai.ingest.rag_bridge import index_corpus
+
     result = index_corpus(body.corpus_dir)
     return ManifestResponse(**result)
 
@@ -145,5 +153,6 @@ def ingest_verify(
     When Squish is unavailable, returns ``available=False`` (K3).
     """
     from konjoai.ingest.rag_bridge import verify_corpus
+
     result = verify_corpus(corpus_dir)
     return VerifyResponse(**result)

@@ -1,4 +1,5 @@
 """Query routes: the full RAG pipeline and its SSE streaming variant."""
+
 from __future__ import annotations
 
 import asyncio

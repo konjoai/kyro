@@ -9,6 +9,7 @@ These tests pin down:
 - stats expose stampedes_collapsed / inflight_peak / inflight_now
 - offload_to_thread=False keeps everything on the loop
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -100,10 +101,7 @@ class TestSingleflightCollapse:
 
         # Fan out 8 concurrent callers. The first will start computing;
         # the other 7 should suspend on the same in-flight future.
-        tasks = [
-            asyncio.create_task(cache.get_or_compute("the question", v, compute))
-            for _ in range(8)
-        ]
+        tasks = [asyncio.create_task(cache.get_or_compute("the question", v, compute)) for _ in range(8)]
 
         await compute_started.wait()
         # At this point exactly one compute is in flight.
@@ -167,10 +165,7 @@ class TestErrorPropagation:
             await gate.wait()
             raise RuntimeError("LLM exploded")
 
-        tasks = [
-            asyncio.create_task(cache.get_or_compute("boom", v, compute))
-            for _ in range(5)
-        ]
+        tasks = [asyncio.create_task(cache.get_or_compute("boom", v, compute)) for _ in range(5)]
         await compute_started.wait()
         gate.set()
 
@@ -275,9 +270,7 @@ class TestSingleflightDisabled:
             return _StubResp(answer=f"v{attempts}")
 
         # Fire 3 concurrent identical misses with singleflight off.
-        await asyncio.gather(*[
-            cache.get_or_compute("q", v, compute) for _ in range(3)
-        ])
+        await asyncio.gather(*[cache.get_or_compute("q", v, compute) for _ in range(3)])
         # All 3 invoked compute.
         assert attempts == 3
         # The cache was written by each one in turn — last writer wins.

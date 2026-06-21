@@ -1,4 +1,5 @@
 """Sprint 29 — query rewriting, suspicious entry detection, and cache federation tests."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -411,9 +412,15 @@ class TestFederatedLookup:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "results": [{"query_index": 0, "query": "q", "matches": [
-                {"question": "cached q", "answer": "cached answer", "similarity": 0.97, "hit_count": 3}
-            ]}]
+            "results": [
+                {
+                    "query_index": 0,
+                    "query": "q",
+                    "matches": [
+                        {"question": "cached q", "answer": "cached answer", "similarity": 0.97, "hit_count": 3}
+                    ],
+                }
+            ]
         }
         with patch.object(real_httpx, "post", return_value=mock_resp):
             result = FederatedLookup(registry).lookup("q", min_similarity=0.95)
@@ -433,9 +440,13 @@ class TestFederatedLookup:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "results": [{"query_index": 0, "query": "q", "matches": [
-                {"question": "q", "answer": "ans", "similarity": 0.70, "hit_count": 1}
-            ]}]
+            "results": [
+                {
+                    "query_index": 0,
+                    "query": "q",
+                    "matches": [{"question": "q", "answer": "ans", "similarity": 0.70, "hit_count": 1}],
+                }
+            ]
         }
         with patch.object(real_httpx, "post", return_value=mock_resp):
             result = FederatedLookup(registry).lookup("q", min_similarity=0.95)

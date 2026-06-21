@@ -13,6 +13,7 @@ Usage::
     # isinstance() works because all protocols are @runtime_checkable
     assert isinstance(get_store(), VectorStoreAdapter)
 """
+
 from konjoai.adapters.base import (
     EmbedderAdapter,
     GeneratorAdapter,

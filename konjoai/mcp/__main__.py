@@ -6,6 +6,7 @@ Run the Kyro MCP server over stdio::
     python -m konjoai.mcp --base-url http://localhost:8000 --api-key sk-xxx
     python -m konjoai.mcp --base-url http://localhost:8000 --timeout 60
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -47,8 +48,7 @@ def main(base_url: str, api_key: str | None, jwt_token: str | None, timeout: flo
     """Run the Kyro MCP server over stdin/stdout."""
     if not _HAS_MCP:
         click.echo(
-            "ERROR: The 'mcp' package is required. Install it with:\n"
-            "  pip install mcp",
+            "ERROR: The 'mcp' package is required. Install it with:\n  pip install mcp",
             err=True,
         )
         sys.exit(1)

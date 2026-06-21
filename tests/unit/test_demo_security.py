@@ -11,6 +11,7 @@ Konjo gates exercised:
   K3 — rate limit, cosine coherence and Welford anomaly are real konjoai code.
   K7 — raw question text never crosses the wire; only the 16-hex hash does.
 """
+
 from __future__ import annotations
 
 import re

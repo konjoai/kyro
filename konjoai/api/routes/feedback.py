@@ -12,6 +12,7 @@ OWASP: raw question text is NEVER accepted or stored — the client must supply
 the ``question_hash`` from the ``POST /query`` response (or compute it locally
 using the same ``hash_text()`` helper).
 """
+
 from __future__ import annotations
 
 import logging
@@ -76,9 +77,7 @@ class FeedbackRequest(BaseModel):
     def _validate_signal(cls, v: str) -> str:
         """Reject any signal not in ``VALID_SIGNALS``."""
         if v not in VALID_SIGNALS:
-            raise ValueError(
-                f"signal must be one of {sorted(VALID_SIGNALS)}, got {v!r}"
-            )
+            raise ValueError(f"signal must be one of {sorted(VALID_SIGNALS)}, got {v!r}")
         return v
 
 
@@ -141,14 +140,10 @@ async def submit_feedback(
 
     # Derive tenant from request state (set by JWT auth middleware when enabled)
     tenant_id: str | None = getattr(request.state, "tenant_id", None)
-    client_ip: str | None = (
-        request.client.host if request.client else None
-    )
+    client_ip: str | None = request.client.host if request.client else None
 
     # Hash the optional comment — OWASP: never store free-text user input
-    comment_hash: str | None = (
-        hash_text(req.comment) if req.comment else None
-    )
+    comment_hash: str | None = hash_text(req.comment) if req.comment else None
 
     event = FeedbackEvent(
         question_hash=req.question_hash,

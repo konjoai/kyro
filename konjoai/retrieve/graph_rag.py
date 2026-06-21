@@ -12,6 +12,7 @@ K1 — all exceptions re-raised with ``from exc`` chain.
 K2 — logger.warning on every error/fallback path.
 K5 — networkx is the only new dependency; import is optional.
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,11 +46,11 @@ class CommunityContext:
     """
 
     community_id: int
-    members: list[str] = field(default_factory=list)       # chunk content, best-first
-    sources: list[str] = field(default_factory=list)       # corresponding source paths
+    members: list[str] = field(default_factory=list)  # chunk content, best-first
+    sources: list[str] = field(default_factory=list)  # corresponding source paths
     rrf_scores: list[float] = field(default_factory=list)  # per-member RRF scores
-    label: str = ""                                         # short human-readable label
-    size: int = 0                                           # total community size
+    label: str = ""  # short human-readable label
+    size: int = 0  # total community size
 
 
 @dataclass
@@ -65,8 +66,8 @@ class GraphRAGResult:
     """
 
     communities: list[CommunityContext]
-    community_labels: list[str]         # flat label list for QueryResponse field
-    representative_chunks: list[Any]    # best chunk per community; replaces hybrid_results
+    community_labels: list[str]  # flat label list for QueryResponse field
+    representative_chunks: list[Any]  # best chunk per community; replaces hybrid_results
     n_nodes: int
     n_edges: int
     used_fallback: bool
@@ -108,9 +109,7 @@ class EntityGraph:
 
     def __init__(self, similarity_threshold: float = 0.3) -> None:
         if not 0.0 <= similarity_threshold <= 1.0:
-            raise ValueError(
-                f"similarity_threshold must be in [0, 1]; got {similarity_threshold!r}"
-            )
+            raise ValueError(f"similarity_threshold must be in [0, 1]; got {similarity_threshold!r}")
         self.similarity_threshold = similarity_threshold
 
     def build(self, contents: list[str]) -> nx.Graph:
@@ -123,8 +122,7 @@ class EntityGraph:
         """
         if not _HAS_NETWORKX:
             raise RuntimeError(
-                "networkx is required for EntityGraph.build — "
-                "install it with: pip install networkx>=3.2"
+                "networkx is required for EntityGraph.build — install it with: pip install networkx>=3.2"
             )
         graph = nx.Graph()
 
@@ -160,8 +158,7 @@ class EntityGraph:
         """
         if not _HAS_NETWORKX:
             raise RuntimeError(
-                "networkx is required for community detection — "
-                "install it with: pip install networkx>=3.2"
+                "networkx is required for community detection — install it with: pip install networkx>=3.2"
             )
         if graph.number_of_nodes() == 0:
             return []
@@ -203,9 +200,7 @@ class GraphRAGRetriever:
         similarity_threshold: float = 0.3,
     ) -> None:
         if max_communities < 1:
-            raise ValueError(
-                f"max_communities must be ≥ 1; got {max_communities!r}"
-            )
+            raise ValueError(f"max_communities must be ≥ 1; got {max_communities!r}")
         self.max_communities = max_communities
         self.entity_graph = EntityGraph(similarity_threshold=similarity_threshold)
 
@@ -237,8 +232,7 @@ class GraphRAGRetriever:
 
         if not _HAS_NETWORKX:
             logger.warning(
-                "GraphRAGRetriever: networkx not installed — "
-                "falling back to raw hybrid results (install networkx>=3.2)"
+                "GraphRAGRetriever: networkx not installed — falling back to raw hybrid results (install networkx>=3.2)"
             )
             return GraphRAGResult(
                 communities=[],
@@ -256,8 +250,7 @@ class GraphRAGRetriever:
             raw_communities = self.entity_graph.detect_communities(graph)
         except Exception as exc:
             logger.warning(
-                "GraphRAGRetriever: graph construction failed (%s) — "
-                "falling back to raw hybrid results",
+                "GraphRAGRetriever: graph construction failed (%s) — falling back to raw hybrid results",
                 exc,
             )
             return GraphRAGResult(

@@ -9,6 +9,7 @@
 
 Both endpoints require ``cache_enabled=True`` (K3: 404 otherwise).
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException

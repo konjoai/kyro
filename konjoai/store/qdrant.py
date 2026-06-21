@@ -1,4 +1,5 @@
 """Qdrant vector-store wrappers: sync/async upsert and tenant-scoped search."""
+
 from __future__ import annotations
 
 import logging
@@ -50,7 +51,9 @@ class QdrantStore:
         else:
             logger.info("QdrantStore: using existing collection '%s'", collection)
 
-    def upsert(self, embeddings: np.ndarray, contents: list[str], sources: list[str], metadatas: list[dict]) -> dict | None:
+    def upsert(
+        self, embeddings: np.ndarray, contents: list[str], sources: list[str], metadatas: list[dict]
+    ) -> dict | None:
         """Upsert a batch of chunks into the collection.
 
         Parameters
@@ -70,10 +73,12 @@ class QdrantStore:
         assert embeddings.shape[0] == n == len(sources) == len(metadatas)
 
         from konjoai.config import get_settings  # noqa: PLC0415
+
         _s = get_settings()
         _vectro_metrics: dict | None = None
         if getattr(_s, "vectro_quantize", False):
             from konjoai.embed.vectro_bridge import quantize_for_storage  # noqa: PLC0415
+
             embeddings, _vectro_metrics = quantize_for_storage(embeddings)
             logger.info("Vectro quantization metrics: %s", _vectro_metrics)
 
@@ -81,6 +86,7 @@ class QdrantStore:
 
         # ── Sprint 17: attach tenant_id to every point payload ────────────────
         from konjoai.auth.tenant import get_current_tenant_id  # noqa: PLC0415
+
         tenant_id = get_current_tenant_id()
 
         points = [
@@ -97,9 +103,7 @@ class QdrantStore:
             for i in range(n)
         ]
         self._client.upsert(collection_name=self._collection, points=points, wait=True)
-        logger.debug(
-            "QdrantStore: upserted %d points tenant_id=%s", n, tenant_id
-        )
+        logger.debug("QdrantStore: upserted %d points tenant_id=%s", n, tenant_id)
         return _vectro_metrics
 
     def search(self, query_vector: np.ndarray, top_k: int = 20) -> list[SearchResult]:
@@ -124,9 +128,8 @@ class QdrantStore:
         if tenant_id is not None:
             try:
                 from qdrant_client.models import FieldCondition, Filter, MatchValue  # noqa: PLC0415
-                query_filter = Filter(
-                    must=[FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id))]
-                )
+
+                query_filter = Filter(must=[FieldCondition(key="tenant_id", match=MatchValue(value=tenant_id))])
             except ImportError:
                 logger.warning("qdrant-client models unavailable — tenant filter skipped")
 
@@ -153,9 +156,7 @@ class QdrantStore:
         """Return the number of points in the collection."""
         return self._client.count(collection_name=self._collection).count
 
-    def scroll_all(
-        self, batch_size: int = 256
-    ) -> tuple[np.ndarray, list[str], list[str], list[str]]:
+    def scroll_all(self, batch_size: int = 256) -> tuple[np.ndarray, list[str], list[str], list[str]]:
         """Scroll through every point in the collection.
 
         Returns

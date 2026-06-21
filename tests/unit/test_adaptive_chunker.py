@@ -5,6 +5,7 @@ Tests cover:
 2. adaptive_chunk_size — hierarchy mapping, boundary conditions.
 3. MultiGranularityChunker — multi-level output, level filtering, overlap enforcement.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -17,6 +18,7 @@ from konjoai.ingest.adaptive_chunker import (
 from konjoai.ingest.loaders import Document
 
 # ── QueryComplexityScorer ────────────────────────────────────────────────────
+
 
 class TestQueryComplexityScorer:
     def setup_method(self):
@@ -74,6 +76,7 @@ class TestQueryComplexityScorer:
 
 # ── adaptive_chunk_size ──────────────────────────────────────────────────────
 
+
 class TestAdaptiveChunkSize:
     def test_empty_hierarchy_raises(self):
         with pytest.raises(ValueError):
@@ -115,6 +118,7 @@ class TestAdaptiveChunkSize:
 
 
 # ── MultiGranularityChunker ──────────────────────────────────────────────────
+
 
 def _make_doc(n_chars: int = 2000) -> Document:
     return Document(content="A " * (n_chars // 2), source="test.txt", metadata={})

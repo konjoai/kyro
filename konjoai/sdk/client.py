@@ -1,4 +1,5 @@
 """Synchronous HTTP client for the Kyro RAG API."""
+
 from __future__ import annotations
 
 import json

@@ -39,6 +39,7 @@ from pathlib import Path
 
 # ── Comment stripping ─────────────────────────────────────────────────────────
 
+
 def _strip_rust_comments(text: str) -> str:
     text = re.sub(r"//[^\n]*", "", text)
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
@@ -89,6 +90,7 @@ def _normalize_lines(path: Path) -> list[str]:
 
 # ── Fingerprinting ────────────────────────────────────────────────────────────
 
+
 def _window_fingerprints(lines: list[str], window: int) -> Iterator[tuple[str, int]]:
     """Yield (sha256_of_window, start_line_index) for every window."""
     if len(lines) < window:
@@ -100,6 +102,7 @@ def _window_fingerprints(lines: list[str], window: int) -> Iterator[tuple[str, i
 
 
 # ── Similarity ────────────────────────────────────────────────────────────────
+
 
 def _similarity(a: list[str], b: list[str]) -> float:
     return SequenceMatcher(None, a, b).ratio()
@@ -121,8 +124,7 @@ def _iter_sources(root: Path, extensions: set[str]) -> Iterator[Path]:
 
 def _staged_files(root: Path, extensions: set[str]) -> list[Path]:
     result = subprocess.run(
-        ["git", "diff", "--cached", "--name-only"],
-        cwd=root, capture_output=True, text=True, check=False
+        ["git", "diff", "--cached", "--name-only"], cwd=root, capture_output=True, text=True, check=False
     )
     paths = []
     for line in result.stdout.splitlines():
@@ -134,8 +136,7 @@ def _staged_files(root: Path, extensions: set[str]) -> list[Path]:
 
 def _changed_files(root: Path, extensions: set[str]) -> list[Path]:
     result = subprocess.run(
-        ["git", "diff", "--name-only", "origin/main...HEAD"],
-        cwd=root, capture_output=True, text=True, check=False
+        ["git", "diff", "--name-only", "origin/main...HEAD"], cwd=root, capture_output=True, text=True, check=False
     )
     paths = []
     for line in result.stdout.splitlines():
@@ -146,6 +147,7 @@ def _changed_files(root: Path, extensions: set[str]) -> list[Path]:
 
 
 # ── Main detection ────────────────────────────────────────────────────────────
+
 
 def find_duplicates(
     files: list[Path],
@@ -188,10 +190,12 @@ def find_duplicates(
                 if other_path == target_path and other_start == start:
                     continue
 
-                pair_key = frozenset([
-                    f"{target_path}:{start}",
-                    f"{other_path}:{other_start}",
-                ])
+                pair_key = frozenset(
+                    [
+                        f"{target_path}:{start}",
+                        f"{other_path}:{other_start}",
+                    ]
+                )
                 if pair_key in seen_pairs:
                     continue
                 seen_pairs.add(pair_key)
@@ -199,15 +203,17 @@ def find_duplicates(
                 other_block = other_lines[other_start : other_start + min_lines]
                 sim = _similarity(target_block, other_block)
                 if sim >= threshold:
-                    violations.append({
-                        "file_a": str(target_path),
-                        "line_a": start + 1,
-                        "file_b": str(other_path),
-                        "line_b": other_start + 1,
-                        "similarity": round(sim, 3),
-                        "lines": min_lines,
-                        "sample": "\n".join(target_block[:5]) + ("..." if len(target_block) > 5 else ""),
-                    })
+                    violations.append(
+                        {
+                            "file_a": str(target_path),
+                            "line_a": start + 1,
+                            "file_b": str(other_path),
+                            "line_b": other_start + 1,
+                            "similarity": round(sim, 3),
+                            "lines": min_lines,
+                            "sample": "\n".join(target_block[:5]) + ("..." if len(target_block) > 5 else ""),
+                        }
+                    )
 
     return violations
 
@@ -234,10 +240,7 @@ def main() -> int:
     if args.root:
         root = Path(args.root)
     else:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=False
-        )
+        result = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=False)
         root = Path(result.stdout.strip()) if result.returncode == 0 else Path(".")
 
     extensions = {e.strip() for e in args.extensions.split(",") if e.strip()}
@@ -282,13 +285,10 @@ def main() -> int:
                 print(
                     f"  {v['file_a']}:{v['line_a']} ↔ "
                     f"{v['file_b']}:{v['line_b']} "
-                    f"({v['similarity']*100:.0f}% similar, {v['lines']}+ lines)"
+                    f"({v['similarity'] * 100:.0f}% similar, {v['lines']}+ lines)"
                 )
                 print(f"    Sample: {v['sample'][:80]}")
-            print(
-                "\nAbstract duplicate logic into a shared function or module. "
-                "DRY violations block merge."
-            )
+            print("\nAbstract duplicate logic into a shared function or module. DRY violations block merge.")
         else:
             print(f"[dry-check] ✅ No DRY violations ({len(scan_targets)} files scanned).")
 

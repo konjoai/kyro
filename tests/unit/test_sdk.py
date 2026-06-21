@@ -11,6 +11,7 @@ Coverage targets:
 - SDKSourceDoc / SDKStreamChunk / SDKIngestResponse / SDKHealthResponse / SDKAgentQueryResponse models
 - Exception hierarchy: KyroError, KyroAuthError, KyroRateLimitError, KyroTimeoutError, KyroNotFoundError
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -54,9 +55,7 @@ def _mock_response(
 
 _QUERY_PAYLOAD = {
     "answer": "42",
-    "sources": [
-        {"source": "doc.md", "content_preview": "hello", "score": 0.9}
-    ],
+    "sources": [{"source": "doc.md", "content_preview": "hello", "score": 0.9}],
     "model": "gpt-4o-mini",
     "usage": {"total_tokens": 100},
     "intent": "retrieval",
@@ -253,9 +252,7 @@ class TestKonjoClientQuery:
 
     def test_query_raises_kyro_rate_limit_on_429(self) -> None:
         client = self._client()
-        client._client.post.return_value = _mock_response(
-            429, text="Too Many Requests", headers={"Retry-After": "30"}
-        )
+        client._client.post.return_value = _mock_response(429, text="Too Many Requests", headers={"Retry-After": "30"})
         with pytest.raises(KyroRateLimitError) as exc_info:
             client.query("q")
         assert exc_info.value.retry_after == 30.0
@@ -269,6 +266,7 @@ class TestKonjoClientQuery:
 
     def test_query_raises_kyro_timeout_on_timeout(self) -> None:
         import httpx
+
         client = self._client()
         client._client.post.side_effect = httpx.TimeoutException("timed out")
         with pytest.raises(KyroTimeoutError):
@@ -297,37 +295,44 @@ class TestKonjoClientQueryStream:
 
     def test_stream_yields_tokens(self) -> None:
         client = self._client()
-        client._client.stream.return_value = self._mock_stream_ctx([
-            'data: {"token": "Hello"}',
-            'data: {"token": " world"}',
-            "data: [DONE]",
-        ])
+        client._client.stream.return_value = self._mock_stream_ctx(
+            [
+                'data: {"token": "Hello"}',
+                'data: {"token": " world"}',
+                "data: [DONE]",
+            ]
+        )
         chunks = list(client.query_stream("q"))
         assert [c.text for c in chunks] == ["Hello", " world"]
 
     def test_stream_stops_at_done_sentinel(self) -> None:
         client = self._client()
-        client._client.stream.return_value = self._mock_stream_ctx([
-            'data: {"token": "tok"}',
-            "data: [DONE]",
-            'data: {"token": "extra"}',
-        ])
+        client._client.stream.return_value = self._mock_stream_ctx(
+            [
+                'data: {"token": "tok"}',
+                "data: [DONE]",
+                'data: {"token": "extra"}',
+            ]
+        )
         chunks = list(client.query_stream("q"))
         assert len(chunks) == 1
 
     def test_stream_skips_non_data_lines(self) -> None:
         client = self._client()
-        client._client.stream.return_value = self._mock_stream_ctx([
-            "event: message",
-            ": comment",
-            'data: {"token": "only"}',
-            "data: [DONE]",
-        ])
+        client._client.stream.return_value = self._mock_stream_ctx(
+            [
+                "event: message",
+                ": comment",
+                'data: {"token": "only"}',
+                "data: [DONE]",
+            ]
+        )
         chunks = list(client.query_stream("q"))
         assert len(chunks) == 1
 
     def test_stream_raises_timeout(self) -> None:
         import httpx
+
         client = self._client()
         client._client.stream.side_effect = httpx.TimeoutException("timeout")
         with pytest.raises(KyroTimeoutError):
@@ -367,6 +372,7 @@ class TestKonjoClientIngest:
 
     def test_ingest_timeout(self) -> None:
         import httpx
+
         client = self._client()
         client._client.post.side_effect = httpx.TimeoutException("timeout")
         with pytest.raises(KyroTimeoutError):
@@ -393,6 +399,7 @@ class TestKonjoClientHealth:
 
     def test_health_timeout(self) -> None:
         import httpx
+
         client = self._client()
         client._client.get.side_effect = httpx.TimeoutException("timeout")
         with pytest.raises(KyroTimeoutError):
@@ -438,6 +445,7 @@ class TestKonjoClientAgentQuery:
 
     def test_agent_query_timeout(self) -> None:
         import httpx
+
         client = self._client()
         client._client.post.side_effect = httpx.TimeoutException("timeout")
         with pytest.raises(KyroTimeoutError):
@@ -483,13 +491,15 @@ class TestKonjoClientAgentQueryStream:
 
     def test_agent_stream_yields_typed_events(self) -> None:
         client = self._client()
-        client._client.stream.return_value = self._mock_stream_ctx([
-            'data: {"type":"step","index":1,"action":"retrieve","thought":"t","action_input":"x","observation":"[]"}',
-            'data: {"type":"step","index":2,"action":"finish","thought":"t","action_input":"","observation":"completed"}',
-            'data: {"type":"result","answer":"A","model":"m","usage":{},"steps":[],"sources":[]}',
-            'data: {"type":"telemetry","telemetry":null}',
-            "data: [DONE]",
-        ])
+        client._client.stream.return_value = self._mock_stream_ctx(
+            [
+                'data: {"type":"step","index":1,"action":"retrieve","thought":"t","action_input":"x","observation":"[]"}',
+                'data: {"type":"step","index":2,"action":"finish","thought":"t","action_input":"","observation":"completed"}',
+                'data: {"type":"result","answer":"A","model":"m","usage":{},"steps":[],"sources":[]}',
+                'data: {"type":"telemetry","telemetry":null}',
+                "data: [DONE]",
+            ]
+        )
         events = list(client.agent_query_stream("q", top_k=3, max_steps=4))
         assert [e.type for e in events] == ["step", "step", "result", "telemetry"]
         assert events[0].data["action"] == "retrieve"
@@ -497,30 +507,35 @@ class TestKonjoClientAgentQueryStream:
 
     def test_agent_stream_stops_at_done_sentinel(self) -> None:
         client = self._client()
-        client._client.stream.return_value = self._mock_stream_ctx([
-            'data: {"type":"step","action":"retrieve"}',
-            "data: [DONE]",
-            'data: {"type":"step","action":"never"}',
-        ])
+        client._client.stream.return_value = self._mock_stream_ctx(
+            [
+                'data: {"type":"step","action":"retrieve"}',
+                "data: [DONE]",
+                'data: {"type":"step","action":"never"}',
+            ]
+        )
         events = list(client.agent_query_stream("q"))
         assert len(events) == 1
 
     def test_agent_stream_skips_malformed_and_typeless_frames(self) -> None:
         client = self._client()
-        client._client.stream.return_value = self._mock_stream_ctx([
-            "event: message",
-            "data: not json",
-            'data: {"no_type":"x"}',
-            'data: ["a","b"]',
-            'data: {"type":"step","action":"retrieve"}',
-            "data: [DONE]",
-        ])
+        client._client.stream.return_value = self._mock_stream_ctx(
+            [
+                "event: message",
+                "data: not json",
+                'data: {"no_type":"x"}',
+                'data: ["a","b"]',
+                'data: {"type":"step","action":"retrieve"}',
+                "data: [DONE]",
+            ]
+        )
         events = list(client.agent_query_stream("q"))
         assert len(events) == 1
         assert events[0].type == "step"
 
     def test_agent_stream_raises_timeout(self) -> None:
         import httpx
+
         client = self._client()
         client._client.stream.side_effect = httpx.TimeoutException("timeout")
         with pytest.raises(KyroTimeoutError):

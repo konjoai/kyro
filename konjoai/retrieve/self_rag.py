@@ -13,6 +13,7 @@ fine-tuning the base model. It combines:
 - lightweight usefulness overlap heuristics,
 - optional LLM rubric scoring callback for ISREL/ISSUP/ISUSE.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -292,9 +293,7 @@ class SelfRAGCritic:
             norm_support = self._support.normalize(raw_support)
             support_norm_scores.append(norm_support)
 
-            relevance = (
-                RelevanceToken.RELEVANT if norm_support >= 0.5 else RelevanceToken.IRRELEVANT
-            )
+            relevance = RelevanceToken.RELEVANT if norm_support >= 0.5 else RelevanceToken.IRRELEVANT
             support = self._support.support_token(raw_support)
             critiques.append(
                 DocumentCritique(
@@ -307,11 +306,7 @@ class SelfRAGCritic:
             )
 
         heuristic_isrel = max(support_norm_scores) if support_norm_scores else 0.0
-        heuristic_issup = (
-            sum(support_norm_scores) / len(support_norm_scores)
-            if support_norm_scores
-            else 0.0
-        )
+        heuristic_issup = sum(support_norm_scores) / len(support_norm_scores) if support_norm_scores else 0.0
 
         _, usefulness_overlap = self._usefulness.score(question, partial_answer)
         heuristic_isuse = usefulness_overlap
@@ -401,10 +396,7 @@ class SelfRAGOrchestrator:
             sentences = [s.strip() for s in focus.split(".") if s.strip()]
             if sentences:
                 focus = max(sentences, key=len)
-        return (
-            f"{question}\n\n"
-            f"Refine retrieval using this draft answer clue: {focus[:300]}"
-        )
+        return f"{question}\n\nRefine retrieval using this draft answer clue: {focus[:300]}"
 
     @staticmethod
     def _call_generate(generate_fn: Callable[..., str], documents: Sequence[Any]) -> str:
@@ -468,12 +460,8 @@ class SelfRAGOrchestrator:
                 }
             )
 
-            is_better = (
-                tokens.issup > best_tokens.issup
-                or (
-                    abs(tokens.issup - best_tokens.issup) < 1e-9
-                    and tokens.isuse > best_tokens.isuse
-                )
+            is_better = tokens.issup > best_tokens.issup or (
+                abs(tokens.issup - best_tokens.issup) < 1e-9 and tokens.isuse > best_tokens.isuse
             )
             if is_better:
                 best_answer = candidate
@@ -489,10 +477,7 @@ class SelfRAGOrchestrator:
             )
 
             if tokens.issup >= self._issup_threshold:
-                if (
-                    retrieve_decision == RetrieveDecision.NO
-                    or tokens.isrel >= self._isrel_no_retrieve_threshold
-                ):
+                if retrieve_decision == RetrieveDecision.NO or tokens.isrel >= self._isrel_no_retrieve_threshold:
                     break
                 break
 

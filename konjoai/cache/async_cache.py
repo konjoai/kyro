@@ -40,6 +40,7 @@ Konjo invariants
 - **K7**: the in-flight dict is keyed inside the active tenant's namespace
   by re-using the backend's key normalisation — see :func:`_inflight_key`.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -212,7 +213,8 @@ class AsyncSemanticCache:
                 self._stampedes_collapsed += 1
                 logger.debug(
                     "singleflight collapse: waiting on inflight key=%s peers=%d",
-                    key[:64], len(self._inflight),
+                    key[:64],
+                    len(self._inflight),
                 )
                 future = existing
                 # Release the lock while we await the existing future.
@@ -251,6 +253,4 @@ def wrap(
     >>> from konjoai.cache import SemanticCache, async_cache
     >>> cache = async_cache.wrap(SemanticCache(max_size=500, threshold=0.95))
     """
-    return AsyncSemanticCache(
-        backend, singleflight=singleflight, offload_to_thread=offload_to_thread
-    )
+    return AsyncSemanticCache(backend, singleflight=singleflight, offload_to_thread=offload_to_thread)

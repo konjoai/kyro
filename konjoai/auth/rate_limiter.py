@@ -9,6 +9,7 @@ Invariants:
 - K5: zero new hard dependencies.
 - K6: all new fields default to sensible values; no existing API breakage.
 """
+
 from __future__ import annotations
 
 import threading
@@ -34,8 +35,7 @@ class RateLimitExceeded(Exception):
         self.limit = limit
         self.window = window
         super().__init__(
-            f"Rate limit exceeded for tenant='{tenant_id}' endpoint='{endpoint}': "
-            f"max {limit} requests per {window}s"
+            f"Rate limit exceeded for tenant='{tenant_id}' endpoint='{endpoint}': max {limit} requests per {window}s"
         )
 
 
@@ -159,9 +159,9 @@ class RateLimiter:
                 self._buckets.clear()
                 return
             keys_to_delete = [
-                k for k in self._buckets
-                if (tenant_id is None or k[0] == tenant_id)
-                and (endpoint is None or k[1] == endpoint)
+                k
+                for k in self._buckets
+                if (tenant_id is None or k[0] == tenant_id) and (endpoint is None or k[1] == endpoint)
             ]
             for k in keys_to_delete:
                 del self._buckets[k]

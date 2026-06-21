@@ -1,4 +1,5 @@
 """Sprint 27 — cache warming, TTL expiry, and query clustering tests."""
+
 from __future__ import annotations
 
 import time
@@ -55,21 +56,20 @@ def _make_app() -> FastAPI:
 
 class TestSemanticCacheEntryTTL:
     def test_no_ttl_never_expires(self) -> None:
-        e = SemanticCacheEntry(
-            question="q", question_vec=_vec(0), response=_Resp("a"), ttl_seconds=0
-        )
+        e = SemanticCacheEntry(question="q", question_vec=_vec(0), response=_Resp("a"), ttl_seconds=0)
         assert e.is_expired() is False
 
     def test_future_ttl_not_expired(self) -> None:
-        e = SemanticCacheEntry(
-            question="q", question_vec=_vec(0), response=_Resp("a"), ttl_seconds=3600
-        )
+        e = SemanticCacheEntry(question="q", question_vec=_vec(0), response=_Resp("a"), ttl_seconds=3600)
         assert e.is_expired() is False
 
     def test_past_ttl_is_expired(self) -> None:
         e = SemanticCacheEntry(
-            question="q", question_vec=_vec(0), response=_Resp("a"),
-            created_at=time.monotonic() - 100, ttl_seconds=10,
+            question="q",
+            question_vec=_vec(0),
+            response=_Resp("a"),
+            created_at=time.monotonic() - 100,
+            ttl_seconds=10,
         )
         assert e.is_expired() is True
 
@@ -94,7 +94,8 @@ class TestSemanticCacheTTL:
         # Manually insert an already-expired entry
         key = SemanticCache._normalise("stale question")
         entry = SemanticCacheEntry(
-            question="stale question", question_vec=v,
+            question="stale question",
+            question_vec=v,
             response=_Resp("old answer"),
             created_at=time.monotonic() - 200,
             ttl_seconds=1,
@@ -109,7 +110,8 @@ class TestSemanticCacheTTL:
         v = _vec(3)
         key = SemanticCache._normalise("timed out")
         entry = SemanticCacheEntry(
-            question="timed out", question_vec=v,
+            question="timed out",
+            question_vec=v,
             response=_Resp("stale"),
             created_at=time.monotonic() - 200,
             ttl_seconds=1,
@@ -135,7 +137,8 @@ class TestSemanticCacheTTL:
         for i in range(3, 5):
             key = SemanticCache._normalise(f"stale {i}")
             entry = SemanticCacheEntry(
-                question=f"stale {i}", question_vec=_vec(i),
+                question=f"stale {i}",
+                question_vec=_vec(i),
                 response=_Resp("old"),
                 created_at=time.monotonic() - 200,
                 ttl_seconds=10,
@@ -150,7 +153,8 @@ class TestSemanticCacheTTL:
         cache.store("fresh", _vec(0), _Resp("ok"))
         key = SemanticCache._normalise("expired")
         entry = SemanticCacheEntry(
-            question="expired", question_vec=_vec(1),
+            question="expired",
+            question_vec=_vec(1),
             response=_Resp("stale"),
             created_at=time.monotonic() - 200,
             ttl_seconds=10,
@@ -201,7 +205,8 @@ class TestTTLRoutes:
         cache = SemanticCache(max_size=20, threshold=0.95, ttl_seconds=10)
         key = SemanticCache._normalise("stale")
         entry = SemanticCacheEntry(
-            question="stale", question_vec=_vec(0),
+            question="stale",
+            question_vec=_vec(0),
             response=_Resp("old"),
             created_at=time.monotonic() - 200,
             ttl_seconds=10,
@@ -224,7 +229,8 @@ class TestTTLRoutes:
         for i in range(2):
             key = SemanticCache._normalise(f"stale {i}")
             entry = SemanticCacheEntry(
-                question=f"stale {i}", question_vec=_vec(i),
+                question=f"stale {i}",
+                question_vec=_vec(i),
                 response=_Resp("old"),
                 created_at=time.monotonic() - 200,
                 ttl_seconds=10,
@@ -245,8 +251,7 @@ class TestTTLRoutes:
     def test_cache_disabled_returns_404(self) -> None:
         app = _make_app()
         client = TestClient(app)
-        with patch("konjoai.api.routes.cache.get_settings",
-                   return_value=_Settings(cache_enabled=False)):
+        with patch("konjoai.api.routes.cache.get_settings", return_value=_Settings(cache_enabled=False)):
             r1 = client.get("/cache/expired_count")
             r2 = client.delete("/cache/expired")
         assert r1.status_code == 404
@@ -261,7 +266,7 @@ def _stub_encoder(questions: list[str]) -> np.ndarray:
     dim = 32
     out = np.zeros((len(questions), dim), dtype=np.float32)
     for i, q in enumerate(questions):
-        rng = np.random.default_rng(seed=abs(hash(q)) % (2 ** 31))
+        rng = np.random.default_rng(seed=abs(hash(q)) % (2**31))
         v = rng.standard_normal(dim).astype(np.float32)
         out[i] = v / (np.linalg.norm(v) + 1e-10)
     return out
@@ -329,8 +334,7 @@ class TestCacheWarmRoute:
     def test_warm_returns_404_when_cache_disabled(self) -> None:
         app = _make_app()
         client = TestClient(app)
-        with patch("konjoai.api.routes.cache.get_settings",
-                   return_value=_Settings(cache_enabled=False)):
+        with patch("konjoai.api.routes.cache.get_settings", return_value=_Settings(cache_enabled=False)):
             resp = client.post("/cache/warm", json={"pairs": [{"question": "x", "answer": "y"}]})
         assert resp.status_code == 404
 
@@ -435,7 +439,6 @@ class TestClusterRoute:
     def test_cluster_route_404_when_disabled(self) -> None:
         app = _make_app()
         client = TestClient(app)
-        with patch("konjoai.api.routes.cache.get_settings",
-                   return_value=_Settings(cache_enabled=False)):
+        with patch("konjoai.api.routes.cache.get_settings", return_value=_Settings(cache_enabled=False)):
             resp = client.get("/cache/clusters?k=3")
         assert resp.status_code == 404

@@ -5,6 +5,7 @@ K2: Telemetry delegated to timed() inside vectro_pipeline_service.run_pipeline.
 K3: VectroBinaryNotFoundError → 503 with build instructions; no silent pass.
 K6: Request schema validated via Pydantic; optional fields have safe defaults.
 """
+
 from __future__ import annotations
 
 import tempfile

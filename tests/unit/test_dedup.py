@@ -5,6 +5,7 @@ Test classes:
     TestFilterNearDuplicateEdgeCases — empty input, all-duplicate, single chunk
     TestFilterNearDuplicateErrors    — invalid input shapes / lengths
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -21,6 +22,7 @@ def _unit(v: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Shape / dtype contract tests (K4 — float32)
 # ---------------------------------------------------------------------------
+
 
 class TestFilterNearDuplicatesContracts:
     def _run(self, n: int = 4, d: int = 8, threshold: float = 0.98) -> tuple:
@@ -57,6 +59,7 @@ class TestFilterNearDuplicatesContracts:
 # ---------------------------------------------------------------------------
 # Correctness tests
 # ---------------------------------------------------------------------------
+
 
 class TestFilterNearDuplicates:
     def test_exact_duplicate_removed(self):
@@ -127,6 +130,7 @@ class TestFilterNearDuplicates:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestFilterNearDuplicateEdgeCases:
     def test_empty_input_returns_empty(self):
         emb = np.empty((0, 16), dtype=np.float32)
@@ -167,6 +171,7 @@ class TestFilterNearDuplicateEdgeCases:
 # ---------------------------------------------------------------------------
 # Error cases
 # ---------------------------------------------------------------------------
+
 
 class TestFilterNearDuplicateErrors:
     def test_1d_embeddings_raises(self):

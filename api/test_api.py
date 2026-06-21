@@ -4,6 +4,7 @@ Each test uses an in-memory stub Pipeline, an ``httpx.AsyncClient`` over
 ``ASGITransport``, and a fresh ``create_app`` instance — so the suite runs
 without sentence-transformers, qdrant, or any other heavy ML dependency.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -45,9 +46,7 @@ class _StubPipeline:
         v /= np.linalg.norm(v) + 1e-12
         return v.reshape(1, -1).astype(np.float32)
 
-    async def retrieve(
-        self, question: str, q_vec: np.ndarray, top_k: int
-    ) -> list[ScoredSource]:
+    async def retrieve(self, question: str, q_vec: np.ndarray, top_k: int) -> list[ScoredSource]:
         self.retrieve_calls += 1
         if self.retrieve_delay_s:
             await asyncio.sleep(self.retrieve_delay_s)
@@ -139,12 +138,8 @@ async def test_query_caches_repeat_question_when_cache_enabled(monkeypatch):
 
     pipeline = _StubPipeline()
     async with _client(pipeline) as c:
-        r1 = await c.post(
-            "/query", json={"question": "same q", "tenant_id": "t1", "top_k": 2}
-        )
-        r2 = await c.post(
-            "/query", json={"question": "same q", "tenant_id": "t1", "top_k": 2}
-        )
+        r1 = await c.post("/query", json={"question": "same q", "tenant_id": "t1", "top_k": 2})
+        r2 = await c.post("/query", json={"question": "same q", "tenant_id": "t1", "top_k": 2})
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r1.json()["cache_hit"] is False
@@ -261,12 +256,8 @@ async def test_singleflight_separates_tenants(monkeypatch):
 
     pipeline = _StubPipeline(retrieve_delay_s=0.03)
     async with _client(pipeline) as c:
-        a = c.post(
-            "/query", json={"question": "shared q", "tenant_id": "acme", "top_k": 1}
-        )
-        b = c.post(
-            "/query", json={"question": "shared q", "tenant_id": "globex", "top_k": 1}
-        )
+        a = c.post("/query", json={"question": "shared q", "tenant_id": "acme", "top_k": 1})
+        b = c.post("/query", json={"question": "shared q", "tenant_id": "globex", "top_k": 1})
         ra, rb = await asyncio.gather(a, b)
 
     assert ra.status_code == 200

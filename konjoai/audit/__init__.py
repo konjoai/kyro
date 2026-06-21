@@ -21,6 +21,7 @@ Usage::
         result_count=5,
     ))
 """
+
 from __future__ import annotations
 
 from konjoai.audit.logger import (

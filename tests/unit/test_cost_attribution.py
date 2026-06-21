@@ -11,6 +11,7 @@ Coverage:
 - /tenants/{id}/cost_report route — disabled → 404, unknown → 404, known → 200
 - /tenants route — lists all tenants
 """
+
 from __future__ import annotations
 
 import threading
@@ -92,9 +93,15 @@ class TestTenantCostTracker:
         assert report is not None
         d = report.as_dict()
         expected_keys = {
-            "tenant_id", "total_queries", "cache_hits", "cache_misses",
-            "hit_rate", "tokens_saved", "estimated_cost_saved_usd",
-            "cost_per_1k_tokens", "avg_response_tokens",
+            "tenant_id",
+            "total_queries",
+            "cache_hits",
+            "cache_misses",
+            "hit_rate",
+            "tokens_saved",
+            "estimated_cost_saved_usd",
+            "cost_per_1k_tokens",
+            "avg_response_tokens",
         }
         assert set(d.keys()) == expected_keys
 
@@ -102,7 +109,7 @@ class TestTenantCostTracker:
         tracker = TenantCostTracker()
         tracker.record("acme", hit=True)
         tracker.record("globex", hit=False)
-        acme   = tracker.report("acme")
+        acme = tracker.report("acme")
         globex = tracker.report("globex")
         assert acme is not None and acme.cache_hits == 1
         assert globex is not None and globex.cache_misses == 1
@@ -190,6 +197,7 @@ class TestCostTrackerSingleton:
 @dataclass
 class _SettingsEnabled:
     cache_enabled: bool = True
+
 
 @dataclass
 class _SettingsDisabled:

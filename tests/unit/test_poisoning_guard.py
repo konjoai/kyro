@@ -16,6 +16,7 @@ Coverage
 - K3: endpoints return 404 when guard disabled.
 - OWASP: question_hash field must be present; raw question is rejected.
 """
+
 from __future__ import annotations
 
 import threading
@@ -302,9 +303,7 @@ class TestPoisoningGuard:
         def embed_fn(_text: str) -> np.ndarray:
             return np.array([[0.0, 1.0, 0.0, 0.0]], dtype=np.float32)
 
-        guard = PoisoningGuard(
-            min_qa_coherence=0.3, embed_fn=embed_fn, report_store=store
-        )
+        guard = PoisoningGuard(min_qa_coherence=0.3, embed_fn=embed_fn, report_store=store)
         assert not guard.validate("question?", q_vec, "answer", "t1")
         assert any("low_coherence" in r.reason for r in store.query())
 
@@ -315,9 +314,7 @@ class TestPoisoningGuard:
         def embed_fn(_text: str) -> np.ndarray:
             return np.array([[0.95, 0.05, 0.0, 0.0]], dtype=np.float32)
 
-        guard = PoisoningGuard(
-            min_qa_coherence=0.3, embed_fn=embed_fn, report_store=store
-        )
+        guard = PoisoningGuard(min_qa_coherence=0.3, embed_fn=embed_fn, report_store=store)
         assert guard.validate("question?", q_vec, "answer", "t1")
 
     def test_embed_failure_does_not_block(self) -> None:

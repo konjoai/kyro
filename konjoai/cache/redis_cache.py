@@ -31,6 +31,7 @@ Konjo invariants
   by :mod:`konjoai.auth.tenant`, so a tenant cannot read another tenant's
   cached responses even when the underlying Redis instance is shared.
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,7 +54,7 @@ class _RedisEntry:
     """One cached entry: question, l2-normalised float32 vector bytes, and response."""
 
     question: str
-    vec_bytes: bytes      # raw float32 buffer, l2-normalised at store time
+    vec_bytes: bytes  # raw float32 buffer, l2-normalised at store time
     response: object
     created_at: float
 
@@ -203,9 +204,7 @@ class RedisSemanticCache:
 
     def store(self, question: str, q_vec: np.ndarray, response: object) -> None:
         """Persist a question/response pair into Redis. K4: float32 enforced."""
-        assert q_vec.dtype == np.float32, (
-            f"RedisSemanticCache.store: q_vec must be float32, got {q_vec.dtype}"
-        )
+        assert q_vec.dtype == np.float32, f"RedisSemanticCache.store: q_vec must be float32, got {q_vec.dtype}"
         key = self._normalise(question)
         normalised_vec = self._l2_norm(q_vec)
         entry = _RedisEntry(

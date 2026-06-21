@@ -23,6 +23,7 @@ from konjoai.retrieve.self_rag import (
 
 # ── Enum smoke tests ──────────────────────────────────────────────────────────
 
+
 class TestEnums:
     def test_retrieve_decision_values(self):
         assert RetrieveDecision.YES == "yes"
@@ -46,6 +47,7 @@ class TestEnums:
 
 
 # ── SupportScorer ─────────────────────────────────────────────────────────────
+
 
 class TestSupportScorerJaccard:
     def setup_method(self):
@@ -89,6 +91,7 @@ class TestSupportScorerToken:
 
 
 # ── UsefulnessScorer ──────────────────────────────────────────────────────────
+
 
 class TestUsefulnessScorer:
     def setup_method(self):
@@ -140,10 +143,12 @@ class TestUsefulnessScorer:
 
 # ── decide_retrieve ───────────────────────────────────────────────────────────
 
+
 class TestDecideRetrieve:
     def test_chat_intent_returns_no(self):
         with patch("konjoai.retrieve.self_rag.classify_intent") as mock_ci:
             from konjoai.retrieve.router import QueryIntent
+
             mock_ci.return_value = QueryIntent.CHAT
             result = decide_retrieve("hello there")
         assert result == RetrieveDecision.NO
@@ -151,6 +156,7 @@ class TestDecideRetrieve:
     def test_non_chat_intent_returns_yes(self):
         with patch("konjoai.retrieve.self_rag.classify_intent") as mock_ci:
             from konjoai.retrieve.router import QueryIntent
+
             mock_ci.return_value = QueryIntent.RETRIEVAL
             result = decide_retrieve("what is python?")
         assert result == RetrieveDecision.YES
@@ -162,6 +168,7 @@ class TestDecideRetrieve:
 
 
 # ── SelfRAGPipeline ───────────────────────────────────────────────────────────
+
 
 def _make_doc(content: str, source: str = "test") -> MagicMock:
     doc = MagicMock()
@@ -267,6 +274,7 @@ class TestSelfRAGPipelineRun:
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
+
 
 class TestSingleton:
     def setup_method(self):

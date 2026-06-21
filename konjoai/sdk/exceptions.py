@@ -1,4 +1,5 @@
 """Exception hierarchy raised by the Kyro Python SDK client."""
+
 from __future__ import annotations
 
 

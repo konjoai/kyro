@@ -7,6 +7,7 @@ Coverage:
 - AdaptiveThresholdEngine: resolve(), singleton stats
 - /cache/threshold_stats route: disabled → 404, enabled → JSON
 """
+
 from __future__ import annotations
 
 import threading
@@ -86,10 +87,10 @@ class TestClassifyQuery:
 class TestThresholdConfig:
     def test_defaults(self) -> None:
         cfg = ThresholdConfig()
-        assert cfg.factual  == pytest.approx(0.94)
-        assert cfg.faq      == pytest.approx(0.85)
+        assert cfg.factual == pytest.approx(0.94)
+        assert cfg.faq == pytest.approx(0.85)
         assert cfg.creative == pytest.approx(0.75)
-        assert cfg.code     == pytest.approx(0.92)
+        assert cfg.code == pytest.approx(0.92)
 
     def test_for_type_all_types(self) -> None:
         cfg = ThresholdConfig()
@@ -105,10 +106,10 @@ class TestThresholdConfig:
 
     def test_custom_values(self) -> None:
         cfg = ThresholdConfig(factual=0.99, faq=0.70, creative=0.60, code=0.88)
-        assert cfg.for_type(QueryType.FACTUAL)  == pytest.approx(0.99)
-        assert cfg.for_type(QueryType.FAQ)      == pytest.approx(0.70)
+        assert cfg.for_type(QueryType.FACTUAL) == pytest.approx(0.99)
+        assert cfg.for_type(QueryType.FAQ) == pytest.approx(0.70)
         assert cfg.for_type(QueryType.CREATIVE) == pytest.approx(0.60)
-        assert cfg.for_type(QueryType.CODE)     == pytest.approx(0.88)
+        assert cfg.for_type(QueryType.CODE) == pytest.approx(0.88)
 
 
 # ── ThresholdStats ───────────────────────────────────────────────────────────
@@ -181,7 +182,7 @@ class TestThresholdStats:
             t.join()
         assert not errors
         snap = stats.snapshot()
-        assert snap["faq"]["hits"] == 400      # 8 × 50
+        assert snap["faq"]["hits"] == 400  # 8 × 50
         assert snap["creative"]["misses"] == 400
 
     def test_singleton_identity(self) -> None:
@@ -229,6 +230,7 @@ class TestAdaptiveThresholdEngine:
 @dataclass
 class _SettingsEnabled:
     cache_enabled: bool = True
+
 
 @dataclass
 class _SettingsDisabled:

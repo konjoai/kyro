@@ -13,6 +13,7 @@ external boundary is wired to the same stub infrastructure the unit suite
 exercises. What you see in the terminal is the actual kyro library doing
 real work.
 """
+
 from __future__ import annotations
 
 import json
@@ -164,7 +165,12 @@ print(response.answer)
             {"source": "policy.md", "content_preview": "Refunds are accepted...", "score": 0.95},
         ],
         "steps": [
-            {"thought": "Need policy docs", "action": "retrieve", "action_input": "refund policy", "observation": "[1 doc]"},
+            {
+                "thought": "Need policy docs",
+                "action": "retrieve",
+                "action_input": "refund policy",
+                "observation": "[1 doc]",
+            },
             {"thought": "Have enough evidence", "action": "finish", "action_input": "", "observation": "completed"},
         ],
         "telemetry": {"steps": {"agent": {"latency_ms": 248}}},
@@ -215,9 +221,7 @@ for event in client.agent_query_stream("What is the refund policy?"):
     ]
     gen = _StubGen(script=script)
 
-    with patch("konjoai.agent.react.hybrid_search", _hybrid), patch(
-        "konjoai.agent.react.rerank", _rerank
-    ):
+    with patch("konjoai.agent.react.hybrid_search", _hybrid), patch("konjoai.agent.react.rerank", _rerank):
         agent = RAGAgent(top_k=3, max_steps=4)
 
         events = list(agent.run_stream("What is the refund policy?", generator=gen))
@@ -228,9 +232,7 @@ for event in client.agent_query_stream("What is the refund policy?"):
         if ev["type"] == "step":
             colour = {"retrieve": "yellow", "finish": "green"}.get(ev["action"], "white")
             label = (
-                f"[bold {colour}]step #{ev['index']}[/]  "
-                f"[white]{ev['action']:<8}[/]  "
-                f"[dim]{ev['observation'][:60]}[/]"
+                f"[bold {colour}]step #{ev['index']}[/]  [white]{ev['action']:<8}[/]  [dim]{ev['observation'][:60]}[/]"
             )
             body.add(label)
         elif ev["type"] == "result":
@@ -326,9 +328,9 @@ hit = cache.lookup("how do refunds work?", q_vec_paraphrase)  # semantic hit
 
     queries = [
         ("What is the refund policy?", "refund", _StubResp(answer="30 days, with receipt.")),
-        ("How do refunds work?", "refund", None),                # paraphrase → hit
+        ("How do refunds work?", "refund", None),  # paraphrase → hit
         ("Tell me about your shipping rates.", "shipping", _StubResp(answer="Free over $50.")),
-        ("How much does shipping cost?", "shipping", None),       # paraphrase → hit
+        ("How much does shipping cost?", "shipping", None),  # paraphrase → hit
     ]
 
     table = Table(title="lookup → action → outcome", border_style="grey42")

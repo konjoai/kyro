@@ -140,12 +140,11 @@ def _load_anthropic():
     """Import anthropic SDK; raise ImportError with install instructions if absent."""
     try:
         import anthropic  # noqa: PLC0415
+
         return anthropic
     except ImportError:
         print(
-            "ERROR: anthropic package not found.\n"
-            "Install: pip install anthropic\n"
-            "Or: uv add anthropic",
+            "ERROR: anthropic package not found.\nInstall: pip install anthropic\nOr: uv add anthropic",
             file=sys.stderr,
         )
         raise
@@ -155,10 +154,7 @@ def _call_api(diff_text: str, anthropic_module) -> dict:
     """Call Claude Opus with the diff; return parsed JSON verdict."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        raise ValueError(
-            "ANTHROPIC_API_KEY not set. "
-            "Export it or add it to GitHub Actions secrets."
-        )
+        raise ValueError("ANTHROPIC_API_KEY not set. Export it or add it to GitHub Actions secrets.")
 
     client = anthropic_module.Anthropic(api_key=api_key)
 
@@ -166,13 +162,11 @@ def _call_api(diff_text: str, anthropic_module) -> dict:
     if truncated:
         diff_text = diff_text[:MAX_DIFF_CHARS]
         diff_text += (
-            f"\n\n[DIFF TRUNCATED: showing first {MAX_DIFF_CHARS} chars. "
-            "Focus your review on what is visible above.]"
+            f"\n\n[DIFF TRUNCATED: showing first {MAX_DIFF_CHARS} chars. Focus your review on what is visible above.]"
         )
 
     user_content = (
-        "Review this pull request diff against the ten Konjo quality standards.\n\n"
-        f"<diff>\n{diff_text}\n</diff>"
+        f"Review this pull request diff against the ten Konjo quality standards.\n\n<diff>\n{diff_text}\n</diff>"
     )
 
     for attempt in range(MAX_RETRIES):
@@ -214,9 +208,7 @@ def _call_api(diff_text: str, anthropic_module) -> dict:
             else:
                 raise
         except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Critic returned non-JSON response. Raw output:\n{raw}"
-            ) from exc
+            raise ValueError(f"Critic returned non-JSON response. Raw output:\n{raw}") from exc
 
     raise RuntimeError("Exhausted retries without success")
 
@@ -261,28 +253,24 @@ def _render_human(result: dict) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Konjo Adversarial Review — Wall 3 quality gate"
-    )
+    parser = argparse.ArgumentParser(description="Konjo Adversarial Review — Wall 3 quality gate")
     diff_group = parser.add_mutually_exclusive_group()
     diff_group.add_argument("--diff-file", help="Path to diff file (default: stdin)")
-    diff_group.add_argument(
-        "--diff", help="Diff text inline (use with <() process substitution)"
+    diff_group.add_argument("--diff", help="Diff text inline (use with <() process substitution)")
+    parser.add_argument("--output", help="Write human-readable report to this file (default: stdout)")
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_out",
+        help="Write machine-readable JSON to stdout instead of human report",
     )
     parser.add_argument(
-        "--output", help="Write human-readable report to this file (default: stdout)"
+        "--dry-run", action="store_true", help="Print what would be sent to the API without calling it (for testing)"
     )
     parser.add_argument(
-        "--json", action="store_true", dest="json_out",
-        help="Write machine-readable JSON to stdout instead of human report"
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Print what would be sent to the API without calling it (for testing)"
-    )
-    parser.add_argument(
-        "--soft-fail", action="store_true",
-        help="Exit 0 even on BLOCKER verdict (report only; use during framework rollout)"
+        "--soft-fail",
+        action="store_true",
+        help="Exit 0 even on BLOCKER verdict (report only; use during framework rollout)",
     )
     args = parser.parse_args()
 

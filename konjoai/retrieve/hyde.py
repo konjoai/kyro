@@ -14,6 +14,7 @@ Integration pattern:
     retrieval step. The returned hypothesis_text is included in the telemetry
     for debugging / recall analysis.
 """
+
 from __future__ import annotations
 
 import logging

@@ -116,6 +116,7 @@ def mock_reranker(monkeypatch):
 # Tests
 # ---------------------------------------------------------------------------
 
+
 class TestFullPipeline:
     def test_ingest_and_query_end_to_end(self, mock_encoder, mock_store, mock_generator, mock_reranker):
         """Ingest two documents, query, and confirm a non-empty answer is returned."""
@@ -137,6 +138,7 @@ class TestFullPipeline:
         metas = [c.metadata for c in all_chunks]
 
         from konjoai.retrieve.sparse import get_sparse_index
+
         bm25 = get_sparse_index()
         bm25.build(contents, sources, metas)
 
@@ -206,6 +208,7 @@ class TestVectroRetrieverPath:
 
         # Override settings inline — cache must be cleared.
         from konjoai import config as config_module
+
         config_module.get_settings.cache_clear()
         monkeypatch.setenv("USE_VECTRO_RETRIEVER", "true")
         config_module.get_settings.cache_clear()
@@ -214,10 +217,12 @@ class TestVectroRetrieverPath:
             # Patch hybrid_search to raise so we catch accidental calls.
             def _should_not_be_called(*a, **kw):
                 raise AssertionError("hybrid_search() was called with use_vectro_retriever=True")
+
             monkeypatch.setattr("konjoai.api.routes.query.hybrid_search", _should_not_be_called, raising=False)
             monkeypatch.setattr("konjoai.retrieve.hybrid.hybrid_search", _should_not_be_called, raising=False)
 
             from konjoai.retrieve.reranker import rerank
+
             reranked = rerank("refund policy", mock_adapter.search.return_value, top_k=2)
             assert len(reranked) > 0
 
@@ -250,14 +255,12 @@ class TestColBERTMaxSimPath:
         def _get_embedding(text: str) -> np.ndarray:
             if text == "A":
                 return np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)  # aligned
-            return np.array([0, 1, 0, 0, 0, 0, 0, 0], dtype=np.float32)      # orthogonal
+            return np.array([0, 1, 0, 0, 0, 0, 0, 0], dtype=np.float32)  # orthogonal
 
         reranked = rerank_with_maxsim(query_emb, input_results, get_embedding=_get_embedding)
 
         # After MaxSim re-ranking: A should be first (cosine=1.0) and B second (cosine=0.0)
-        assert reranked[0].content == "A", (
-            f"Expected A first after MaxSim re-rank, got {reranked[0].content}"
-        )
+        assert reranked[0].content == "A", f"Expected A first after MaxSim re-rank, got {reranked[0].content}"
         assert reranked[1].content == "B"
 
     def test_maxsim_rerank_preserves_length(self):
@@ -269,18 +272,13 @@ class TestColBERTMaxSimPath:
 
         DIM = 4
         query_emb = np.ones(DIM, dtype=np.float32)
-        results = [
-            HybridResult(content=f"doc{i}", source=f"{i}.md", rrf_score=float(i), metadata={})
-            for i in range(5)
-        ]
+        results = [HybridResult(content=f"doc{i}", source=f"{i}.md", rrf_score=float(i), metadata={}) for i in range(5)]
 
         def _get_embedding(text: str) -> np.ndarray:
             return np.ones(DIM, dtype=np.float32)
 
         reranked = rerank_with_maxsim(query_emb, results, get_embedding=_get_embedding)
-        assert len(reranked) == len(results), (
-            f"Expected {len(results)} results, got {len(reranked)}"
-        )
+        assert len(reranked) == len(results), f"Expected {len(results)} results, got {len(reranked)}"
 
     def test_maxsim_rerank_degrades_gracefully_on_encoder_error(self):
         """If get_embedding raises, rerank_with_maxsim returns original order (K3)."""

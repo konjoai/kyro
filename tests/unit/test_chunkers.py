@@ -14,6 +14,7 @@ def _doc(text: str, source: str = "test.md") -> Document:
 # RecursiveChunker
 # ---------------------------------------------------------------------------
 
+
 class TestRecursiveChunker:
     def test_raises_if_overlap_gte_chunk_size(self) -> None:
         with pytest.raises(ValueError, match="overlap"):
@@ -64,6 +65,7 @@ class TestRecursiveChunker:
 # SentenceWindowChunker
 # ---------------------------------------------------------------------------
 
+
 class TestSentenceWindowChunker:
     def test_single_sentence(self) -> None:
         chunker = SentenceWindowChunker(window_size=3)
@@ -87,6 +89,7 @@ class TestSentenceWindowChunker:
 # ---------------------------------------------------------------------------
 # get_chunker factory
 # ---------------------------------------------------------------------------
+
 
 def test_get_chunker_recursive() -> None:
     chunker = get_chunker("recursive", 256, 32)

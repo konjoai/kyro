@@ -16,6 +16,7 @@ but all peers are unreachable, the lookup degrades gracefully and the caller
 proceeds to compute normally — no exception is raised.
 K5: uses ``httpx`` which is already a declared project dependency.
 """
+
 from __future__ import annotations
 
 import logging
@@ -36,13 +37,13 @@ class PeerNode:
     """A registered federation peer."""
 
     peer_id: str
-    url: str                         # base URL, no trailing slash
+    url: str  # base URL, no trailing slash
     name: str
     auth_token: str | None
     registered_at: float = field(default_factory=time.monotonic)
     last_checked: float | None = None
     last_healthy: bool | None = None  # None = never checked
-    availability: float = 1.0         # exponential-decay availability score [0, 1]
+    availability: float = 1.0  # exponential-decay availability score [0, 1]
     hits_contributed: int = 0
 
 
@@ -68,8 +69,8 @@ class PeerRegistry:
     success using an exponential moving average with ``alpha=0.3``.
     """
 
-    AVAILABILITY_ALPHA = 0.3   # EMA coefficient
-    MIN_AVAILABILITY   = 0.15  # threshold below which a peer is skipped
+    AVAILABILITY_ALPHA = 0.3  # EMA coefficient
+    MIN_AVAILABILITY = 0.15  # threshold below which a peer is skipped
 
     def __init__(self) -> None:
         self._peers: dict[str, PeerNode] = {}
@@ -108,8 +109,11 @@ class PeerRegistry:
     def healthy_peers(self) -> list[PeerNode]:
         """Return peers that are not known-unhealthy or still meet the availability floor."""
         with self._lock:
-            return [p for p in self._peers.values()
-                    if p.last_healthy is not False or p.availability >= self.MIN_AVAILABILITY]
+            return [
+                p
+                for p in self._peers.values()
+                if p.last_healthy is not False or p.availability >= self.MIN_AVAILABILITY
+            ]
 
     # ── Health tracking ───────────────────────────────────────────────────────
 
@@ -122,8 +126,7 @@ class PeerRegistry:
             p.last_checked = time.monotonic()
             p.last_healthy = success
             p.availability = (
-                self.AVAILABILITY_ALPHA * (1.0 if success else 0.0)
-                + (1.0 - self.AVAILABILITY_ALPHA) * p.availability
+                self.AVAILABILITY_ALPHA * (1.0 if success else 0.0) + (1.0 - self.AVAILABILITY_ALPHA) * p.availability
             )
 
     def record_hit(self, peer_id: str) -> None:
@@ -234,14 +237,14 @@ class FederatedLookup:
         total_hits = sum(p.hits_contributed for p in peers) or 1
         return [
             {
-                "peer_id":          p.peer_id,
-                "name":             p.name,
-                "url":              p.url,
-                "availability":     round(p.availability, 3),
-                "last_healthy":     p.last_healthy,
+                "peer_id": p.peer_id,
+                "name": p.name,
+                "url": p.url,
+                "availability": round(p.availability, 3),
+                "last_healthy": p.last_healthy,
                 "hits_contributed": p.hits_contributed,
-                "hit_share_pct":    round(p.hits_contributed / total_hits * 100, 1),
-                "registered_at":    p.registered_at,
+                "hit_share_pct": round(p.hits_contributed / total_hits * 100, 1),
+                "registered_at": p.registered_at,
             }
             for p in peers
         ]

@@ -1,4 +1,5 @@
 """LLM answer generation: pluggable OpenAI/Anthropic/Squish backends + streaming."""
+
 from __future__ import annotations
 
 import asyncio

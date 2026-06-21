@@ -4,6 +4,7 @@ Test taxonomy:
 - Pure unit: all tests use a mock encoder (no sentence-transformers model download).
 - No I/O, no process-state mutation.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -15,6 +16,7 @@ from konjoai.ingest.loaders import Document
 # ---------------------------------------------------------------------------
 # Mock encoder
 # ---------------------------------------------------------------------------
+
 
 def _make_uniform_encoder(n_dims: int = 8):
     """Return an encoder that produces identical unit vectors — no splits occur."""
@@ -142,18 +144,14 @@ class TestSemanticSplitterChunk:
 class TestSemanticSplitterSplitting:
     def test_uniform_encoder_no_splits(self):
         """All adjacent sims = 1.0 → threshold 0.4 not crossed → single chunk."""
-        splitter = SemanticSplitter(
-            similarity_threshold=0.4, _encoder=_make_uniform_encoder()
-        )
+        splitter = SemanticSplitter(similarity_threshold=0.4, _encoder=_make_uniform_encoder())
         text = "First sentence. Second sentence. Third sentence."
         chunks = splitter.chunk(_doc(text))
         assert len(chunks) == 1
 
     def test_alternating_encoder_splits_every_boundary(self):
         """Adjacent sims = 0.0 → threshold 0.4 always crossed → N-1 split points."""
-        splitter = SemanticSplitter(
-            similarity_threshold=0.4, _encoder=_make_alternating_encoder()
-        )
+        splitter = SemanticSplitter(similarity_threshold=0.4, _encoder=_make_alternating_encoder())
         text = "A sentence. Another one. Yet another. And one more."
         chunks = splitter.chunk(_doc(text))
         # 4 sentences → up to 3 splits → up to 4 chunks
@@ -161,21 +159,15 @@ class TestSemanticSplitterSplitting:
 
     def test_block_encoder_splits_at_block_boundaries(self):
         """Block encoder with block_size=2 → split after every 2nd sentence."""
-        splitter = SemanticSplitter(
-            similarity_threshold=0.5, _encoder=_make_block_encoder(block_size=2)
-        )
+        splitter = SemanticSplitter(similarity_threshold=0.5, _encoder=_make_block_encoder(block_size=2))
         # 6 sentences → 3 blocks → up to 3 chunks
         text = "S1. S2. S3. S4. S5. S6."
         chunks = splitter.chunk(_doc(text))
         assert 2 <= len(chunks) <= 6  # at least some splitting happened
 
     def test_high_threshold_produces_more_chunks(self):
-        splitter_low = SemanticSplitter(
-            similarity_threshold=0.1, _encoder=_make_alternating_encoder()
-        )
-        splitter_high = SemanticSplitter(
-            similarity_threshold=0.9, _encoder=_make_alternating_encoder()
-        )
+        splitter_low = SemanticSplitter(similarity_threshold=0.1, _encoder=_make_alternating_encoder())
+        splitter_high = SemanticSplitter(similarity_threshold=0.9, _encoder=_make_alternating_encoder())
         text = "A. B. C. D. E. F."
         chunks_low = splitter_low.chunk(_doc(text))
         chunks_high = splitter_high.chunk(_doc(text))
@@ -183,31 +175,23 @@ class TestSemanticSplitterSplitting:
         assert len(chunks_high) >= len(chunks_low)
 
     def test_no_empty_chunks(self):
-        splitter = SemanticSplitter(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        splitter = SemanticSplitter(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         text = "Sentence A. Sentence B. Sentence C. Sentence D."
         chunks = splitter.chunk(_doc(text))
         assert all(c.content.strip() for c in chunks), "Empty chunk produced"
 
     def test_all_content_present(self):
         """Chunks collectively contain all original sentences."""
-        splitter = SemanticSplitter(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        splitter = SemanticSplitter(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         sentences = ["Alpha beta.", "Gamma delta.", "Epsilon zeta.", "Eta theta."]
         text = " ".join(sentences)
         chunks = splitter.chunk(_doc(text))
         for sent in sentences:
             # Each original sentence should be recoverable from the chunks
-            assert any(
-                sent.rstrip(".") in c.content for c in chunks
-            ), f"Sentence {sent!r} missing from chunks"
+            assert any(sent.rstrip(".") in c.content for c in chunks), f"Sentence {sent!r} missing from chunks"
 
     def test_sentence_count_in_metadata(self):
-        splitter = SemanticSplitter(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        splitter = SemanticSplitter(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         text = "A sentence here. Another one there. A third one."
         chunks = splitter.chunk(_doc(text))
         for c in chunks:

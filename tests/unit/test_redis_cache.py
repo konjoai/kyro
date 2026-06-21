@@ -4,6 +4,7 @@ These tests use an in-process fake Redis (a small dict + sorted-list
 implementation) so they exercise the full RedisSemanticCache code path
 without requiring the optional ``redis`` package to be installed.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -226,6 +227,7 @@ class TestRedisCacheTenantScoping:
             cache.store("shared question", v, _StubResp(answer="acme-answer"))
         finally:
             from konjoai.auth.tenant import _current_tenant_id
+
             _current_tenant_id.reset(token)
 
         token = set_current_tenant_id("globex")
@@ -235,6 +237,7 @@ class TestRedisCacheTenantScoping:
             assert cache.lookup("shared question", v).answer == "globex-answer"
         finally:
             from konjoai.auth.tenant import _current_tenant_id
+
             _current_tenant_id.reset(token)
 
         # Acme's entry must still be intact.
@@ -243,6 +246,7 @@ class TestRedisCacheTenantScoping:
             assert cache.lookup("shared question", v).answer == "acme-answer"
         finally:
             from konjoai.auth.tenant import _current_tenant_id
+
             _current_tenant_id.reset(token)
 
     def test_anonymous_tenant_when_unset(self) -> None:
@@ -265,6 +269,7 @@ class TestRedisCacheInvalidateAndStats:
             cache.store("qa", _vec(50), _StubResp(answer="A"))
         finally:
             from konjoai.auth.tenant import _current_tenant_id
+
             _current_tenant_id.reset(token_a)
 
         token_b = set_current_tenant_id("b")
@@ -274,6 +279,7 @@ class TestRedisCacheInvalidateAndStats:
             assert cache.lookup("qb", _vec(51)) is None
         finally:
             from konjoai.auth.tenant import _current_tenant_id
+
             _current_tenant_id.reset(token_b)
 
         token_a = set_current_tenant_id("a")
@@ -281,6 +287,7 @@ class TestRedisCacheInvalidateAndStats:
             assert cache.lookup("qa", _vec(50)).answer == "A"
         finally:
             from konjoai.auth.tenant import _current_tenant_id
+
             _current_tenant_id.reset(token_a)
 
     def test_stats_track_hits_and_misses(self) -> None:
@@ -349,6 +356,7 @@ class TestRedisCacheGracefulDegradation:
 class TestBuildRedisCache:
     def test_returns_none_when_redis_package_missing(self) -> None:
         import builtins
+
         real_import = builtins.__import__
 
         def _fail_redis(name: str, *args, **kwargs):
