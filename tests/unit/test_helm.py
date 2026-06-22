@@ -13,6 +13,7 @@ Coverage targets:
 - Chart version matches appVersion format
 - release.yml: tag trigger on v*.*.*, PyPI publish, Docker publish jobs
 """
+
 from __future__ import annotations
 
 import re

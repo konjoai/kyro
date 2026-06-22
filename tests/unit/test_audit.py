@@ -14,6 +14,7 @@ Coverage:
     - Ingest route: AuditEvent emitted when audit_enabled=True
     - No raw question text in AuditEvent (OWASP K1)
 """
+
 from __future__ import annotations
 
 import json
@@ -267,6 +268,7 @@ class TestSingleton:
         """Two calls without reset return the same object."""
         # Directly inject a pre-built logger to avoid touching config
         import konjoai.audit.logger as _mod
+
         _mod._audit_logger = AuditLogger(InMemoryBackend(), enabled=False)
         a = get_audit_logger()
         b = get_audit_logger()
@@ -275,6 +277,7 @@ class TestSingleton:
     def test_reset_singleton_clears_instance(self) -> None:
         """After _reset_singleton a new instance is created."""
         import konjoai.audit.logger as _mod
+
         _mod._audit_logger = AuditLogger(InMemoryBackend(), enabled=False)
         a = get_audit_logger()
         _reset_singleton()
@@ -288,6 +291,7 @@ class TestSingleton:
         log_path = str(tmp_path / "audit.jsonl")
         # Inject directly — avoids importing konjoai.config in isolation
         import konjoai.audit.logger as _mod
+
         _mod._audit_logger = AuditLogger(JsonLinesBackend(log_path), enabled=True)
         al = get_audit_logger()
         assert isinstance(al._backend, JsonLinesBackend)
@@ -326,6 +330,7 @@ class TestAuditAPIDisabled:
             audit_enabled: bool = False
 
         from fastapi import FastAPI
+
         _app = FastAPI()
         _app.include_router(audit_router)
 
@@ -346,6 +351,7 @@ class TestAuditAPIDisabled:
             audit_enabled: bool = False
 
         from fastapi import FastAPI
+
         _app = FastAPI()
         _app.include_router(audit_router)
 
@@ -380,6 +386,7 @@ class TestAuditAPIEnabled:
         from fastapi.testclient import TestClient
 
         import konjoai.audit.logger as _logger_mod
+
         _app, backend, al, _S = self._build_app_and_backend()
         backend.write(_make_event(tenant_id="acme"))
 
@@ -400,6 +407,7 @@ class TestAuditAPIEnabled:
         from fastapi.testclient import TestClient
 
         import konjoai.audit.logger as _logger_mod
+
         _app, backend, al, _S = self._build_app_and_backend()
         backend.write(_make_event(event_type=QUERY))
 
@@ -449,6 +457,7 @@ class TestConfigFields:
     def test_audit_config_defaults(self) -> None:
         """Config fields must have correct defaults."""
         from konjoai.config import Settings
+
         # Use model_fields to check defaults without constructing (avoids .env reading)
         fields = Settings.model_fields
         assert fields["audit_enabled"].default is False

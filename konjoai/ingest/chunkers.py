@@ -1,3 +1,5 @@
+"""Document chunkers: recursive, sentence-window, semantic, and late chunking."""
+
 from __future__ import annotations
 
 import re
@@ -19,7 +21,11 @@ class Chunk:
 
 @runtime_checkable
 class Chunker(Protocol):
-    def chunk(self, doc: Document) -> list[Chunk]: ...
+    """Protocol for splitting a :class:`Document` into :class:`Chunk` objects."""
+
+    def chunk(self, doc: Document) -> list[Chunk]:
+        """Split *doc* into a list of chunks."""
+        ...
 
 
 # ── Recursive character splitter ─────────────────────────────────────────────
@@ -37,6 +43,7 @@ class RecursiveChunker:
         self.overlap = overlap
 
     def chunk(self, doc: Document) -> list[Chunk]:
+        """Split *doc* recursively, carrying its metadata onto each chunk."""
         chunks = self._split(doc.content)
         return [
             Chunk(
@@ -49,6 +56,7 @@ class RecursiveChunker:
         ]
 
     def _split(self, text: str) -> list[str]:
+        """Recursively split *text* on the first separator that yields >1 part."""
         text = text.strip()
         if not text:
             return []
@@ -64,6 +72,7 @@ class RecursiveChunker:
         return [text[i : i + self.chunk_size] for i in range(0, len(text), self.chunk_size - self.overlap)]
 
     def _merge(self, parts: list[str], sep: str) -> list[str]:
+        """Greedily merge *parts* (rejoined with *sep*) up to ``chunk_size``."""
         chunks: list[str] = []
         current = ""
         for part in parts:
@@ -452,6 +461,7 @@ class SentenceWindowChunker:
         self.window_size = window_size
 
     def chunk(self, doc: Document) -> list[Chunk]:
+        """Emit one chunk per sentence, each padded with its surrounding window."""
         sentences = [s.strip() for s in self._SENT_RE.split(doc.content) if s.strip()]
         chunks: list[Chunk] = []
         for i, sent in enumerate(sentences):

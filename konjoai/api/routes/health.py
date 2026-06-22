@@ -3,6 +3,7 @@
 GET /health   — liveness probe (existing, re-exported here for router grouping)
 GET /metrics  — Prometheus text exposition (Sprint 16; K3-gated on otel_enabled)
 """
+
 from __future__ import annotations
 
 import logging

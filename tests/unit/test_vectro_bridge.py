@@ -1,4 +1,5 @@
 """Unit tests for konjoai.embed.vectro_bridge — _check_vectro(), compression_ratio(), quantize_for_storage()."""
+
 from __future__ import annotations
 
 import builtins
@@ -68,7 +69,7 @@ class TestCompressionRatio:
         from konjoai.embed.vectro_bridge import compression_ratio
 
         original = np.zeros((10, 128), dtype=np.float32)  # 4 bytes/element
-        quantized = np.zeros((10, 128), dtype=np.int8)    # 1 byte/element
+        quantized = np.zeros((10, 128), dtype=np.int8)  # 1 byte/element
         assert abs(compression_ratio(original, quantized) - 4.0) < 1e-6
 
     def test_same_dtype_is_1x(self) -> None:
@@ -87,8 +88,8 @@ class TestCompressionRatio:
     def test_float32_to_float16_is_2x(self) -> None:
         from konjoai.embed.vectro_bridge import compression_ratio
 
-        original = np.zeros((8, 64), dtype=np.float32)   # 4 bytes/element
-        half = np.zeros((8, 64), dtype=np.float16)       # 2 bytes/element
+        original = np.zeros((8, 64), dtype=np.float32)  # 4 bytes/element
+        half = np.zeros((8, 64), dtype=np.float16)  # 2 bytes/element
         assert abs(compression_ratio(original, half) - 2.0) < 1e-6
 
 
@@ -216,9 +217,7 @@ class TestVectroCompressionBenchmark:
 
         _, metrics = bridge.quantize_for_storage(emb)
 
-        assert metrics["compression_ratio"] >= 4.0, (
-            f"compression_ratio {metrics['compression_ratio']:.4f} < 4.0 (gate)"
-        )
+        assert metrics["compression_ratio"] >= 4.0, f"compression_ratio {metrics['compression_ratio']:.4f} < 4.0 (gate)"
         assert metrics["mean_cosine_similarity"] >= 0.9999, (
             f"mean_cosine_similarity {metrics['mean_cosine_similarity']:.6f} < 0.9999 (gate)"
         )

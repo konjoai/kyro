@@ -1,6 +1,7 @@
 """Unit tests for konjoai.telemetry — StepTiming, PipelineTelemetry, timed(),
 KyroMetrics, KyroTracer, get_metrics(), get_tracer(), record_pipeline_metrics().
 """
+
 from __future__ import annotations
 
 import time

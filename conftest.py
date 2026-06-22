@@ -12,6 +12,7 @@ the parent dir on sys.path is the correct mechanism:
 
 This file is loaded automatically by pytest on every run.
 """
+
 from __future__ import annotations
 
 import os

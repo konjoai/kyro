@@ -13,6 +13,7 @@ Coverage targets:
 - get_tenant_id dep: API key auth disabled — skipped even if header present
 - get_tenant_id dep: API key preferred over JWT when both present
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -264,9 +265,7 @@ class TestGetTenantIdAPIKeyPaths:
             api_keys=[f"{self._HASH}:apikey-tenant"],
         )
         req = _FakeRequest(headers={"X-API-Key": self._KEY})
-        jwt_creds = HTTPAuthorizationCredentials(
-            scheme="Bearer", credentials="fake.jwt.token"
-        )
+        jwt_creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="fake.jwt.token")
         fake_claims = TenantClaims(tenant_id="jwt-tenant")
         with patch("konjoai.auth.deps.get_settings", return_value=stub):
             with patch("konjoai.auth.deps.decode_token", return_value=fake_claims):

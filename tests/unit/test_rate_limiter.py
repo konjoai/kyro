@@ -13,6 +13,7 @@ Coverage targets:
 - RateLimitExceeded message contract
 - get_rate_limiter() singleton + _reset_singleton()
 """
+
 from __future__ import annotations
 
 import threading

@@ -13,6 +13,7 @@ fine-tuning the base model. It combines:
 - lightweight usefulness overlap heuristics,
 - optional LLM rubric scoring callback for ISREL/ISSUP/ISUSE.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -106,6 +107,7 @@ class SupportScorer:
         self._use_fallback = False
 
     def _load_model(self) -> None:
+        """Lazily load the cross-encoder, switching to token-overlap fallback on failure."""
         if self._model is not None or self._use_fallback:
             return
         try:
@@ -122,6 +124,7 @@ class SupportScorer:
 
     @staticmethod
     def _jaccard(a: str, b: str) -> float:
+        """Return word-level Jaccard overlap of two strings in [0, 1]."""
         ta = set(re.findall(r"\w+", a.lower()))
         tb = set(re.findall(r"\w+", b.lower()))
         if not ta or not tb:
@@ -130,6 +133,7 @@ class SupportScorer:
 
     @staticmethod
     def _sigmoid(x: float) -> float:
+        """Numerically stable logistic sigmoid."""
         if x >= 0:
             z = math.exp(-x)
             return 1.0 / (1.0 + z)
@@ -250,10 +254,12 @@ class SelfRAGCritic:
 
     @staticmethod
     def _clamp01(value: float) -> float:
+        """Clamp a value to the [0, 1] range."""
         return max(0.0, min(value, 1.0))
 
     @staticmethod
     def _docs_preview(documents: Sequence[Any], max_docs: int = 3, max_chars: int = 240) -> str:
+        """Build a numbered, truncated text preview of the leading documents."""
         items: list[str] = []
         for idx, doc in enumerate(documents[:max_docs], start=1):
             text = str(getattr(doc, "content", ""))[:max_chars]
@@ -261,6 +267,7 @@ class SelfRAGCritic:
         return "\n".join(items)
 
     def _score_with_llm(self, prompt: str) -> float | None:
+        """Score the prompt via the optional LLM callback, returning None if unset or failing."""
         if self._llm_score_fn is None:
             return None
         try:
@@ -286,9 +293,7 @@ class SelfRAGCritic:
             norm_support = self._support.normalize(raw_support)
             support_norm_scores.append(norm_support)
 
-            relevance = (
-                RelevanceToken.RELEVANT if norm_support >= 0.5 else RelevanceToken.IRRELEVANT
-            )
+            relevance = RelevanceToken.RELEVANT if norm_support >= 0.5 else RelevanceToken.IRRELEVANT
             support = self._support.support_token(raw_support)
             critiques.append(
                 DocumentCritique(
@@ -301,11 +306,7 @@ class SelfRAGCritic:
             )
 
         heuristic_isrel = max(support_norm_scores) if support_norm_scores else 0.0
-        heuristic_issup = (
-            sum(support_norm_scores) / len(support_norm_scores)
-            if support_norm_scores
-            else 0.0
-        )
+        heuristic_issup = sum(support_norm_scores) / len(support_norm_scores) if support_norm_scores else 0.0
 
         _, usefulness_overlap = self._usefulness.score(question, partial_answer)
         heuristic_isuse = usefulness_overlap
@@ -366,14 +367,17 @@ class SelfRAGOrchestrator:
 
     @staticmethod
     def _token_count(text: str) -> int:
+        """Count whitespace-delimited tokens in the text."""
         return len(re.findall(r"\S+", text))
 
     def _partial_answer(self, full_answer: str) -> str:
+        """Truncate an answer to the first ``max_partial_tokens`` words."""
         tokens = full_answer.split()
         return " ".join(tokens[: self._max_partial_tokens])
 
     @staticmethod
     def _map_usefulness(score: float) -> UsefulnessToken:
+        """Bucket a [0, 1] usefulness score into a discrete usefulness token."""
         if score >= 0.875:
             return UsefulnessToken.VERY_HIGH
         if score >= 0.625:
@@ -386,18 +390,17 @@ class SelfRAGOrchestrator:
 
     @staticmethod
     def _refined_query(question: str, partial_answer: str) -> str:
+        """Augment the question with the longest sentence of the draft answer as a retrieval clue."""
         focus = partial_answer.strip()
         if "." in focus:
             sentences = [s.strip() for s in focus.split(".") if s.strip()]
             if sentences:
                 focus = max(sentences, key=len)
-        return (
-            f"{question}\n\n"
-            f"Refine retrieval using this draft answer clue: {focus[:300]}"
-        )
+        return f"{question}\n\nRefine retrieval using this draft answer clue: {focus[:300]}"
 
     @staticmethod
     def _call_generate(generate_fn: Callable[..., str], documents: Sequence[Any]) -> str:
+        """Invoke ``generate_fn`` with documents if it accepts an argument, else with none."""
         try:
             sig = inspect.signature(generate_fn)
             if len(sig.parameters) >= 1:
@@ -457,12 +460,8 @@ class SelfRAGOrchestrator:
                 }
             )
 
-            is_better = (
-                tokens.issup > best_tokens.issup
-                or (
-                    abs(tokens.issup - best_tokens.issup) < 1e-9
-                    and tokens.isuse > best_tokens.isuse
-                )
+            is_better = tokens.issup > best_tokens.issup or (
+                abs(tokens.issup - best_tokens.issup) < 1e-9 and tokens.isuse > best_tokens.isuse
             )
             if is_better:
                 best_answer = candidate
@@ -478,10 +477,7 @@ class SelfRAGOrchestrator:
             )
 
             if tokens.issup >= self._issup_threshold:
-                if (
-                    retrieve_decision == RetrieveDecision.NO
-                    or tokens.isrel >= self._isrel_no_retrieve_threshold
-                ):
+                if retrieve_decision == RetrieveDecision.NO or tokens.isrel >= self._isrel_no_retrieve_threshold:
                     break
                 break
 

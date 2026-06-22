@@ -9,6 +9,7 @@ Covers:
    - precision gain on noisy corpus
 5. Singleton helpers.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -21,6 +22,7 @@ from konjoai.retrieve.crag import (
 )
 
 # ── Stub document type ────────────────────────────────────────────────────────
+
 
 @dataclass
 class _Doc:
@@ -35,6 +37,7 @@ class _Doc:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_docs(n: int, content_prefix: str = "doc") -> list[_Doc]:
     return [_Doc(content=f"{content_prefix} {i}", source=f"src_{i}.txt") for i in range(n)]
@@ -76,6 +79,7 @@ class _StubEvaluator(CRAGEvaluator):
 
 
 # ── Classification thresholds ────────────────────────────────────────────────
+
 
 def test_classification_bands_match_sprint11_contract():
     ev = _StubEvaluator(scores=[0.71, 0.70, 0.30, 0.29])
@@ -148,6 +152,7 @@ def test_noisy_corpus_precision_improves_with_crag_filtering():
 
 # ── Module singleton ──────────────────────────────────────────────────────────
 
+
 def test_get_crag_pipeline_returns_same_instance():
     _reset_crag()
     a = get_crag_pipeline()
@@ -164,4 +169,4 @@ def test_reset_crag_creates_new_instance():
 
 
 def test_reset_crag_cleanup():
-    _reset_crag()   # ensure test teardown
+    _reset_crag()  # ensure test teardown

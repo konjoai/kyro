@@ -14,6 +14,7 @@ K5: stdlib only — ``collections.deque``, ``threading.Lock``, ``hashlib``, ``ti
 K7: rate-limit counters are per-tenant; reports carry tenant_id.
 OWASP: question text is never stored — only its 16-hex SHA-256 prefix.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -157,8 +158,8 @@ class PoisoningReport:
     """An immutable record of a detected or user-reported cache poisoning event."""
 
     tenant_id: str
-    question_hash: str    # 16-hex SHA-256 prefix — no raw text (OWASP)
-    reason: str           # e.g. "rate_limit_exceeded", "low_coherence:0.12"
+    question_hash: str  # 16-hex SHA-256 prefix — no raw text (OWASP)
+    reason: str  # e.g. "rate_limit_exceeded", "low_coherence:0.12"
     timestamp: float = field(default_factory=time.time)
 
 
@@ -286,15 +287,11 @@ class PoisoningGuard:
                         self._min_coherence,
                         q_hash,
                     )
-                    self._report_store.record(
-                        tenant_id, q_hash, f"low_coherence:{score:.3f}"
-                    )
+                    self._report_store.record(tenant_id, q_hash, f"low_coherence:{score:.3f}")
                     return False
             except Exception as exc:  # noqa: BLE001
                 # K1: embed failure must never prevent the store
-                logger.warning(
-                    "cache poisoning guard: coherence check failed (store allowed): %s", exc
-                )
+                logger.warning("cache poisoning guard: coherence check failed (store allowed): %s", exc)
 
         # Layer 3 — anomaly detection (informational; never blocks)
         if self._anomaly.is_length_outlier(answer_text):
@@ -303,9 +300,7 @@ class PoisoningGuard:
                 len(answer_text),
                 q_hash,
             )
-            self._report_store.record(
-                tenant_id, q_hash, f"length_anomaly:{len(answer_text)}"
-            )
+            self._report_store.record(tenant_id, q_hash, f"length_anomaly:{len(answer_text)}")
         self._anomaly.record(answer_text)
 
         return True
@@ -353,9 +348,7 @@ def _make_embed_fn(
 
         return _encode
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "poisoning guard: encoder unavailable — coherence check disabled: %s", exc
-        )
+        logger.warning("poisoning guard: encoder unavailable — coherence check disabled: %s", exc)
         return None
 
 
@@ -371,9 +364,7 @@ def get_poisoning_guard() -> PoisoningGuard:
             settings = get_settings()
             _guard = PoisoningGuard(
                 min_qa_coherence=getattr(settings, "cache_poisoning_min_coherence", 0.3),
-                max_writes_per_minute=getattr(
-                    settings, "cache_poisoning_max_writes_per_minute", 100
-                ),
+                max_writes_per_minute=getattr(settings, "cache_poisoning_max_writes_per_minute", 100),
                 length_sigma=getattr(settings, "cache_poisoning_length_sigma", 3.0),
                 embed_fn=_make_embed_fn(settings),
                 report_store=get_poisoning_report_store(),

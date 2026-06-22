@@ -15,6 +15,7 @@ Endpoints:
 Singleflight: identical (tenant_id, question) requests collide on a single
 in-flight pipeline invocation via :class:`konjoai.cache.AsyncSemanticCache`.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Wire types ────────────────────────────────────────────────────────────────
+
 
 class IngestItem(BaseModel):
     text: str = Field(..., min_length=1)
@@ -98,11 +100,10 @@ class MetricsResult(BaseModel):
 
 # ── Pipeline protocol — real impl below; tests inject a stub ──────────────────
 
+
 class Pipeline(Protocol):
     async def embed_query(self, question: str) -> np.ndarray: ...
-    async def retrieve(
-        self, question: str, q_vec: np.ndarray, top_k: int
-    ) -> list[ScoredSource]: ...
+    async def retrieve(self, question: str, q_vec: np.ndarray, top_k: int) -> list[ScoredSource]: ...
     async def index(self, request: IngestRequest) -> IngestResult: ...
     def document_count(self) -> int: ...
 
@@ -115,9 +116,7 @@ class KyroPipeline:
 
         return await asyncio.to_thread(get_encoder().encode_query, question)
 
-    async def retrieve(
-        self, question: str, q_vec: np.ndarray, top_k: int
-    ) -> list[ScoredSource]:
+    async def retrieve(self, question: str, q_vec: np.ndarray, top_k: int) -> list[ScoredSource]:
         from konjoai.retrieve.hybrid import hybrid_search
         from konjoai.retrieve.reranker import rerank
 
@@ -187,6 +186,7 @@ class KyroPipeline:
 
 # ── Bounded retrieval-by-id store ─────────────────────────────────────────────
 
+
 class _RetrievalStore:
     """Thread-safe LRU cache mapping retrieval-id → QueryResult."""
 
@@ -211,6 +211,7 @@ class _RetrievalStore:
 
 
 # ── Live metrics ──────────────────────────────────────────────────────────────
+
 
 class _Metrics:
     """In-process counters + bounded latency ring for percentiles."""
@@ -248,6 +249,7 @@ class _Metrics:
 
 
 # ── App factory ───────────────────────────────────────────────────────────────
+
 
 def _build_async_cache() -> AsyncSemanticCache:
     """Construct an AsyncSemanticCache with a tenant-aware singleflight key.
@@ -350,9 +352,7 @@ def create_app(pipeline: Pipeline | None = None) -> FastAPI:
                 cache_hit = False
                 # Singleflight collapses concurrent (tenant_id, question) misses
                 # onto a single _compute invocation.
-                sources = await cache.get_or_compute(
-                    body.question, q_vec, _compute
-                )
+                sources = await cache.get_or_compute(body.question, q_vec, _compute)
         finally:
             try:
                 from konjoai.auth.tenant import _current_tenant_id  # noqa: PLC0415
@@ -419,9 +419,7 @@ def create_app(pipeline: Pipeline | None = None) -> FastAPI:
     ) -> MetricsResult:
         avg_ms, p50_ms, p95_ms = m.snapshot()
         cache_stats = await cache.stats()
-        hit_rate = (
-            m.cache_hits / m.queries_total if m.queries_total else 0.0
-        )
+        hit_rate = m.cache_hits / m.queries_total if m.queries_total else 0.0
         return MetricsResult(
             queries_total=m.queries_total,
             cache_hits=m.cache_hits,

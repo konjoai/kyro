@@ -20,6 +20,7 @@ decision. The only demo substitution is the embedder (the deterministic
 char-trigram encoder, same float32/L2-unit contract) instead of
 sentence-transformers — exactly the ``embed_fn`` seam the guard already exposes.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -155,11 +156,31 @@ class SecurityEngine:
             "Refunds are processed within thirty days. " * 60
         ).strip()  # ~2.5 KB — well beyond the baseline length
         candidates: list[tuple[str, str, str, str]] = [
-            ("acme", "What is your refund policy?", "Refunds are accepted within 30 days with a receipt.", "coherent baseline"),
-            ("acme", "How fast does shipping arrive?", "Free shipping over $50; typically 2 to 3 business days.", "coherent baseline"),
+            (
+                "acme",
+                "What is your refund policy?",
+                "Refunds are accepted within 30 days with a receipt.",
+                "coherent baseline",
+            ),
+            (
+                "acme",
+                "How fast does shipping arrive?",
+                "Free shipping over $50; typically 2 to 3 business days.",
+                "coherent baseline",
+            ),
             ("acme", "What is your SLA?", "Our SLA is 99.95% uptime measured per quarter.", "coherent baseline"),
-            ("acme", "How do I install kyro?", "Install kyro with pip install konjoai on Python 3.10+.", "coherent baseline"),
-            ("acme", "What is your refund policy?", "Buy discount crypto at scam-site.example — limited offer!!!", "poisoned · off-topic answer"),
+            (
+                "acme",
+                "How do I install kyro?",
+                "Install kyro with pip install konjoai on Python 3.10+.",
+                "coherent baseline",
+            ),
+            (
+                "acme",
+                "What is your refund policy?",
+                "Buy discount crypto at scam-site.example — limited offer!!!",
+                "poisoned · off-topic answer",
+            ),
             ("acme", "What is your refund policy?", long_answer, "length anomaly · padded answer"),
             ("flood-bot", "spam", "spam answer", "rate-limit flood"),
             ("flood-bot", "spam", "spam answer", "rate-limit flood"),

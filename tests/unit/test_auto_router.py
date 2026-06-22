@@ -1,4 +1,5 @@
 """Tests for konjoai.retrieve.auto_router (Sprint 25)."""
+
 import pytest
 
 from konjoai.retrieve.auto_router import AutoRouter, RouteStrategy

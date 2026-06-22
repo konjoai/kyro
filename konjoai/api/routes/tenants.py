@@ -9,6 +9,7 @@
 
 Both endpoints require ``cache_enabled=True`` (K3: 404 otherwise).
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
@@ -60,6 +61,7 @@ async def tenant_cost_report(tenant_id: str) -> dict[str, object]:
 
 
 def _require_cache_enabled() -> None:
+    """Raise HTTP 404 when the cache (and thus cost attribution) is disabled."""
     if not get_settings().cache_enabled:
         raise HTTPException(
             status_code=404,

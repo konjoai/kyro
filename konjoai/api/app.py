@@ -1,3 +1,5 @@
+"""KonjoOS FastAPI application: lifespan warmup, CORS, and router wiring."""
+
 from __future__ import annotations
 
 import logging
@@ -91,6 +93,7 @@ def create_app() -> FastAPI:
 
 @app.get("/health", response_model=HealthResponse, tags=["health"])
 def health() -> HealthResponse:
+    """Liveness probe: report status, stored vector count, and BM25 build state."""
     from konjoai.retrieve.sparse import get_sparse_index
     from konjoai.store.qdrant import get_store
 

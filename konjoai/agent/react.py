@@ -1,3 +1,5 @@
+"""Bounded ReAct agent loop: Thought/Action/Observation over hybrid retrieval."""
+
 from __future__ import annotations
 
 import json
@@ -36,6 +38,8 @@ class AgentResult:
 
 @dataclass
 class _ActionPayload:
+    """Parsed JSON action emitted by the model on a single step."""
+
     thought: str
     action: str
     action_input: str
@@ -49,12 +53,15 @@ class ToolRegistry:
         self._tools: dict[str, Callable[[str], tuple[list[RerankResult], str]]] = {}
 
     def register(self, name: str, fn: Callable[[str], tuple[list[RerankResult], str]]) -> None:
+        """Register an action handler under *name*."""
         self._tools[name] = fn
 
     def actions(self) -> list[str]:
+        """Return the sorted list of registered action names."""
         return sorted(self._tools.keys())
 
     def invoke(self, name: str, action_input: str) -> tuple[list[RerankResult], str]:
+        """Invoke action *name* with *action_input*, returning (docs, observation)."""
         return self._tools[name](action_input)
 
 
@@ -177,9 +184,7 @@ class RAGAgent:
                         thought=payload.thought,
                         action=action,
                         action_input=payload.action_input,
-                        observation=(
-                            f"unknown action '{action}' — expected one of {', '.join(registry.actions())}"
-                        ),
+                        observation=(f"unknown action '{action}' — expected one of {', '.join(registry.actions())}"),
                     )
                 )
                 continue
@@ -222,6 +227,7 @@ class RAGAgent:
         _ = last_generation  # retained for parity with prior closure
 
     def _build_registry(self, question: str) -> ToolRegistry:
+        """Build the action registry, wiring the hybrid-search ``retrieve`` tool."""
         registry = ToolRegistry()
 
         def _retrieve(action_input: str) -> tuple[list[RerankResult], str]:
@@ -249,6 +255,7 @@ class RAGAgent:
         return registry
 
     def _build_prompt(self, question: str, steps: list[AgentStep], actions: list[str]) -> str:
+        """Render the ReAct system prompt including the prior step trace."""
         if steps:
             trace = "\n".join(
                 (
@@ -274,12 +281,14 @@ class RAGAgent:
         )
 
     def _format_context(self, docs: list[RerankResult]) -> str:
+        """Render retrieved docs as a delimited context block for the generator."""
         if not docs:
             return "No retrieved documents yet."
         return "\n\n---\n\n".join(f"[{d.source}] {d.content}" for d in docs)
 
 
 def _normalize_action(action: str) -> str:
+    """Lowercase and map common action aliases to canonical names."""
     value = action.strip().lower()
     aliases = {
         "search": "retrieve",
@@ -293,6 +302,7 @@ def _normalize_action(action: str) -> str:
 
 
 def _strip_code_fence(raw: str) -> str:
+    """Strip a surrounding ```` ``` ```` / ```` ```json ```` code fence if present."""
     text = raw.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
@@ -301,6 +311,7 @@ def _strip_code_fence(raw: str) -> str:
 
 
 def _parse_action_payload(raw: str) -> _ActionPayload | None:
+    """Parse a model output into an :class:`_ActionPayload`, or None on failure."""
     text = _strip_code_fence(raw)
     candidates = [text]
 

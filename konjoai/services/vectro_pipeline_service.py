@@ -197,10 +197,9 @@ def quantize(
         :func:`~konjoai.embed.vectro_bridge.quantize_for_storage` for
         the ``metrics_dict`` keys.
     """
-    assert embeddings.dtype == np.float32, (
-        f"K4 violation: expected float32 embeddings, got {embeddings.dtype}"
-    )
+    assert embeddings.dtype == np.float32, f"K4 violation: expected float32 embeddings, got {embeddings.dtype}"
     from konjoai.embed.vectro_bridge import quantize_for_storage  # K5: deferred
+
     return quantize_for_storage(embeddings)
 
 
@@ -226,9 +225,7 @@ def embeddings_to_jsonl(
         Absolute path of the newly-created temporary JSONL file.
         **Caller is responsible for deleting it.**
     """
-    assert embeddings.dtype == np.float32, (
-        f"K4 violation: expected float32, got {embeddings.dtype}"
-    )
+    assert embeddings.dtype == np.float32, f"K4 violation: expected float32, got {embeddings.dtype}"
     n = embeddings.shape[0]
     if ids is None:
         ids = [f"vec_{i}" for i in range(n)]
@@ -309,9 +306,7 @@ def run_pipeline(
         When the pipeline exits with a non-zero status code.
     """
     if format not in _VALID_FORMATS:
-        raise VectroPipelineError(
-            f"Unknown format {format!r}. Valid formats: {sorted(_VALID_FORMATS)}"
-        )
+        raise VectroPipelineError(f"Unknown format {format!r}. Valid formats: {sorted(_VALID_FORMATS)}")
     if format in _STUB_FORMATS:
         raise VectroStubFormatError(
             f"Format {format!r} is not yet implemented. "
@@ -324,14 +319,22 @@ def run_pipeline(
     Path(out_dir).mkdir(parents=True, exist_ok=True)
 
     cmd: list[str] = [
-        binary, "pipeline",
-        "--input", input_jsonl,
-        "--out-dir", out_dir,
-        "--format", format,
-        "--m", str(m),
-        "--ef-construction", str(ef_construction),
-        "--ef-search", str(ef_search),
-        "--top-k", str(top_k),
+        binary,
+        "pipeline",
+        "--input",
+        input_jsonl,
+        "--out-dir",
+        out_dir,
+        "--format",
+        format,
+        "--m",
+        str(m),
+        "--ef-construction",
+        str(ef_construction),
+        "--ef-search",
+        str(ef_search),
+        "--top-k",
+        str(top_k),
     ]
     if query_file:
         cmd += ["--query-file", query_file]
@@ -346,8 +349,7 @@ def run_pipeline(
 
     if result.returncode != 0:
         raise VectroPipelineError(
-            f"vectro pipeline exited with code {result.returncode}.\n"
-            f"stderr: {result.stderr.strip()}"
+            f"vectro pipeline exited with code {result.returncode}.\nstderr: {result.stderr.strip()}"
         )
 
     # Parse n_vectors from stderr progress lines (e.g. "✓ compressed 1000 vectors")
@@ -436,9 +438,7 @@ def run_pipeline_from_embeddings(
     -------
     VectroPipelineResult
     """
-    assert embeddings.dtype == np.float32, (
-        f"K4 violation: expected float32, got {embeddings.dtype}"
-    )
+    assert embeddings.dtype == np.float32, f"K4 violation: expected float32, got {embeddings.dtype}"
     tmp_path = embeddings_to_jsonl(embeddings, ids=ids)
     try:
         return run_pipeline(

@@ -23,6 +23,7 @@ Notes
 - Cosine similarity is computed in float32 (K4).
 - The function is pure — it does not mutate the inputs.
 """
+
 from __future__ import annotations
 
 import logging

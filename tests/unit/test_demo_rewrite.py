@@ -9,6 +9,7 @@ Konjo gates exercised:
   K3 — the rewrite pipeline is real konjoai code, not a re-implementation.
   K6 — adding the demo trace is purely additive over the production rewriter.
 """
+
 from __future__ import annotations
 
 import sys

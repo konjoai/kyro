@@ -15,6 +15,7 @@ Thread safety
 ``ThresholdStats`` uses a single ``threading.Lock``.  ``AdaptiveThresholdEngine``
 is stateless: every call is independent.
 """
+
 from __future__ import annotations
 
 import re
@@ -79,8 +80,13 @@ def classify_query(question: str) -> QueryType:
     q = question.strip()
     if _RE_CODE_FENCE.search(q) or _RE_SQL_KW.search(q) or _RE_LANG_KW.search(q):
         return QueryType.CODE
-    if (_RE_DATE.search(q) or _RE_NUMBER.search(q) or _RE_PERCENT.search(q)
-            or _RE_UNIT_WORD.search(q) or _RE_YEAR_WORD.search(q)):
+    if (
+        _RE_DATE.search(q)
+        or _RE_NUMBER.search(q)
+        or _RE_PERCENT.search(q)
+        or _RE_UNIT_WORD.search(q)
+        or _RE_YEAR_WORD.search(q)
+    ):
         return QueryType.FACTUAL
     if _RE_HOW.search(q) or _RE_WHAT_IS.search(q):
         return QueryType.FAQ
@@ -104,11 +110,14 @@ class ThresholdConfig:
         return float(getattr(self, query_type.value))
 
     def as_dict(self) -> dict[str, float]:
+        """Return thresholds keyed by query-type name."""
         return {t.value: self.for_type(t) for t in QueryType}
 
 
 @dataclass
 class _TypeStats:
+    """Hit/miss counters for a single query type."""
+
     hits: int = 0
     misses: int = 0
 
@@ -134,10 +143,12 @@ class ThresholdStats:
         self._data: dict[QueryType, _TypeStats] = {t: _TypeStats() for t in QueryType}
 
     def record_hit(self, query_type: QueryType) -> None:
+        """Increment the hit counter for the given query type."""
         with self._lock:
             self._data[query_type].hits += 1
 
     def record_miss(self, query_type: QueryType) -> None:
+        """Increment the miss counter for the given query type."""
         with self._lock:
             self._data[query_type].misses += 1
 
@@ -155,6 +166,7 @@ class ThresholdStats:
             }
 
     def reset(self) -> None:
+        """Zero all per-type hit and miss counters."""
         with self._lock:
             for s in self._data.values():
                 s.hits = 0
@@ -241,7 +253,7 @@ def _lookup_with_threshold(cache: object, question: str, q_vec: np.ndarray, thre
     """
 
     original = cache._threshold  # type: ignore[attr-defined]
-    lock = cache._lock           # type: ignore[attr-defined]
+    lock = cache._lock  # type: ignore[attr-defined]
     with lock:
         cache._threshold = threshold  # type: ignore[attr-defined]
         try:
@@ -256,27 +268,27 @@ def _inner_lookup(cache: object, question: str, q_vec: np.ndarray) -> object | N
     import numpy as np  # noqa: PLC0415
 
     key = cache._normalise(question)  # type: ignore[attr-defined]
-    exact = cache._exact.get(key)     # type: ignore[attr-defined]
+    exact = cache._exact.get(key)  # type: ignore[attr-defined]
     if exact is not None:
-        cache._lru.move_to_end(key)   # type: ignore[attr-defined]
+        cache._lru.move_to_end(key)  # type: ignore[attr-defined]
         exact.hit_count += 1
-        cache._total_hits += 1       # type: ignore[attr-defined]
+        cache._total_hits += 1  # type: ignore[attr-defined]
         return exact.response
 
-    q_norm = cache._l2_norm(q_vec)   # type: ignore[attr-defined]
+    q_norm = cache._l2_norm(q_vec)  # type: ignore[attr-defined]
     best_key, best_sim = None, -1.0
     for k, e in cache._lru.items():  # type: ignore[attr-defined]
         sim = float(np.dot(q_norm, cache._l2_norm(e.question_vec)))  # type: ignore[attr-defined]
         if sim > best_sim:
             best_sim, best_key = sim, k
 
-    threshold = cache._threshold     # type: ignore[attr-defined]
+    threshold = cache._threshold  # type: ignore[attr-defined]
     if best_key is not None and best_sim >= threshold:
         entry = cache._lru[best_key]  # type: ignore[attr-defined]
         cache._lru.move_to_end(best_key)  # type: ignore[attr-defined]
         entry.hit_count += 1
-        cache._total_hits += 1       # type: ignore[attr-defined]
+        cache._total_hits += 1  # type: ignore[attr-defined]
         return entry.response
 
-    cache._total_misses += 1         # type: ignore[attr-defined]
+    cache._total_misses += 1  # type: ignore[attr-defined]
     return None

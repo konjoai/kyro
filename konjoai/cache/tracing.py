@@ -95,10 +95,10 @@ class _NoopSpan:
     """Minimal no-op span for when OTel is absent or disabled."""
 
     def set_attribute(self, key: str, value: object) -> None:  # noqa: D102
-        pass
+        """Discard the attribute (no-op)."""
 
     def record_exception(self, exc: BaseException) -> None:  # noqa: D102
-        pass
+        """Discard the exception (no-op)."""
 
 
 def emit_cache_lookup(

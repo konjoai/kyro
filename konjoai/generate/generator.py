@@ -1,3 +1,5 @@
+"""LLM answer generation: pluggable OpenAI/Anthropic/Squish backends + streaming."""
+
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +27,8 @@ Answer:"""
 
 @dataclass
 class GenerationResult:
+    """An LLM completion plus the model name and token usage."""
+
     answer: str
     model: str
     usage: dict = field(default_factory=dict)
@@ -32,7 +36,11 @@ class GenerationResult:
 
 @runtime_checkable
 class Generator(Protocol):
-    def generate(self, question: str, context: str) -> GenerationResult: ...
+    """Protocol for any backend that answers a question over context."""
+
+    def generate(self, question: str, context: str) -> GenerationResult:
+        """Return a completion for *question* grounded in *context*."""
+        ...
 
 
 class _BaseGenerator:
@@ -60,6 +68,7 @@ class _BaseGenerator:
         sync_gen = self.generate_stream(question=question, context=context)
 
         def _next() -> object:
+            """Pull the next token off the sync generator, or the sentinel."""
             return next(sync_gen, sentinel)
 
         while True:

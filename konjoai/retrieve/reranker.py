@@ -1,3 +1,5 @@
+"""Cross-encoder reranking of retrieval candidates."""
+
 from __future__ import annotations
 
 import logging
@@ -10,6 +12,8 @@ _reranker: CrossEncoderReranker | None = None
 
 @dataclass
 class RerankResult:
+    """A candidate with its cross-encoder relevance score."""
+
     score: float
     content: str
     source: str

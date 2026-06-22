@@ -1,3 +1,5 @@
+"""Hybrid retrieval via reciprocal rank fusion of dense and sparse results."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +12,8 @@ from konjoai.store.qdrant import SearchResult
 
 @dataclass
 class HybridResult:
+    """A chunk with its fused reciprocal-rank score."""
+
     rrf_score: float
     content: str
     source: str
@@ -91,6 +95,7 @@ def hybrid_search(
 
     if getattr(s, "use_vectro_retriever", False):
         from konjoai.retrieve.vectro_retriever import get_vectro_retriever
+
         return get_vectro_retriever().search(query, top_k=max(kd, ks))
 
     dense_results = dense_search(query, top_k=kd, q_vec=q_vec)

@@ -7,6 +7,7 @@ Coverage:
 - cache_span: context manager wrapping
 - K3: no exceptions when opentelemetry-sdk is absent (mocked)
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch

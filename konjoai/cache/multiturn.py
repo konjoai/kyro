@@ -26,6 +26,7 @@ K5: stdlib only — ``hashlib``, ``threading``, ``collections.OrderedDict``.
 K7: Conversation histories are scoped to ``(tenant_id, conversation_id)``.
 OWASP: Raw question text is never stored — only 16-hex SHA-256 prefixes.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -223,9 +224,7 @@ class MultiTurnCache:
 
         Does not advance conversation history — call :meth:`advance_turn` on hit.
         """
-        turn_hash = self._conversations.get_turn_hash(
-            tenant_id, conversation_id, question
-        )
+        turn_hash = self._conversations.get_turn_hash(tenant_id, conversation_id, question)
         return self._cache.lookup(  # type: ignore[attr-defined]
             self._keyed(question, turn_hash), q_vec
         )
@@ -239,9 +238,7 @@ class MultiTurnCache:
         conversation_id: str,
     ) -> None:
         """Store the response and advance conversation history."""
-        turn_hash = self._conversations.get_turn_hash(
-            tenant_id, conversation_id, question
-        )
+        turn_hash = self._conversations.get_turn_hash(tenant_id, conversation_id, question)
         self._cache.store(  # type: ignore[attr-defined]
             self._keyed(question, turn_hash), q_vec, response
         )
@@ -279,6 +276,7 @@ class MultiTurnCache:
 
     @staticmethod
     def _keyed(question: str, turn_hash: str) -> str:
+        """Prefix a question with its conversation turn hash for cache keying."""
         return f"[conv:{turn_hash}] {question}"
 
 
@@ -303,9 +301,7 @@ def get_conversation_store() -> ConversationStore:
 
             settings = get_settings()
             _conversation_store = ConversationStore(
-                max_conversations=getattr(
-                    settings, "cache_multiturn_max_conversations", 1000
-                ),
+                max_conversations=getattr(settings, "cache_multiturn_max_conversations", 1000),
                 max_turns=getattr(settings, "cache_multiturn_window", 5),
             )
     return _conversation_store  # type: ignore[return-value]

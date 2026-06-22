@@ -20,6 +20,7 @@ understand what changed and why.
 K3: disabled by default (``cache_query_rewrite_enabled=False``).
 K5: pure stdlib — no new hard dependencies.
 """
+
 from __future__ import annotations
 
 import re
@@ -27,38 +28,38 @@ from dataclasses import dataclass, field
 
 # ── Contraction expansion table ───────────────────────────────────────────────
 _CONTRACTIONS: dict[str, str] = {
-    "what's":  "what is",
+    "what's": "what is",
     "what're": "what are",
     "where's": "where is",
-    "when's":  "when is",
-    "who's":   "who is",
-    "how's":   "how is",
-    "it's":    "it is",
-    "i'm":     "i am",
-    "i've":    "i have",
-    "i'll":    "i will",
-    "i'd":     "i would",
-    "you're":  "you are",
-    "you've":  "you have",
-    "you'll":  "you will",
-    "don't":   "do not",
+    "when's": "when is",
+    "who's": "who is",
+    "how's": "how is",
+    "it's": "it is",
+    "i'm": "i am",
+    "i've": "i have",
+    "i'll": "i will",
+    "i'd": "i would",
+    "you're": "you are",
+    "you've": "you have",
+    "you'll": "you will",
+    "don't": "do not",
     "doesn't": "does not",
-    "didn't":  "did not",
-    "won't":   "will not",
-    "can't":   "cannot",
-    "couldn't":"could not",
-    "wouldn't":"would not",
-    "shouldn't":"should not",
-    "isn't":   "is not",
-    "aren't":  "are not",
-    "wasn't":  "was not",
+    "didn't": "did not",
+    "won't": "will not",
+    "can't": "cannot",
+    "couldn't": "could not",
+    "wouldn't": "would not",
+    "shouldn't": "should not",
+    "isn't": "is not",
+    "aren't": "are not",
+    "wasn't": "was not",
     "weren't": "were not",
     "haven't": "have not",
-    "hasn't":  "has not",
-    "hadn't":  "had not",
+    "hasn't": "has not",
+    "hadn't": "had not",
     "there's": "there is",
-    "that's":  "that is",
-    "let's":   "let us",
+    "that's": "that is",
+    "let's": "let us",
 }
 
 # ── Filler phrase stripping table ─────────────────────────────────────────────
@@ -106,43 +107,49 @@ class RewriteResult:
 
 
 def _step_lowercase(q: str) -> str:
+    """Lower-case the query."""
     return q.lower()
 
 
 def _step_normalize_whitespace(q: str) -> str:
+    """Collapse runs of whitespace into single spaces."""
     return " ".join(q.split())
 
 
 def _step_strip_punctuation(q: str) -> str:
+    """Replace punctuation with spaces, preserving in-word apostrophes."""
     # Strip leading/trailing non-alphanumeric characters; preserve apostrophes
     # within words so contractions survive until the expand step.
     return re.sub(r"[^\w\s']", " ", q).strip()
 
 
 def _step_expand_contractions(q: str) -> str:
+    """Expand known contractions to their full forms."""
     words = q.split()
     result = [_CONTRACTIONS.get(w.lower(), w) for w in words]
     return " ".join(result)
 
 
 def _step_strip_fillers(q: str) -> str:
+    """Strip a leading filler prefix (e.g. "please", "can you")."""
     lower = q.lower()
     for prefix in _FILLER_PREFIXES:
         if lower.startswith(prefix):
-            return q[len(prefix):].strip()
+            return q[len(prefix) :].strip()
     return q
 
 
 def _step_strip_trailing_question_mark(q: str) -> str:
+    """Remove trailing question marks and surrounding whitespace."""
     return q.rstrip("?").strip()
 
 
 _STEP_MAP: dict[str, callable] = {
-    "lowercase":                    _step_lowercase,
-    "normalize_whitespace":         _step_normalize_whitespace,
-    "strip_punctuation":            _step_strip_punctuation,
-    "expand_contractions":          _step_expand_contractions,
-    "strip_fillers":                _step_strip_fillers,
+    "lowercase": _step_lowercase,
+    "normalize_whitespace": _step_normalize_whitespace,
+    "strip_punctuation": _step_strip_punctuation,
+    "expand_contractions": _step_expand_contractions,
+    "strip_fillers": _step_strip_fillers,
     "strip_trailing_question_mark": _step_strip_trailing_question_mark,
 }
 
@@ -170,9 +177,7 @@ class QueryRewriter:
 
     def __init__(self, steps: list[str] | None = None) -> None:
         resolved = steps if steps is not None else DEFAULT_STEPS
-        self._steps: list[tuple[str, callable]] = [
-            (name, _STEP_MAP[name]) for name in resolved if name in _STEP_MAP
-        ]
+        self._steps: list[tuple[str, callable]] = [(name, _STEP_MAP[name]) for name in resolved if name in _STEP_MAP]
 
     def rewrite(self, question: str) -> str:
         """Return the normalised query string."""

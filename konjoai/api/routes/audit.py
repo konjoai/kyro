@@ -8,6 +8,7 @@ Two read-only endpoints surface the in-process audit log for operators:
 Both return HTTP 404 when ``audit_enabled=False`` so that the existence of the
 endpoint cannot be used as an oracle to determine whether auditing is active.
 """
+
 from __future__ import annotations
 
 import logging
@@ -46,16 +47,21 @@ class AuditEventOut(BaseModel):
 
     @classmethod
     def from_event(cls, event: AuditEvent) -> AuditEventOut:
+        """Build the response view from an ``AuditEvent`` (None fields dropped)."""
         return cls(**event.as_dict())
 
 
 class AuditEventsResponse(BaseModel):
+    """A page of audit events with the total returned and the enabled flag."""
+
     events: list[AuditEventOut]
     total: int
     audit_enabled: bool
 
 
 class AuditStatsResponse(BaseModel):
+    """Per-event-type counts plus the audit-enabled flag."""
+
     stats: dict[str, int]
     audit_enabled: bool
 
@@ -80,7 +86,9 @@ def _require_audit_enabled() -> None:
 def list_audit_events(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of events to return."),
     tenant_id: str | None = Query(None, description="Filter by tenant identifier."),
-    event_type: str | None = Query(None, description="Filter by event type (query/ingest/agent_query/auth_failure/rate_limited)."),
+    event_type: str | None = Query(
+        None, description="Filter by event type (query/ingest/agent_query/auth_failure/rate_limited)."
+    ),
     _: None = Depends(_require_audit_enabled),
 ) -> AuditEventsResponse:
     """Return recent audit log entries, optionally filtered by tenant or event type.

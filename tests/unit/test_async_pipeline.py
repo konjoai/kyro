@@ -1,4 +1,5 @@
 """Unit tests for the async query pipeline (Sprint 8)."""
+
 from __future__ import annotations
 
 import inspect

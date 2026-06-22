@@ -9,6 +9,7 @@ The ``AuditLogger`` wraps a backend and enforces K3: when
 ``audit_enabled=False`` every ``log()`` call is a pure no-op with zero
 allocation overhead.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,9 @@ logger = logging.getLogger(__name__)
 class AuditBackend(Protocol):
     """Structural protocol for pluggable audit backends."""
 
-    def write(self, event: AuditEvent) -> None: ...
+    def write(self, event: AuditEvent) -> None:
+        """Persist a single audit event."""
+        ...
 
     def query(
         self,
@@ -37,9 +40,13 @@ class AuditBackend(Protocol):
         limit: int = 100,
         tenant_id: str | None = None,
         event_type: str | None = None,
-    ) -> list[AuditEvent]: ...
+    ) -> list[AuditEvent]:
+        """Return up to ``limit`` recent events, optionally filtered."""
+        ...
 
-    def stats(self) -> dict[str, int]: ...
+    def stats(self) -> dict[str, int]:
+        """Return per-event-type counts."""
+        ...
 
 
 # ── InMemoryBackend ───────────────────────────────────────────────────────────
@@ -59,6 +66,7 @@ class InMemoryBackend:
         self._lock = threading.Lock()
 
     def write(self, event: AuditEvent) -> None:
+        """Append an event, evicting the oldest when the buffer is full."""
         with self._lock:
             self._events.append(event)
 
@@ -69,6 +77,7 @@ class InMemoryBackend:
         tenant_id: str | None = None,
         event_type: str | None = None,
     ) -> list[AuditEvent]:
+        """Return the most recent ``limit`` events matching the given filters."""
         with self._lock:
             events = list(self._events)
 
@@ -80,6 +89,7 @@ class InMemoryBackend:
         return events[-limit:]
 
     def stats(self) -> dict[str, int]:
+        """Return per-event-type counts over the buffered events."""
         with self._lock:
             counts: dict[str, int] = {}
             for e in self._events:
@@ -109,6 +119,7 @@ class JsonLinesBackend:
         self._lock = threading.Lock()
 
     def write(self, event: AuditEvent) -> None:
+        """Append the event as one JSON object on its own line."""
         line = json.dumps(event.as_dict(), default=str) + "\n"
         with self._lock:
             with self._path.open("a", encoding="utf-8") as fh:
@@ -121,6 +132,7 @@ class JsonLinesBackend:
         tenant_id: str | None = None,
         event_type: str | None = None,
     ) -> list[AuditEvent]:
+        """Read the file, parse each line, and return the filtered tail of events."""
         if not self._path.exists():
             return []
         events: list[AuditEvent] = []
@@ -129,10 +141,7 @@ class JsonLinesBackend:
         for line in lines:
             try:
                 data = json.loads(line)
-                event = AuditEvent(**{
-                    k: v for k, v in data.items()
-                    if k in AuditEvent.__dataclass_fields__
-                })
+                event = AuditEvent(**{k: v for k, v in data.items() if k in AuditEvent.__dataclass_fields__})
                 if tenant_id is not None and event.tenant_id != tenant_id:
                     continue
                 if event_type is not None and event.event_type != event_type:
@@ -143,6 +152,7 @@ class JsonLinesBackend:
         return events[-limit:]
 
     def stats(self) -> dict[str, int]:
+        """Return per-event-type counts over the most recent 10k events on disk."""
         events = self.query(limit=10_000)
         counts: dict[str, int] = {}
         for e in events:
@@ -169,6 +179,7 @@ class AuditLogger:
         return self._enabled
 
     def log(self, event: AuditEvent) -> None:
+        """Write an event when enabled; a no-op (and never raises) otherwise."""
         if not self._enabled:
             return
         try:
@@ -183,11 +194,13 @@ class AuditLogger:
         tenant_id: str | None = None,
         event_type: str | None = None,
     ) -> list[AuditEvent]:
+        """Return filtered events from the backend; empty list when disabled."""
         if not self._enabled:
             return []
         return self._backend.query(limit=limit, tenant_id=tenant_id, event_type=event_type)
 
     def stats(self) -> dict[str, int]:
+        """Return per-event-type counts from the backend; empty dict when disabled."""
         if not self._enabled:
             return {}
         return self._backend.stats()
@@ -206,6 +219,7 @@ def get_audit_logger() -> AuditLogger:
         with _singleton_lock:
             if _audit_logger is None:
                 from konjoai.config import get_settings
+
                 settings = get_settings()
                 enabled = getattr(settings, "audit_enabled", False)
                 backend_name = getattr(settings, "audit_backend", "memory")

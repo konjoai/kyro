@@ -3,6 +3,7 @@
 These are pure-unit tests — no real Qdrant, no real encoder, no vectro_py.
 The adapter's numpy fallback path is exercised via monkeypatching.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -13,8 +14,10 @@ from konjoai.retrieve.hybrid import HybridResult
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
 
+
 class _FakeEncoder:
     """Minimal stand-in for konjoai.embed.encoder.get_encoder()."""
+
     dim = 4
 
     def encode(self, texts: list[str]) -> np.ndarray:
@@ -34,6 +37,7 @@ def _make_corpus(n: int = 5, dim: int = 4) -> tuple[np.ndarray, list[str], list[
 # ---------------------------------------------------------------------------
 # Shape / dtype contract tests
 # ---------------------------------------------------------------------------
+
 
 def test_hybrid_result_fields():
     """HybridResult must have rrf_score, content, source, metadata."""
@@ -62,6 +66,7 @@ def test_adapter_search_returns_list(monkeypatch):
 
     # patch encoder
     import konjoai.embed.encoder as enc_mod  # type: ignore[import]
+
     monkeypatch.setattr(enc_mod, "get_encoder", lambda: _FakeEncoder())
 
     adapter = vr.VectroRetrieverAdapter(alpha=0.7)
@@ -89,6 +94,7 @@ def test_adapter_returns_at_most_top_k(monkeypatch):
     monkeypatch.setattr(vr.VectroRetrieverAdapter, "_load_corpus", _patched_load)
 
     import konjoai.embed.encoder as enc_mod
+
     monkeypatch.setattr(enc_mod, "get_encoder", lambda: _FakeEncoder())
 
     adapter = vr.VectroRetrieverAdapter(alpha=0.5)
@@ -140,6 +146,7 @@ def test_rebuild_clears_cache(monkeypatch):
     monkeypatch.setattr(vr.VectroRetrieverAdapter, "_load_corpus", _patched_load)
 
     import konjoai.embed.encoder as enc_mod
+
     monkeypatch.setattr(enc_mod, "get_encoder", lambda: _FakeEncoder())
 
     adapter = vr.VectroRetrieverAdapter()
@@ -162,6 +169,7 @@ def test_get_vectro_retriever_singleton(monkeypatch):
         vectro_retriever_alpha = 0.7
 
     import konjoai.config as cfg_mod
+
     monkeypatch.setattr(cfg_mod, "get_settings", lambda: _FakeSettings())
 
     a1 = vr.get_vectro_retriever()

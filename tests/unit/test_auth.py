@@ -10,6 +10,7 @@ Coverage targets:
 - get_tenant_id FastAPI dependency: K3 pass-through, 401, 503 paths
 - QdrantStore tenant_id payload injection (upsert) and filter (search)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,6 +24,7 @@ from konjoai.auth.jwt_auth import _HAS_JWT, TenantClaims, decode_token
 
 try:
     import qdrant_client as _qc  # noqa: F401
+
     _HAS_QDRANT = True
 except ImportError:
     _HAS_QDRANT = False
@@ -92,6 +94,7 @@ class TestDecodeTokenWithJWT:
 
     def _make_token(self, payload: dict) -> str:
         import jwt
+
         return jwt.encode(payload, self._SECRET, algorithm="HS256")
 
     def test_valid_token_returns_claims(self) -> None:
@@ -122,6 +125,7 @@ class TestDecodeTokenWithJWT:
 
     def test_expired_token_raises_value_error(self) -> None:
         import time
+
         tok = self._make_token({"sub": "t1", "exp": int(time.time()) - 3600})
         with pytest.raises(ValueError, match="expired"):
             decode_token(tok, self._SECRET)
@@ -138,6 +142,7 @@ class TestDecodeTokenWithJWT:
 
     def test_exp_field_populated_when_present(self) -> None:
         import time
+
         future = int(time.time()) + 3600
         tok = self._make_token({"sub": "t1", "exp": future})
         claims = decode_token(tok, self._SECRET)
@@ -227,6 +232,7 @@ class TestGetTenantIdDep:
 
     def _stub_creds(self, token: str):
         from fastapi.security import HTTPAuthorizationCredentials
+
         return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
     async def _collect(self, gen):
@@ -236,6 +242,7 @@ class TestGetTenantIdDep:
     @pytest.mark.asyncio
     async def test_returns_none_when_multi_tenancy_disabled(self) -> None:
         from konjoai.auth.deps import _resolve_tenant_id
+
         with patch("konjoai.auth.deps.get_settings", return_value=_AuthSettingsStub(multi_tenancy_enabled=False)):
             gen = _resolve_tenant_id(request=None, credentials=None)
             result = await self._collect(gen)
@@ -246,6 +253,7 @@ class TestGetTenantIdDep:
         from fastapi import HTTPException
 
         from konjoai.auth.deps import _resolve_tenant_id
+
         stub = _AuthSettingsStub(multi_tenancy_enabled=True, jwt_secret_key="s")
         with patch("konjoai.auth.deps.get_settings", return_value=stub):
             gen = _resolve_tenant_id(request=None, credentials=None)
@@ -258,6 +266,7 @@ class TestGetTenantIdDep:
         from fastapi import HTTPException
 
         from konjoai.auth.deps import _resolve_tenant_id
+
         stub = _AuthSettingsStub(multi_tenancy_enabled=True, jwt_secret_key="")
         creds = self._stub_creds("sometoken")
         with patch("konjoai.auth.deps.get_settings", return_value=stub):
@@ -271,6 +280,7 @@ class TestGetTenantIdDep:
         from fastapi import HTTPException
 
         from konjoai.auth.deps import _resolve_tenant_id
+
         stub = _AuthSettingsStub(multi_tenancy_enabled=True, jwt_secret_key="real-secret")
         creds = self._stub_creds("not-a-valid-jwt")
         with patch("konjoai.auth.deps.get_settings", return_value=stub):
@@ -283,6 +293,7 @@ class TestGetTenantIdDep:
     @pytest.mark.asyncio
     async def test_yields_tenant_id_and_sets_context_var(self) -> None:
         from konjoai.auth.deps import _resolve_tenant_id
+
         stub = _AuthSettingsStub(multi_tenancy_enabled=True, jwt_secret_key="s")
         creds = self._stub_creds("valid.jwt.token")
         fake_claims = TenantClaims(tenant_id="enterprise-a")
@@ -295,6 +306,7 @@ class TestGetTenantIdDep:
     @pytest.mark.asyncio
     async def test_context_var_cleared_after_generator_exhausted(self) -> None:
         from konjoai.auth.deps import _resolve_tenant_id
+
         stub = _AuthSettingsStub(multi_tenancy_enabled=True, jwt_secret_key="s")
         creds = self._stub_creds("valid.jwt.token")
         fake_claims = TenantClaims(tenant_id="cleanup-test")

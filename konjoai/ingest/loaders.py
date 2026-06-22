@@ -1,3 +1,5 @@
+"""Document loaders for PDF, Markdown, text, HTML, and source-code files."""
+
 from __future__ import annotations
 
 import logging
@@ -14,21 +16,27 @@ class Document:
     """A single loaded document before chunking."""
 
     content: str
-    source: str   # file path or URL
+    source: str  # file path or URL
     metadata: dict = field(default_factory=dict)
 
 
 @runtime_checkable
 class Loader(Protocol):
-    def load(self, path: Path) -> list[Document]: ...
+    """Protocol for loading a file path into :class:`Document` objects."""
+
+    def load(self, path: Path) -> list[Document]:
+        """Load *path* and return its documents."""
+        ...
 
 
 # ── PDF ───────────────────────────────────────────────────────────────────────
+
 
 class PDFLoader:
     """Load a PDF file using pypdf."""
 
     def load(self, path: Path) -> list[Document]:
+        """Return one Document per non-empty PDF page with page-number metadata."""
         try:
             import pypdf
         except ImportError as e:
@@ -52,10 +60,12 @@ class PDFLoader:
 
 # ── Markdown / Plain Text ─────────────────────────────────────────────────────
 
+
 class MarkdownLoader:
     """Load Markdown or plain-text files."""
 
     def load(self, path: Path) -> list[Document]:
+        """Return the file's full text as a single Markdown-tagged Document."""
         content = path.read_text(encoding="utf-8", errors="replace")
         return [Document(content=content, source=str(path), metadata={"format": "markdown"})]
 
@@ -64,16 +74,19 @@ class TextLoader:
     """Load any plain-text file."""
 
     def load(self, path: Path) -> list[Document]:
+        """Return the file's full text as a single text-tagged Document."""
         content = path.read_text(encoding="utf-8", errors="replace")
         return [Document(content=content, source=str(path), metadata={"format": "text"})]
 
 
 # ── HTML ──────────────────────────────────────────────────────────────────────
 
+
 class HTMLLoader:
     """Strip HTML tags and load the visible text."""
 
     def load(self, path: Path) -> list[Document]:
+        """Return the page's visible text with script/style/head removed."""
         try:
             from bs4 import BeautifulSoup
         except ImportError as e:
@@ -90,16 +103,25 @@ class HTMLLoader:
 
 # ── Code ──────────────────────────────────────────────────────────────────────
 
+
 class CodeLoader:
     """Load source-code files verbatim, adding language metadata."""
 
     _EXT_MAP: dict[str, str] = {
-        ".py": "python", ".rs": "rust", ".go": "go", ".ts": "typescript",
-        ".js": "javascript", ".java": "java", ".cpp": "cpp", ".c": "c",
-        ".rb": "ruby", ".sh": "shell",
+        ".py": "python",
+        ".rs": "rust",
+        ".go": "go",
+        ".ts": "typescript",
+        ".js": "javascript",
+        ".java": "java",
+        ".cpp": "cpp",
+        ".c": "c",
+        ".rb": "ruby",
+        ".sh": "shell",
     }
 
     def load(self, path: Path) -> list[Document]:
+        """Return the source verbatim with a detected ``language`` in metadata."""
         content = path.read_text(encoding="utf-8", errors="replace")
         lang = self._EXT_MAP.get(path.suffix.lower(), "unknown")
         return [

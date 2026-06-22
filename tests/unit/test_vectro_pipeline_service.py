@@ -4,6 +4,7 @@ Test taxonomy:
 - Pure unit: no I/O, deterministic, no real subprocesses.
 - Uses monkeypatch to intercept subprocess.run and shutil.which.
 """
+
 from __future__ import annotations
 
 import json
@@ -114,9 +115,7 @@ class TestStubFormatError:
 
         # Write a minimal JSONL input so dims can be inferred
         input_file = tmp_path / "input.jsonl"
-        input_file.write_text(
-            json.dumps({"id": "a", "vector": [0.1, 0.2, 0.3]}) + "\n"
-        )
+        input_file.write_text(json.dumps({"id": "a", "vector": [0.1, 0.2, 0.3]}) + "\n")
 
         result = svc.run_pipeline(
             input_jsonl=str(input_file),
@@ -209,10 +208,12 @@ class TestRunPipeline:
         input_file = tmp_path / "in.jsonl"
         input_file.write_text(json.dumps({"id": "a", "vector": [1.0, 0.0]}) + "\n")
 
-        stdout_lines = "\n".join([
-            json.dumps({"query_id": "q1", "results": [{"id": "a", "score": 0.99}]}),
-            json.dumps({"query_id": "q2", "results": [{"id": "b", "score": 0.88}]}),
-        ])
+        stdout_lines = "\n".join(
+            [
+                json.dumps({"query_id": "q1", "results": [{"id": "a", "score": 0.99}]}),
+                json.dumps({"query_id": "q2", "results": [{"id": "b", "score": 0.88}]}),
+            ]
+        )
 
         monkeypatch.setattr("shutil.which", lambda _: _FAKE_BINARY)
         monkeypatch.setattr(svc, "_BINARY_SEARCH_PATHS", ())
@@ -232,9 +233,7 @@ class TestRunPipeline:
 
 
 class TestRunPipelineFromEmbeddings:
-    def test_dtype_assertion_raises_for_non_float32(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_dtype_assertion_raises_for_non_float32(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         from konjoai.services import vectro_pipeline_service as svc
 
         monkeypatch.setattr("shutil.which", lambda _: _FAKE_BINARY)

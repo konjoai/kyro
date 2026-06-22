@@ -9,6 +9,7 @@ Coverage targets:
 - get_graph_rag_retriever: singleton, custom params
 - K3 gate behaviour in /query route (enabled / disabled)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -39,7 +40,7 @@ def _make_chunk(content: str, source: str = "doc.md", rrf_score: float = 0.5):
 
 def test_tokenize_basic():
     tokens = _tokenize("Hello World foo bar baz")
-    assert "hello" in tokens   # 5 chars — included
+    assert "hello" in tokens  # 5 chars — included
     assert "world" in tokens
     assert "foo" in tokens
     assert "bar" in tokens
@@ -173,6 +174,7 @@ def test_entity_graph_detect_communities_no_edges():
 def test_entity_graph_detect_communities_empty_graph():
     pytest.importorskip("networkx")
     import networkx as nx
+
     eg = EntityGraph()
     empty_graph = nx.Graph()
     communities = eg.detect_communities(empty_graph)
@@ -283,10 +285,7 @@ def test_retriever_max_communities_respected():
     pytest.importorskip("networkx")
     # With threshold=1.0 every chunk is its own community
     r = GraphRAGRetriever(max_communities=2, similarity_threshold=1.0)
-    chunks = [
-        _make_chunk(f"unique topic {i} alpha beta gamma delta", rrf_score=float(10 - i))
-        for i in range(5)
-    ]
+    chunks = [_make_chunk(f"unique topic {i} alpha beta gamma delta", rrf_score=float(10 - i)) for i in range(5)]
     result = r.retrieve(chunks)
     assert len(result.representative_chunks) <= 2
     assert len(result.communities) <= 2
@@ -356,6 +355,7 @@ def test_retriever_graph_failure_falls_back(monkeypatch):
 
 def test_get_graph_rag_retriever_returns_instance():
     import konjoai.retrieve.graph_rag as mod
+
     # Reset singleton so this test is isolated
     mod._graph_rag_retriever = None
     inst = get_graph_rag_retriever(max_communities=3)
@@ -365,6 +365,7 @@ def test_get_graph_rag_retriever_returns_instance():
 
 def test_get_graph_rag_retriever_singleton_identity():
     import konjoai.retrieve.graph_rag as mod
+
     mod._graph_rag_retriever = None
     inst1 = get_graph_rag_retriever()
     inst2 = get_graph_rag_retriever()
@@ -377,6 +378,7 @@ def test_get_graph_rag_retriever_singleton_identity():
 @dataclass
 class _SettingsStubGraphRAG:
     """Minimal settings stub for GraphRAG route tests."""
+
     enable_query_router: bool = False
     enable_hyde: bool = False
     enable_telemetry: bool = True
@@ -401,6 +403,7 @@ class _SettingsStubGraphRAG:
 @dataclass
 class _SettingsStubGraphRAGEnabled:
     """Settings stub with GraphRAG enabled."""
+
     enable_query_router: bool = False
     enable_hyde: bool = False
     enable_telemetry: bool = True
@@ -449,9 +452,7 @@ def _make_hybrid_results():
 
 
 def _make_reranked():
-    return [
-        RerankResult(score=0.9, content="machine learning neural network", source="a.md", metadata={})
-    ]
+    return [RerankResult(score=0.9, content="machine learning neural network", source="a.md", metadata={})]
 
 
 def _make_app() -> FastAPI:

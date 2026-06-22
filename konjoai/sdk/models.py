@@ -1,3 +1,5 @@
+"""Typed response models returned by the Kyro Python SDK client."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -5,6 +7,8 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class SDKSourceDoc:
+    """A retrieved source document with a content preview and score."""
+
     source: str
     content_preview: str
     score: float
@@ -12,6 +16,8 @@ class SDKSourceDoc:
 
 @dataclass(frozen=True)
 class SDKQueryResponse:
+    """Response from ``KonjoClient.query``."""
+
     answer: str
     sources: list
     model: str
@@ -24,11 +30,14 @@ class SDKQueryResponse:
 @dataclass(frozen=True)
 class SDKStreamChunk:
     """A single streamed token chunk from ``KonjoClient.query_stream``."""
+
     text: str
 
 
 @dataclass(frozen=True)
 class SDKIngestResponse:
+    """Response from ``KonjoClient.ingest``."""
+
     chunks_indexed: int
     sources_processed: int
     chunks_deduplicated: int = 0
@@ -36,6 +45,8 @@ class SDKIngestResponse:
 
 @dataclass(frozen=True)
 class SDKHealthResponse:
+    """Response from ``KonjoClient.health``."""
+
     status: str
     vector_count: int
     bm25_built: bool
@@ -43,6 +54,8 @@ class SDKHealthResponse:
 
 @dataclass(frozen=True)
 class SDKAgentStep:
+    """One Thought/Action/Observation turn from the agent."""
+
     thought: str
     action: str
     action_input: str
@@ -51,6 +64,8 @@ class SDKAgentStep:
 
 @dataclass(frozen=True)
 class SDKAgentQueryResponse:
+    """Response from ``KonjoClient.agent_query``."""
+
     answer: str
     sources: list
     model: str
@@ -68,5 +83,6 @@ class SDKAgentStreamEvent:
     into a plain dict so callers can branch on ``type`` without depending on
     a specific schema version.
     """
+
     type: str
     data: dict = field(default_factory=dict)

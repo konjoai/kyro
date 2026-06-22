@@ -8,10 +8,12 @@ Run as a stdio server::
 
     python -m konjoai.mcp --base-url http://localhost:8000 --api-key sk-...
 """
+
 from __future__ import annotations
 
 try:
     import mcp  # noqa: F401
+
     _HAS_MCP: bool = True
 except ImportError:
     _HAS_MCP = False

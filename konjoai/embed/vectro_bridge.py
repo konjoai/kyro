@@ -17,6 +17,7 @@ Vectro API contract (vectro.python.interface):
     reconstruct_embeddings(result: QuantizationResult) -> np.ndarray (float32)
     mean_cosine_similarity(original: np.ndarray, reconstructed: np.ndarray) -> float
 """
+
 from __future__ import annotations
 
 import logging

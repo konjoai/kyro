@@ -11,6 +11,7 @@ Sprint 16 additions:
 
 All new features are guarded by _HAS_PROMETHEUS / _HAS_OTEL and by otel_enabled (K3, K5).
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,6 +30,7 @@ try:
         Histogram,
         generate_latest,
     )
+
     _HAS_PROMETHEUS = True
 except ImportError:
     _HAS_PROMETHEUS = False
@@ -37,12 +39,14 @@ try:
     from opentelemetry import trace as _otel_trace  # type: ignore[import-untyped]
     from opentelemetry.sdk.trace import TracerProvider as _TracerProvider  # type: ignore[import-untyped]
     from opentelemetry.sdk.trace.export import BatchSpanProcessor as _BatchSpanProcessor  # type: ignore[import-untyped]
+
     _HAS_OTEL = True
 except ImportError:
     _HAS_OTEL = False
 
 
 # ── Existing pipeline timing (unchanged) ──────────────────────────────────────
+
 
 @dataclass
 class StepTiming:
@@ -53,6 +57,7 @@ class StepTiming:
     metadata: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
+        """Return ``{"duration_ms": ..., **metadata}`` for JSON serialization."""
         d: dict = {"duration_ms": round(self.duration_ms, 3)}
         d.update(self.metadata)
         return d
@@ -127,6 +132,7 @@ def timed(
 
 # ── Sprint 16: Prometheus metrics ─────────────────────────────────────────────
 
+
 class KyroMetrics:
     """Prometheus counters + histograms for the Kyro pipeline.
 
@@ -199,6 +205,7 @@ class KyroMetrics:
 
 # ── Sprint 16: OTel tracer ────────────────────────────────────────────────────
 
+
 @contextmanager
 def _noop_span() -> Generator[None, None, None]:
     """Context manager that does nothing — stand-in when OTel is absent."""
@@ -219,6 +226,7 @@ class KyroTracer:
                 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (  # type: ignore[import-untyped]
                     OTLPSpanExporter,
                 )
+
                 provider = _TracerProvider()
                 exporter = OTLPSpanExporter(endpoint=endpoint)
                 provider.add_span_processor(_BatchSpanProcessor(exporter))
@@ -256,6 +264,7 @@ def get_metrics() -> KyroMetrics:
     if _metrics is None:
         try:
             from konjoai.config import get_settings
+
             enabled = get_settings().otel_enabled
         except Exception:  # noqa: BLE001
             enabled = False
@@ -272,6 +281,7 @@ def get_tracer() -> KyroTracer:
     if _tracer is None:
         try:
             from konjoai.config import get_settings
+
             s = get_settings()
             _tracer = KyroTracer(endpoint=s.otel_endpoint, service_name=s.otel_service_name)
         except Exception:  # noqa: BLE001
@@ -280,6 +290,7 @@ def get_tracer() -> KyroTracer:
 
 
 # ── Convenience helper ────────────────────────────────────────────────────────
+
 
 def record_pipeline_metrics(
     telemetry: PipelineTelemetry,

@@ -6,6 +6,7 @@ Tests verify that:
 3. Objects that are missing required methods do NOT satisfy the protocol.
 4. The protocol contracts (return types, signatures) are correct.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -18,6 +19,7 @@ from konjoai.adapters import (
 )
 
 # ── Stub implementations ─────────────────────────────────────────────────────
+
 
 class _StubVectorStore:
     def upsert(self, vectors, payloads, ids=None):
@@ -51,6 +53,7 @@ class _StubGenerator:
             answer = "stub"
             model = "stub"
             usage = {}
+
         return _R()
 
     def generate_stream(self, question, context):
@@ -67,18 +70,23 @@ class _StubRetriever:
 
 # ── Incomplete stubs ──────────────────────────────────────────────────────────
 
+
 class _IncompleteStore:
     """Missing `search` and `count`."""
+
     def upsert(self, vectors, payloads, ids=None):
         return 0
+
     def delete_collection(self):
         pass
 
 
 class _IncompleteEmbedder:
     """Missing `encode_query`."""
+
     def encode(self, texts):
         return np.zeros((len(texts), 10), dtype=np.float32)
+
     @property
     def dim(self):
         return 10
@@ -86,15 +94,18 @@ class _IncompleteEmbedder:
 
 class _IncompleteGenerator:
     """Missing `generate_stream`."""
+
     def generate(self, question, context):
         class _R:
             answer = "x"
             model = "x"
             usage = {}
+
         return _R()
 
 
 # ── VectorStoreAdapter ───────────────────────────────────────────────────────
+
 
 def test_vector_store_isinstance():
     assert isinstance(_StubVectorStore(), VectorStoreAdapter)
@@ -126,6 +137,7 @@ def test_vector_store_count_returns_int():
 
 # ── EmbedderAdapter ──────────────────────────────────────────────────────────
 
+
 def test_embedder_isinstance():
     assert isinstance(_StubEmbedder(), EmbedderAdapter)
 
@@ -154,6 +166,7 @@ def test_embedder_dim_property():
 
 # ── GeneratorAdapter ─────────────────────────────────────────────────────────
 
+
 def test_generator_isinstance():
     assert isinstance(_StubGenerator(), GeneratorAdapter)
 
@@ -178,12 +191,14 @@ def test_generator_stream_yields_str():
 
 def test_generator_stub_stream_is_async_generator():
     import inspect
+
     gen = _StubGenerator()
     assert inspect.isasyncgenfunction(gen.stream)
 
 
 def test_generator_stub_stream_yields_token():
     import asyncio
+
     gen = _StubGenerator()
 
     async def _collect():
@@ -203,9 +218,11 @@ def test_stream_flag_passed_correctly_to_generate_stream():
     gen._model = "gpt-4o-mini"
     gen._max_tokens = 1024
     with patch.object(gen, "generate_stream", return_value=iter(["x"])) as mock_gs:
+
         async def _run() -> None:
             async for _ in gen.stream(question="my q", context="my ctx"):
                 pass
+
         asyncio.run(_run())
     mock_gs.assert_called_once_with(question="my q", context="my ctx")
 
@@ -222,6 +239,7 @@ def test_cli_stream_flag_appears_in_help():
 
 
 # ── RetrieverAdapter ─────────────────────────────────────────────────────────
+
 
 def test_retriever_isinstance():
     assert isinstance(_StubRetriever(), RetrieverAdapter)
@@ -242,6 +260,7 @@ def test_retriever_search_accepts_q_vec():
 
 # ── Import smoke test ────────────────────────────────────────────────────────
 
+
 def test_adapter_imports():
     from konjoai.adapters import (
         EmbedderAdapter,
@@ -249,7 +268,5 @@ def test_adapter_imports():
         RetrieverAdapter,
         VectorStoreAdapter,
     )
-    assert all(
-        callable(p)
-        for p in [EmbedderAdapter, GeneratorAdapter, RetrieverAdapter, VectorStoreAdapter]
-    )
+
+    assert all(callable(p) for p in [EmbedderAdapter, GeneratorAdapter, RetrieverAdapter, VectorStoreAdapter])

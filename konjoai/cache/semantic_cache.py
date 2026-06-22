@@ -9,6 +9,7 @@ Design:
   - K5: uses only numpy (already required) and stdlib collections.OrderedDict.
   - K6: cache_hit field on QueryResponse is False by default; cache path sets it to True.
 """
+
 from __future__ import annotations
 
 import logging
@@ -24,12 +25,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class SemanticCacheEntry:
+    """A cached question/response pair with its embedding, TTL, and access stats."""
+
     question: str
-    question_vec: np.ndarray      # float32, shape (1, dim)
-    response: object              # QueryResponse — typed as object to avoid circular import
+    question_vec: np.ndarray  # float32, shape (1, dim)
+    response: object  # QueryResponse — typed as object to avoid circular import
     created_at: float = field(default_factory=time.monotonic)
     hit_count: int = 0
-    ttl_seconds: int = 0       # 0 = no expiry for this entry
+    ttl_seconds: int = 0  # 0 = no expiry for this entry
     last_accessed: float = field(default_factory=time.monotonic)
 
     def is_expired(self) -> bool:
@@ -69,7 +72,7 @@ class SemanticCache:
 
         self._max_size = max_size
         self._threshold = threshold
-        self._ttl_seconds = ttl_seconds   # 0 = no expiry (default)
+        self._ttl_seconds = ttl_seconds  # 0 = no expiry (default)
         self._lock = threading.Lock()
         # Keyed by normalised question string for exact-match fast path
         self._exact: dict[str, SemanticCacheEntry] = {}
@@ -126,7 +129,9 @@ class SemanticCache:
                 self._total_hits += 1
                 logger.debug(
                     "cache hit (semantic) sim=%.4f key=%s hits=%d",
-                    best_sim, best_key[:40], self._total_hits,
+                    best_sim,
+                    best_key[:40],
+                    self._total_hits,
                 )
                 return entry.response
 
@@ -139,13 +144,11 @@ class SemanticCache:
         K4: asserts q_vec is float32.
         Evicts the least-recently-used entry if max_size is exceeded.
         """
-        assert q_vec.dtype == np.float32, (
-            f"SemanticCache.store: q_vec must be float32, got {q_vec.dtype}"
-        )
+        assert q_vec.dtype == np.float32, f"SemanticCache.store: q_vec must be float32, got {q_vec.dtype}"
         key = self._normalise(question)
         entry = SemanticCacheEntry(
             question=question,
-            question_vec=q_vec.copy(),   # own the array
+            question_vec=q_vec.copy(),  # own the array
             response=response,
             ttl_seconds=self._ttl_seconds,
         )
@@ -305,19 +308,22 @@ class SemanticCache:
             * ``total``           — total non-expired entries
         """
         with self._lock:
-            entries = [(e.ttl_seconds, e.access_rate_per_day(), e.days_since_last_access(), e.question)
-                       for e in self._lru.values() if not e.is_expired()]
+            entries = [
+                (e.ttl_seconds, e.access_rate_per_day(), e.days_since_last_access(), e.question)
+                for e in self._lru.values()
+                if not e.is_expired()
+            ]
 
         no_ttl = sum(1 for t, *_ in entries if t == 0)
         ttl_entries = [(t, r, d, q) for t, r, d, q in entries if t > 0]
 
         # 5 log-scale buckets: <1 min, 1–60 min, 1–24 h, 1–7 d, >7 d
         buckets = [
-            {"label": "<1 min",  "min_s": 0,       "max_s": 60,     "count": 0},
-            {"label": "1–60 min","min_s": 60,      "max_s": 3600,   "count": 0},
-            {"label": "1–24 h",  "min_s": 3600,    "max_s": 86400,  "count": 0},
-            {"label": "1–7 d",   "min_s": 86400,   "max_s": 604800, "count": 0},
-            {"label": ">7 d",    "min_s": 604800,  "max_s": None,   "count": 0},
+            {"label": "<1 min", "min_s": 0, "max_s": 60, "count": 0},
+            {"label": "1–60 min", "min_s": 60, "max_s": 3600, "count": 0},
+            {"label": "1–24 h", "min_s": 3600, "max_s": 86400, "count": 0},
+            {"label": "1–7 d", "min_s": 86400, "max_s": 604800, "count": 0},
+            {"label": ">7 d", "min_s": 604800, "max_s": None, "count": 0},
         ]
         for t, *_ in ttl_entries:
             for b in buckets:
@@ -329,10 +335,10 @@ class SemanticCache:
         pending_reduce = [q for t, _r, d, q in ttl_entries if d > 3.0][:20]
 
         return {
-            "total":          len(entries),
-            "no_ttl":         no_ttl,
-            "with_ttl":       len(ttl_entries),
-            "buckets":        buckets,
+            "total": len(entries),
+            "no_ttl": no_ttl,
+            "with_ttl": len(ttl_entries),
+            "buckets": buckets,
             "pending_extend": pending_extend,
             "pending_reduce": pending_reduce,
         }

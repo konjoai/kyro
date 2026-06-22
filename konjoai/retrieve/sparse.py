@@ -1,3 +1,5 @@
+"""BM25 sparse lexical retrieval index."""
+
 from __future__ import annotations
 
 import logging
@@ -12,6 +14,8 @@ _index: BM25Index | None = None
 
 @dataclass
 class BM25Result:
+    """A corpus chunk with its BM25 score."""
+
     score: float
     content: str
     source: str
@@ -101,6 +105,7 @@ class BM25Index:
             return False
 
     def search(self, query: str, top_k: int = 20) -> list[BM25Result]:
+        """Return the top-*k* BM25-scored chunks for *query*, best-first."""
         if self._bm25 is None:
             raise RuntimeError("BM25Index.build() must be called before search()")
 
@@ -135,6 +140,7 @@ def get_sparse_index() -> BM25Index:
         _index = BM25Index()
         try:
             from konjoai.config import get_settings
+
             path = get_settings().bm25_persist_path
             if path:
                 _index.load(path)

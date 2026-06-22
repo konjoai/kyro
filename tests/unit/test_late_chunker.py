@@ -7,6 +7,7 @@ Test taxonomy:
 Interview note: LateChunker approximates the Jina AI late-chunking paper by
 encoding ALL sentences in a single batch call, then finding boundaries post-embedding.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -39,9 +40,7 @@ def _make_alternating_encoder(n_dims: int = 8):
     v1[1] = 1.0
 
     def encoder(texts: list[str]) -> np.ndarray:
-        return np.stack(
-            [v0 if i % 2 == 0 else v1 for i in range(len(texts))]
-        )
+        return np.stack([v0 if i % 2 == 0 else v1 for i in range(len(texts))])
 
     return encoder
 
@@ -53,9 +52,7 @@ def _make_block_encoder(n_dims: int = 8, block_size: int = 2):
         b[i % n_dims] = 1.0
 
     def encoder(texts: list[str]) -> np.ndarray:
-        return np.stack(
-            [bases[i // block_size % len(bases)] for i in range(len(texts))]
-        )
+        return np.stack([bases[i // block_size % len(bases)] for i in range(len(texts))])
 
     return encoder
 
@@ -129,9 +126,7 @@ class TestLateChunkerChunk:
         assert chunks[0].metadata.get("chunker") == "late"
 
     def test_chunk_indices_are_sequential(self):
-        lc = LateChunker(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        lc = LateChunker(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         text = "Alpha. Beta. Gamma. Delta."
         chunks = lc.chunk(_doc(text))
         for i, c in enumerate(chunks):
@@ -157,9 +152,7 @@ class TestLateChunkerSplitting:
 
     def test_alternating_encoder_splits_every_boundary(self):
         """Adjacent sims = 0.0 → splits at every sentence boundary."""
-        lc = LateChunker(
-            similarity_threshold=0.4, _encoder=_make_alternating_encoder()
-        )
+        lc = LateChunker(similarity_threshold=0.4, _encoder=_make_alternating_encoder())
         text = "A sentence. Another one. Yet another. One more."
         chunks = lc.chunk(_doc(text))
         assert len(chunks) >= 3
@@ -177,30 +170,22 @@ class TestLateChunkerSplitting:
         assert len(chunks) >= 2
 
     def test_no_empty_chunks(self):
-        lc = LateChunker(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        lc = LateChunker(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         text = "First. Second. Third. Fourth."
         chunks = lc.chunk(_doc(text))
         assert all(c.content.strip() for c in chunks)
 
     def test_all_content_present(self):
         """Union of all chunk contents covers every original sentence."""
-        lc = LateChunker(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        lc = LateChunker(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         sentences = ["Alpha beta.", "Gamma delta.", "Epsilon zeta.", "Eta theta."]
         text = " ".join(sentences)
         chunks = lc.chunk(_doc(text))
         for sent in sentences:
-            assert any(
-                sent.rstrip(".") in c.content for c in chunks
-            ), f"Sentence {sent!r} lost after late chunking"
+            assert any(sent.rstrip(".") in c.content for c in chunks), f"Sentence {sent!r} lost after late chunking"
 
     def test_sentence_count_in_metadata(self):
-        lc = LateChunker(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        lc = LateChunker(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         text = "A. B. C. D."
         chunks = lc.chunk(_doc(text))
         for c in chunks:
@@ -209,9 +194,7 @@ class TestLateChunkerSplitting:
 
     def test_boundary_sim_in_metadata(self):
         """Chunks at split boundaries store the triggering similarity score."""
-        lc = LateChunker(
-            similarity_threshold=0.5, _encoder=_make_alternating_encoder()
-        )
+        lc = LateChunker(similarity_threshold=0.5, _encoder=_make_alternating_encoder())
         text = "A. B. C. D."
         chunks = lc.chunk(_doc(text))
         # All but the last chunk should have a boundary_sim

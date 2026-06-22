@@ -12,11 +12,13 @@ from konjoai.embed.encoder import SentenceEncoder
 # SentenceEncoder via mocked SentenceTransformer
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def mock_st(monkeypatch) -> MagicMock:
     """Patch SentenceTransformer so no model is downloaded."""
     dim = 384
     mock = MagicMock()
+
     # encode returns float32 unit vectors
     def fake_encode(texts, batch_size=32, show_progress_bar=False, normalize_embeddings=False):
         n = len(texts)

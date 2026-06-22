@@ -25,6 +25,7 @@ RagScanner API contract (squish.squash.rag):
             .path: str
             .status: "added" | "removed" | "modified"
 """
+
 from __future__ import annotations
 
 import logging
@@ -64,6 +65,7 @@ def _check_squish() -> bool:
 
     try:
         from squish.squash.rag import RagScanner  # type: ignore[import]
+
         _rag_scanner_cls = RagScanner
         _SQUISH_AVAILABLE = True
         logger.debug("RagScanner available (squish found)")
@@ -77,6 +79,7 @@ def _check_squish() -> bool:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def index_corpus(corpus_dir: str) -> dict[str, Any]:
     """Hash every file in *corpus_dir* and write a .rag_manifest.json.

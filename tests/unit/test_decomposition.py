@@ -33,9 +33,7 @@ def test_query_decomposer_parses_strict_json():
 
 
 def test_query_decomposer_parses_markdown_json_block():
-    gen = _GeneratorStub(
-        answer='```json\n{"sub_queries": ["A", "B"], "synthesis_hint": "Use both."}\n```'
-    )
+    gen = _GeneratorStub(answer='```json\n{"sub_queries": ["A", "B"], "synthesis_hint": "Use both."}\n```')
     out = QueryDecomposer(gen, max_sub_queries=4).decompose("Compare A and B")
 
     assert out.used_fallback is False
@@ -53,9 +51,7 @@ def test_query_decomposer_fallback_when_json_invalid():
 
 
 def test_query_decomposer_dedupes_and_applies_max_sub_queries():
-    gen = _GeneratorStub(
-        answer='{"sub_queries": ["A", "A", "B", "C", "D"], "synthesis_hint": "hint"}'
-    )
+    gen = _GeneratorStub(answer='{"sub_queries": ["A", "A", "B", "C", "D"], "synthesis_hint": "hint"}')
     out = QueryDecomposer(gen, max_sub_queries=3).decompose("question")
 
     assert out.sub_queries == ["A", "B", "C"]

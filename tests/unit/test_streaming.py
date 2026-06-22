@@ -4,6 +4,7 @@ Covers:
 - generate_stream() on OpenAIGenerator, AnthropicGenerator, SquishGenerator
 - /query/stream SSE endpoint (happy path + chat-intent short-circuit + fallback)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,6 +18,7 @@ from fastapi.testclient import TestClient
 # ---------------------------------------------------------------------------
 # Generator streaming tests
 # ---------------------------------------------------------------------------
+
 
 class TestOpenAIGeneratorStream:
     """generate_stream() yields tokens from the OpenAI streaming API."""
@@ -79,6 +81,7 @@ class TestOpenAIGeneratorStream:
         result = gen.generate_stream(question="q", context="c")
         # Must be an iterator (not a list) — lazy evaluation
         import inspect
+
         assert inspect.isgenerator(result)
 
 
@@ -99,9 +102,7 @@ class TestSquishGeneratorStream:
         gen._max_tokens = 512
         mock_client = MagicMock()
         tokens = ["tok1", " tok2"]
-        mock_client.chat.completions.create.return_value = iter(
-            [self._make_chunk(t) for t in tokens]
-        )
+        mock_client.chat.completions.create.return_value = iter([self._make_chunk(t) for t in tokens])
         gen._client = mock_client
 
         result = list(gen.generate_stream(question="q", context="c"))
@@ -169,6 +170,7 @@ class TestAnthropicGeneratorStream:
 # /query/stream endpoint tests
 # ---------------------------------------------------------------------------
 
+
 def _make_app():
     """Build a minimal FastAPI app with the query router mounted.
 
@@ -178,6 +180,7 @@ def _make_app():
     from fastapi import FastAPI
 
     from konjoai.api.routes.query import router
+
     app = FastAPI()
     app.include_router(router)  # router already has prefix="/query"
     return app
@@ -212,11 +215,16 @@ class TestQueryStreamEndpoint:
         # (SOCKS / socksio absent).  monkeypatch.delenv restores originals after
         # each test — no permanent env mutation.
         for _var in (
-            "HTTP_PROXY", "http_proxy",
-            "HTTPS_PROXY", "https_proxy",
-            "ALL_PROXY", "all_proxy",
-            "GRPC_PROXY", "grpc_proxy",
-            "FTP_PROXY", "ftp_proxy",
+            "HTTP_PROXY",
+            "http_proxy",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "ALL_PROXY",
+            "all_proxy",
+            "GRPC_PROXY",
+            "grpc_proxy",
+            "FTP_PROXY",
+            "ftp_proxy",
             "RSYNC_PROXY",
         ):
             monkeypatch.delenv(_var, raising=False)
@@ -371,6 +379,7 @@ class TestAsyncGeneratorStream:
 
     def test_openai_stream_is_async_generator(self):
         from konjoai.generate.generator import OpenAIGenerator
+
         gen = OpenAIGenerator.__new__(OpenAIGenerator)
         gen._model = "gpt-4o-mini"
         gen._max_tokens = 1024
@@ -380,6 +389,7 @@ class TestAsyncGeneratorStream:
 
     def test_openai_stream_yields_all_tokens(self):
         from konjoai.generate.generator import OpenAIGenerator
+
         gen = OpenAIGenerator.__new__(OpenAIGenerator)
         gen._model = "gpt-4o-mini"
         gen._max_tokens = 1024
@@ -396,6 +406,7 @@ class TestAsyncGeneratorStream:
 
     def test_openai_stream_empty_yields_nothing(self):
         from konjoai.generate.generator import OpenAIGenerator
+
         gen = OpenAIGenerator.__new__(OpenAIGenerator)
         gen._model = "gpt-4o-mini"
         gen._max_tokens = 1024
@@ -411,6 +422,7 @@ class TestAsyncGeneratorStream:
 
     def test_anthropic_stream_is_async_generator(self):
         from konjoai.generate.generator import AnthropicGenerator
+
         gen = AnthropicGenerator.__new__(AnthropicGenerator)
         gen._model = "claude-3-haiku-20240307"
         gen._max_tokens = 1024
@@ -420,6 +432,7 @@ class TestAsyncGeneratorStream:
 
     def test_anthropic_stream_yields_all_tokens(self):
         from konjoai.generate.generator import AnthropicGenerator
+
         gen = AnthropicGenerator.__new__(AnthropicGenerator)
         gen._model = "claude-3-haiku-20240307"
         gen._max_tokens = 1024
@@ -436,6 +449,7 @@ class TestAsyncGeneratorStream:
 
     def test_squish_stream_is_async_generator(self):
         from konjoai.generate.generator import SquishGenerator
+
         gen = SquishGenerator.__new__(SquishGenerator)
         gen._model = "qwen3:8b"
         gen._max_tokens = 1024
@@ -445,6 +459,7 @@ class TestAsyncGeneratorStream:
 
     def test_squish_stream_yields_all_tokens(self):
         from konjoai.generate.generator import SquishGenerator
+
         gen = SquishGenerator.__new__(SquishGenerator)
         gen._model = "qwen3:8b"
         gen._max_tokens = 1024
@@ -461,6 +476,7 @@ class TestAsyncGeneratorStream:
 
     def test_squish_stream_empty_yields_nothing(self):
         from konjoai.generate.generator import SquishGenerator
+
         gen = SquishGenerator.__new__(SquishGenerator)
         gen._model = "qwen3:8b"
         gen._max_tokens = 1024
@@ -480,11 +496,13 @@ class TestStreamingEnabledConfig:
 
     def test_streaming_enabled_default_is_true(self):
         from konjoai.config import Settings
+
         s = Settings()
         assert s.streaming_enabled is True
 
     def test_streaming_enabled_can_be_disabled(self):
         from konjoai.config import Settings
+
         s = Settings(streaming_enabled=False)
         assert s.streaming_enabled is False
 
@@ -501,12 +519,13 @@ class TestCLIStreamFlag:
         mock_gen.generate_stream.return_value = iter(["Hello", " world"])
 
         with (
-            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
-            patch("konjoai.retrieve.reranker.rerank", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
+            patch(
+                "konjoai.retrieve.hybrid.hybrid_search",
+                return_value=[MagicMock(content="ctx", score=0.9, source="src.md")],
+            ),
+            patch(
+                "konjoai.retrieve.reranker.rerank", return_value=[MagicMock(content="ctx", score=0.9, source="src.md")]
+            ),
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
         ):
             runner = CliRunner()
@@ -525,12 +544,13 @@ class TestCLIStreamFlag:
         mock_gen.generate_stream.return_value = iter(["tok"])
 
         with (
-            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
-            patch("konjoai.retrieve.reranker.rerank", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
+            patch(
+                "konjoai.retrieve.hybrid.hybrid_search",
+                return_value=[MagicMock(content="ctx", score=0.9, source="src.md")],
+            ),
+            patch(
+                "konjoai.retrieve.reranker.rerank", return_value=[MagicMock(content="ctx", score=0.9, source="src.md")]
+            ),
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
         ):
             runner = CliRunner()
@@ -548,12 +568,13 @@ class TestCLIStreamFlag:
         mock_gen.generate.return_value = MagicMock(answer="The answer.", model="gpt-4o-mini")
 
         with (
-            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
-            patch("konjoai.retrieve.reranker.rerank", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
+            patch(
+                "konjoai.retrieve.hybrid.hybrid_search",
+                return_value=[MagicMock(content="ctx", score=0.9, source="src.md")],
+            ),
+            patch(
+                "konjoai.retrieve.reranker.rerank", return_value=[MagicMock(content="ctx", score=0.9, source="src.md")]
+            ),
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
         ):
             runner = CliRunner()
@@ -572,12 +593,13 @@ class TestCLIStreamFlag:
         mock_gen.generate_stream.return_value = iter(["Hello", " world"])
 
         with (
-            patch("konjoai.retrieve.hybrid.hybrid_search", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
-            patch("konjoai.retrieve.reranker.rerank", return_value=[
-                MagicMock(content="ctx", score=0.9, source="src.md")
-            ]),
+            patch(
+                "konjoai.retrieve.hybrid.hybrid_search",
+                return_value=[MagicMock(content="ctx", score=0.9, source="src.md")],
+            ),
+            patch(
+                "konjoai.retrieve.reranker.rerank", return_value=[MagicMock(content="ctx", score=0.9, source="src.md")]
+            ),
             patch("konjoai.generate.generator.get_generator", return_value=mock_gen),
         ):
             runner = CliRunner()

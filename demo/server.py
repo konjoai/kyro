@@ -23,6 +23,7 @@ Run::
 
 Then open ``demo/index.html`` (the page auto-detects the server on load).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -67,13 +68,70 @@ log = logging.getLogger("kyro-demo-server")
 
 _DIM = 256
 _STOP = {
-    "the", "a", "an", "is", "are", "was", "were", "be", "of", "to", "for",
-    "in", "on", "at", "what", "which", "how", "where", "when", "why", "who",
-    "do", "does", "did", "you", "your", "my", "i", "it", "that", "this",
-    "with", "and", "or", "but", "as", "from", "by", "so", "if",
-    "can", "could", "would", "should", "have", "has", "had", "will",
-    "about", "tell", "me", "us", "any", "some", "s",
-    "into", "onto", "over", "out", "up", "down", "very", "more", "less",
+    "the",
+    "a",
+    "an",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "of",
+    "to",
+    "for",
+    "in",
+    "on",
+    "at",
+    "what",
+    "which",
+    "how",
+    "where",
+    "when",
+    "why",
+    "who",
+    "do",
+    "does",
+    "did",
+    "you",
+    "your",
+    "my",
+    "i",
+    "it",
+    "that",
+    "this",
+    "with",
+    "and",
+    "or",
+    "but",
+    "as",
+    "from",
+    "by",
+    "so",
+    "if",
+    "can",
+    "could",
+    "would",
+    "should",
+    "have",
+    "has",
+    "had",
+    "will",
+    "about",
+    "tell",
+    "me",
+    "us",
+    "any",
+    "some",
+    "s",
+    "into",
+    "onto",
+    "over",
+    "out",
+    "up",
+    "down",
+    "very",
+    "more",
+    "less",
 }
 
 
@@ -326,8 +384,10 @@ class DemoState:
                     self._dollars_saved += self.COST_PER_LLM_CALL_USD
                 self._record_query(question, latency_ms)
             answer = (
-                cached.answer if cached is not None and hasattr(cached, "answer")
-                else str(cached) if cached is not None
+                cached.answer
+                if cached is not None and hasattr(cached, "answer")
+                else str(cached)
+                if cached is not None
                 else f'I would ask the LLM about "{question}".'
             )
             return {
@@ -386,14 +446,17 @@ class DemoState:
             self._seeded = True
 
         pairs = [
-            ("What is the capital of France?",          "Paris."),
-            ("What is your refund policy?",             "Refunds are accepted within 30 days with a receipt."),
-            ("How fast does shipping arrive?",          "Free shipping over $50; typically 2–3 business days."),
-            ("What is your SLA?",                       "Our SLA is 99.95% uptime measured per quarter."),
-            ("How do I install Kyro?",                  "pip install konjoai"),
-            ("What language is Kyro written in?",       "Python 3.11+."),
-            ("Is Kyro open source?",                    "Yes — Kyro is MIT licensed."),
-            ("What does Kyro actually do?",             "It's a production RAG agent with semantic caching and live answer streaming."),
+            ("What is the capital of France?", "Paris."),
+            ("What is your refund policy?", "Refunds are accepted within 30 days with a receipt."),
+            ("How fast does shipping arrive?", "Free shipping over $50; typically 2–3 business days."),
+            ("What is your SLA?", "Our SLA is 99.95% uptime measured per quarter."),
+            ("How do I install Kyro?", "pip install konjoai"),
+            ("What language is Kyro written in?", "Python 3.11+."),
+            ("Is Kyro open source?", "Yes — Kyro is MIT licensed."),
+            (
+                "What does Kyro actually do?",
+                "It's a production RAG agent with semantic caching and live answer streaming.",
+            ),
         ]
         for q, a in pairs:
             v = encode(q)
@@ -426,10 +489,7 @@ class DemoState:
         # List the seeded entries so the UI can show "what's already known".
         with self.cache._lock:  # type: ignore[attr-defined]
             entries = list(self.cache._lru.items())  # type: ignore[attr-defined]
-        s["entries"] = [
-            {"question": e.question, "hit_count": e.hit_count}
-            for _, e in entries
-        ]
+        s["entries"] = [{"question": e.question, "hit_count": e.hit_count} for _, e in entries]
         return s
 
     def _record_query(self, question: str, latency_ms: float) -> None:
@@ -458,14 +518,8 @@ class DemoState:
         with self._lock:
             history = list(self._latency_history)
             avg_latency = sum(history) / len(history) if history else 0.0
-            ratio = (
-                self._singleflight_collapsed / self._total_queries
-                if self._total_queries > 0 else 0.0
-            )
-            top = [
-                {"term": term, "count": count}
-                for term, count in self._top_terms.most_common(10)
-            ]
+            ratio = self._singleflight_collapsed / self._total_queries if self._total_queries > 0 else 0.0
+            top = [{"term": term, "count": count} for term, count in self._top_terms.most_common(10)]
             return {
                 "cache_hit_rate": float(cache_stats["hit_rate"]),
                 "avg_latency_ms": round(avg_latency, 3),

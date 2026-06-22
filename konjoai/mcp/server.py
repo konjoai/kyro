@@ -14,6 +14,7 @@ The ``dispatch`` method routes tool calls and is fully testable without the
 in a single method that imports ``mcp`` lazily so the rest of the module is
 always importable (K3/K5 pattern).
 """
+
 from __future__ import annotations
 
 import json
@@ -55,8 +56,7 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "kyro_ingest",
         "description": (
-            "Ingest a local file or directory into the Kyro vector store so it "
-            "can be retrieved by future queries."
+            "Ingest a local file or directory into the Kyro vector store so it can be retrieved by future queries."
         ),
         "inputSchema": {
             "type": "object",
@@ -81,10 +81,7 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "kyro_health",
-        "description": (
-            "Check Kyro API health. Returns status, vector count, and BM25 "
-            "index readiness."
-        ),
+        "description": ("Check Kyro API health. Returns status, vector count, and BM25 index readiness."),
         "inputSchema": {
             "type": "object",
             "properties": {},
@@ -176,16 +173,15 @@ class KyroMCPServer:
                 top_k=int(arguments.get("top_k", 5)),
                 use_hyde=bool(arguments.get("use_hyde", False)),
             )
-            return json.dumps({
-                "answer": response.answer,
-                "model": response.model,
-                "intent": response.intent,
-                "cache_hit": response.cache_hit,
-                "sources": [
-                    {"source": s.source, "score": s.score}
-                    for s in response.sources
-                ],
-            })
+            return json.dumps(
+                {
+                    "answer": response.answer,
+                    "model": response.model,
+                    "intent": response.intent,
+                    "cache_hit": response.cache_hit,
+                    "sources": [{"source": s.source, "score": s.score} for s in response.sources],
+                }
+            )
 
         if name == "kyro_ingest":
             response = self._client.ingest(
@@ -193,19 +189,23 @@ class KyroMCPServer:
                 strategy=str(arguments.get("strategy", "recursive")),
                 chunk_size=int(arguments.get("chunk_size", 512)),
             )
-            return json.dumps({
-                "chunks_indexed": response.chunks_indexed,
-                "sources_processed": response.sources_processed,
-                "chunks_deduplicated": response.chunks_deduplicated,
-            })
+            return json.dumps(
+                {
+                    "chunks_indexed": response.chunks_indexed,
+                    "sources_processed": response.sources_processed,
+                    "chunks_deduplicated": response.chunks_deduplicated,
+                }
+            )
 
         if name == "kyro_health":
             response = self._client.health()
-            return json.dumps({
-                "status": response.status,
-                "vector_count": response.vector_count,
-                "bm25_built": response.bm25_built,
-            })
+            return json.dumps(
+                {
+                    "status": response.status,
+                    "vector_count": response.vector_count,
+                    "bm25_built": response.bm25_built,
+                }
+            )
 
         if name == "kyro_agent_query":
             response = self._client.agent_query(
@@ -213,19 +213,21 @@ class KyroMCPServer:
                 top_k=int(arguments.get("top_k", 5)),
                 max_steps=int(arguments.get("max_steps", 5)),
             )
-            return json.dumps({
-                "answer": response.answer,
-                "model": response.model,
-                "steps": [
-                    {
-                        "thought": s.thought,
-                        "action": s.action,
-                        "action_input": s.action_input,
-                        "observation": s.observation,
-                    }
-                    for s in response.steps
-                ],
-            })
+            return json.dumps(
+                {
+                    "answer": response.answer,
+                    "model": response.model,
+                    "steps": [
+                        {
+                            "thought": s.thought,
+                            "action": s.action,
+                            "action_input": s.action_input,
+                            "observation": s.observation,
+                        }
+                        for s in response.steps
+                    ],
+                }
+            )
 
         raise ValueError(f"Unknown tool: {name!r}")
 
@@ -237,11 +239,9 @@ class KyroMCPServer:
         :raises RuntimeError: When the ``mcp`` package is not installed.
         """
         from konjoai.mcp import _HAS_MCP
+
         if not _HAS_MCP:
-            raise RuntimeError(
-                "The 'mcp' package is required to run the MCP server. "
-                "Install it with: pip install mcp"
-            )
+            raise RuntimeError("The 'mcp' package is required to run the MCP server. Install it with: pip install mcp")
 
         import mcp.types as types
         from mcp.server import Server
@@ -251,6 +251,7 @@ class KyroMCPServer:
 
         @server.list_tools()
         async def _list_tools() -> list[types.Tool]:
+            """Return the MCP tool definitions exposed by this server."""
             return [
                 types.Tool(
                     name=t["name"],
@@ -261,9 +262,8 @@ class KyroMCPServer:
             ]
 
         @server.call_tool()
-        async def _call_tool(
-            name: str, arguments: dict[str, Any]
-        ) -> list[types.TextContent]:
+        async def _call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
+            """Dispatch an MCP tool call, returning its result as text content."""
             try:
                 text = await self.dispatch(name, arguments or {})
             except KyroError as exc:

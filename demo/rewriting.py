@@ -11,6 +11,7 @@ Everything here is the real production rewriter: :meth:`QueryRewriter.explain`
 gives the per-step before/after trace the UI renders, and :meth:`rewrite` is the
 exact transform used on the live lookup path. No stubs.
 """
+
 from __future__ import annotations
 
 from typing import Any

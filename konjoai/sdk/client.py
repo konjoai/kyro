@@ -1,3 +1,5 @@
+"""Synchronous HTTP client for the Kyro RAG API."""
+
 from __future__ import annotations
 
 import json
@@ -66,6 +68,7 @@ class KonjoClient:
     # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _raise_for_status(self, response: httpx.Response) -> None:
+        """Map a non-2xx response to the matching Kyro SDK exception."""
         code = response.status_code
         if code in (401, 403):
             raise KyroAuthError(
@@ -96,6 +99,7 @@ class KonjoClient:
 
     @staticmethod
     def _parse_sources(raw: list) -> list:
+        """Convert raw source dicts into :class:`SDKSourceDoc` objects."""
         return [
             SDKSourceDoc(
                 source=s["source"],

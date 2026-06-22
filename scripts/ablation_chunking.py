@@ -48,6 +48,7 @@ Gates (Sprint 10):
 * No strategy produces zero chunks for any document.
 * Report generated to ``evals/runs/<timestamp>_chunking_ablation/``.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -120,9 +121,7 @@ def _build_encoder(model_name: str, quiet: bool):
         enc = SentenceEncoder(model_name=model_name, device="cpu")
         return enc
     except ImportError as e:
-        raise SystemExit(
-            f"sentence-transformers is required for semantic/late strategies: {e}"
-        ) from e
+        raise SystemExit(f"sentence-transformers is required for semantic/late strategies: {e}") from e
 
 
 def _safe_encode(encoder, texts: list[str]) -> Any:

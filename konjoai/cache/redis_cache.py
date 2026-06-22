@@ -31,6 +31,7 @@ Konjo invariants
   by :mod:`konjoai.auth.tenant`, so a tenant cannot read another tenant's
   cached responses even when the underlying Redis instance is shared.
 """
+
 from __future__ import annotations
 
 import logging
@@ -50,8 +51,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class _RedisEntry:
+    """One cached entry: question, l2-normalised float32 vector bytes, and response."""
+
     question: str
-    vec_bytes: bytes      # raw float32 buffer, l2-normalised at store time
+    vec_bytes: bytes  # raw float32 buffer, l2-normalised at store time
     response: object
     created_at: float
 
@@ -109,21 +112,26 @@ class RedisSemanticCache:
     # ── Key layout ────────────────────────────────────────────────────────────
 
     def _tenant(self) -> str:
+        """Return the active tenant_id, or the anonymous bucket when unset."""
         tid = self._tenant_provider()
         return tid if tid else ANONYMOUS_TENANT
 
     def _entries_key(self) -> str:
+        """Redis hash key holding the current tenant's entries."""
         return f"{self._namespace}:{self._tenant()}:entries"
 
     def _lru_key(self) -> str:
+        """Redis sorted-set key tracking the current tenant's LRU order."""
         return f"{self._namespace}:{self._tenant()}:lru"
 
     @staticmethod
     def _normalise(text: str) -> str:
+        """Return the stripped, lower-cased form used as the entry key."""
         return text.strip().lower()
 
     @staticmethod
     def _l2_norm(vec: np.ndarray) -> np.ndarray:
+        """Flatten to float32 and l2-normalise; return as-is if near-zero norm."""
         flat = vec.ravel().astype(np.float32)
         norm = float(np.linalg.norm(flat))
         if norm < 1e-10:
@@ -133,6 +141,7 @@ class RedisSemanticCache:
     # ── Safe Redis call wrapper ───────────────────────────────────────────────
 
     def _safely(self, op: str, fn: Callable[[], Any]) -> Any:
+        """Run a Redis call, logging and returning None on transport failure."""
         try:
             return fn()
         except Exception as exc:  # noqa: BLE001 — Redis transport, NOT silent
@@ -195,9 +204,7 @@ class RedisSemanticCache:
 
     def store(self, question: str, q_vec: np.ndarray, response: object) -> None:
         """Persist a question/response pair into Redis. K4: float32 enforced."""
-        assert q_vec.dtype == np.float32, (
-            f"RedisSemanticCache.store: q_vec must be float32, got {q_vec.dtype}"
-        )
+        assert q_vec.dtype == np.float32, f"RedisSemanticCache.store: q_vec must be float32, got {q_vec.dtype}"
         key = self._normalise(question)
         normalised_vec = self._l2_norm(q_vec)
         entry = _RedisEntry(
@@ -257,6 +264,7 @@ class RedisSemanticCache:
 
     @staticmethod
     def _unpickle(raw: Any) -> _RedisEntry | None:
+        """Decode raw bytes into a _RedisEntry, or None on corrupt/unexpected data."""
         if raw is None:
             return None
         try:

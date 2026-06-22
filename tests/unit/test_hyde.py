@@ -1,4 +1,5 @@
 """Unit tests for konjoai.retrieve.hyde — generate_hypothesis() and hyde_encode()."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch

@@ -18,6 +18,7 @@ Design notes:
 - Comparison is done with ``hmac.compare_digest`` to prevent timing attacks.
 - Feature-flagged off by default via ``api_key_auth_enabled=False`` (K3).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -101,4 +102,5 @@ def verify_api_key(
 def _anonymous_tenant() -> str:
     """Lazy import to avoid circular dependencies with tenant.py."""
     from konjoai.auth.tenant import ANONYMOUS_TENANT
+
     return ANONYMOUS_TENANT

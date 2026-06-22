@@ -1,5 +1,6 @@
 """Unit tests for konjoai.retrieve.router — classify_intent(), decompose_query(),
 classify_chunk_complexity(), and ChunkComplexity."""
+
 from __future__ import annotations
 
 import pytest

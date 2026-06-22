@@ -10,6 +10,7 @@ Coverage targets:
 - dispatch(): KyroError from client propagates
 - run_stdio() raises RuntimeError when _HAS_MCP=False
 """
+
 from __future__ import annotations
 
 import json
